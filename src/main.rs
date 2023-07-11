@@ -37,9 +37,9 @@ pub enum RepoCommand {
         private: bool,
         /// Sets the new repo to be the `origin` remote of the current local repo.
         #[clap(long, short)]
-        set_upstream: bool,
+        set_upstream: Option<String>,
         /// Pushes the current branch to the default branch on the new repo.
-        /// Implies `--set-upstream`
+        /// Implies `--set-upstream=origin` (setting upstream manual overrides this)
         #[clap(long, short)]
         push: bool
     },
@@ -87,7 +87,7 @@ async fn main() -> eyre::Result<()> {
 
                 description,
                 private,
-                set_upstream,
+                mut set_upstream,
                 push,
             } => {
                 // let (host_domain, host_keys, repo) = keys.get_current_host_and_repo().await?;
@@ -111,11 +111,13 @@ async fn main() -> eyre::Result<()> {
                 let new_repo = api.create_repo(repo_spec).await?;
                 eprintln!("created new repo at {}", url.join(&format!("{}/{}", user.name, repo))?);
 
-                if set_upstream || push {
+                let upstream = set_upstream.as_deref().unwrap_or("origin");
+
+                if set_upstream.is_some() || push {
                     let status = tokio::process::Command::new("git")
                         .arg("remote")
                         .arg("add")
-                        .arg("origin")
+                        .arg(upstream)
                         .arg(new_repo.clone_url.as_str())
                         .status()
                         .await?;
@@ -128,7 +130,7 @@ async fn main() -> eyre::Result<()> {
                     let status = tokio::process::Command::new("git")
                         .arg("push")
                         .arg("-u")
-                        .arg("origin")
+                        .arg(upstream)
                         .arg("main")
                         .status()
                         .await?;
