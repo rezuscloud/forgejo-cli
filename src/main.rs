@@ -44,6 +44,7 @@ pub enum RepoCommand {
         push: bool
     },
     Info,
+    Browse,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -148,6 +149,11 @@ async fn main() -> eyre::Result<()> {
                     }
                     None => eprintln!("repo not found"),
                 }
+            }
+            RepoCommand::Browse => {
+                let (host_domain, host_keys, repo) = keys.get_current_host_and_repo().await?;
+                let (_, user) = host_keys.get_current_user()?;
+                open::that(format!("http://{host_domain}/{}/{repo}", user.name))?;
             }
         },
         Command::User { host } => {
