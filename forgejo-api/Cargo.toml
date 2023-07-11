@@ -1,0 +1,15 @@
+[package]
+name = "forgejo-api"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = { version = "0.11.18", features = ["json"] }
+soft_assert = "0.1.1"
+thiserror = "1.0.43"
+tokio = { version = "1.29.1", features = ["net"] }
+url = { version = "2.4.0", features = ["serde"] }
+serde = { version = "1.0.168", features = ["derive"] }
+time = { version = "0.3.22", features = ["parsing", "serde"] }
