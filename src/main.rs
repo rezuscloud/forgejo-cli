@@ -87,7 +87,7 @@ async fn main() -> eyre::Result<()> {
 
                 description,
                 private,
-                mut set_upstream,
+                set_upstream,
                 push,
             } => {
                 // let (host_domain, host_keys, repo) = keys.get_current_host_and_repo().await?;
