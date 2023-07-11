@@ -22,6 +22,8 @@ pub enum ForgejoError {
     BadStructure,
     #[error("unexpected status code {} {}", .0.as_u16(), .0.canonical_reason().unwrap_or(""))]
     UnexpectedStatusCode(StatusCode),
+    #[error("{} {}: {}", .0.as_u16(), .0.canonical_reason().unwrap_or(""), .1)]
+    ApiError(StatusCode, String)
 }
 
 impl From<reqwest::Error> for ForgejoError {
@@ -101,6 +103,7 @@ impl Forgejo {
         let response = self.client.execute(dbg!(request)).await?;
         match response.status() {
             status if status.is_success() => Ok(response.json::<T>().await?),
+            status if status.is_client_error() => Err(ForgejoError::ApiError(status, response.json::<ErrorMessage>().await?.message)),
             status => Err(ForgejoError::UnexpectedStatusCode(status))
         }
     }
@@ -111,9 +114,17 @@ impl Forgejo {
         match response.status() {
             status if status.is_success() => Ok(Some(response.json::<T>().await?)),
             StatusCode::NOT_FOUND => Ok(None),
+            status if status.is_client_error() => Err(ForgejoError::ApiError(status, response.json::<ErrorMessage>().await?.message)),
             status => Err(ForgejoError::UnexpectedStatusCode(status))
         }
     }
+}
+
+#[derive(serde::Deserialize)]
+struct ErrorMessage {
+    message: String,
+    // intentionally ignored, no need for now
+    // url: Url 
 }
 
 
