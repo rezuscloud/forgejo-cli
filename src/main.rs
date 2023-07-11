@@ -129,7 +129,6 @@ async fn main() -> eyre::Result<()> {
                         .arg("-u")
                         .arg("origin")
                         .arg("main")
-                        .arg(new_repo.clone_url.as_str())
                         .status()
                         .await?;
                     if !status.success() {
