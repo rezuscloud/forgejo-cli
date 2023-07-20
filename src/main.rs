@@ -26,8 +26,8 @@ pub enum Command {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
-    Create { 
-        host: String, 
+    Create {
+        host: String,
         repo: String,
 
         // flags
@@ -41,7 +41,7 @@ pub enum RepoCommand {
         /// Pushes the current branch to the default branch on the new repo.
         /// Implies `--set-upstream=origin` (setting upstream manual overrides this)
         #[clap(long, short)]
-        push: bool
+        push: bool,
     },
     Info,
     Browse,
@@ -81,9 +81,9 @@ async fn main() -> eyre::Result<()> {
 
     match args.command {
         Command::Repo(repo_subcommand) => match repo_subcommand {
-            RepoCommand::Create { 
-                host, 
-                repo ,
+            RepoCommand::Create {
+                host,
+                repo,
 
                 description,
                 private,
@@ -91,10 +91,12 @@ async fn main() -> eyre::Result<()> {
                 push,
             } => {
                 // let (host_domain, host_keys, repo) = keys.get_current_host_and_repo().await?;
-                let host_info = keys.hosts.get(&host).ok_or_else(|| eyre!("not a known host"))?;
+                let host_info = keys
+                    .hosts
+                    .get(&host)
+                    .ok_or_else(|| eyre!("not a known host"))?;
                 let (_, user) = host_info.get_current_user()?;
-                let url = Url::parse(&format!("http://{host}/"))?;
-                let api = Forgejo::new(&user.key, url.clone())?;
+                let api = Forgejo::new(&user.key, host_info.url.clone())?;
                 let repo_spec = CreateRepoOption {
                     auto_init: false,
                     default_branch: "main".into(),
@@ -109,41 +111,28 @@ async fn main() -> eyre::Result<()> {
                     trust_model: forgejo_api::TrustModel::Default,
                 };
                 let new_repo = api.create_repo(repo_spec).await?;
-                eprintln!("created new repo at {}", url.join(&format!("{}/{}", user.name, repo))?);
+                eprintln!(
+                    "created new repo at {}",
+                    host_info.url.join(&format!("{}/{}", user.name, repo))?
+                );
 
                 let upstream = set_upstream.as_deref().unwrap_or("origin");
 
-                if set_upstream.is_some() || push {
-                    let status = tokio::process::Command::new("git")
-                        .arg("remote")
-                        .arg("add")
-                        .arg(upstream)
-                        .arg(new_repo.clone_url.as_str())
-                        .status()
-                        .await?;
-                    if !status.success() {
-                        eprintln!("origin set failed");
-                    }
-                }
+                let repo = git2::Repository::open(".")?;
+                let remote = if set_upstream.is_some() || push {
+                    repo.remote(upstream, new_repo.clone_url.as_str())?;
+                } else {
+                    repo.find_remote(upstream)?;
+                };
 
                 if push {
-                    let status = tokio::process::Command::new("git")
-                        .arg("push")
-                        .arg("-u")
-                        .arg(upstream)
-                        .arg("main")
-                        .status()
-                        .await?;
-                    if !status.success() {
-                        eprintln!("push failed");
-                    }
+                    remote.push(upstream)?;
                 }
             }
             RepoCommand::Info => {
-                let (host_domain, host_keys, repo) = keys.get_current_host_and_repo().await?;
+                let (_, host_keys, repo) = keys.get_current_host_and_repo().await?;
                 let (_, user) = host_keys.get_current_user()?;
-                let url = Url::parse(&format!("http://{host_domain}/"))?;
-                let api = Forgejo::new(&user.key, url)?;
+                let api = Forgejo::new(&user.key, host_keys.url.clone())?;
                 let repo = api.get_repo(&user.name, &repo).await?;
                 match repo {
                     Some(repo) => {
@@ -153,19 +142,27 @@ async fn main() -> eyre::Result<()> {
                 }
             }
             RepoCommand::Browse => {
-                let (host_domain, host_keys, repo) = keys.get_current_host_and_repo().await?;
+                let (_, host_keys, repo) = keys.get_current_host_and_repo().await?;
                 let (_, user) = host_keys.get_current_user()?;
-                open::that(format!("http://{host_domain}/{}/{repo}", user.name))?;
+                open::that(
+                    host_keys
+                        .url
+                        .join(&format!("/{}/{repo}", user.name))?
+                        .as_str(),
+                )?;
             }
         },
         Command::User { host } => {
-            let (host_domain, host_keys) = match host.as_deref() {
-                Some(s) => (s, keys.hosts.get(s).ok_or_else(|| eyre!("not a known host"))?),
+            let (_, host_keys) = match host.as_deref() {
+                Some(s) => (
+                    s,
+                    keys.hosts.get(s).ok_or_else(|| eyre!("not a known host"))?,
+                ),
                 None => keys.get_current_host().await?,
             };
             let (_, info) = host_keys.get_current_user()?;
-            eprintln!("currently signed in to {}@{}", info.name, host_domain);
-        },
+            eprintln!("currently signed in to {}@{}", info.name, host_keys.url);
+        }
         Command::Auth(auth_subcommand) => match auth_subcommand {
             AuthCommand::Login => {
                 todo!();
@@ -206,7 +203,10 @@ async fn main() -> eyre::Result<()> {
                 name,
                 key,
             } => {
-                let host_keys = keys.hosts.entry(host.clone()).or_default();
+                let host_keys = keys
+                    .hosts
+                    .get_mut(&host)
+                    .ok_or_else(|| eyre!("unknown host {host}"))?;
                 let key = match key {
                     Some(key) => key,
                     None => readline("new key: ").await?,
@@ -254,30 +254,16 @@ async fn readline(msg: &str) -> eyre::Result<String> {
 }
 
 async fn get_remotes() -> eyre::Result<Vec<(String, Url)>> {
-    let remotes = String::from_utf8(
-        tokio::process::Command::new("git")
-            .arg("remote")
-            .output()
-            .await?
-            .stdout,
-    )?;
-    let remotes = futures::future::try_join_all(remotes.lines().map(|name| async {
-        let name = name.trim();
-        let url = Url::parse(
-            String::from_utf8(
-                tokio::process::Command::new("git")
-                    .arg("remote")
-                    .arg("get-url")
-                    .arg(name)
-                    .output()
-                    .await?
-                    .stdout,
-            )?
-            .trim(),
-        )?;
-        Ok::<_, eyre::Report>((name.to_string(), url))
-    }))
-    .await?;
+    let repo = git2::Repository::open(".")?;
+    let remotes = repo
+        .remotes()?
+        .iter()
+        .filter_map(|name| {
+            let name = name?.to_string();
+            let url = Url::parse(repo.find_remote(&name).ok()?.url()?).ok()?;
+            Some((name, url))
+        })
+        .collect::<Vec<_>>();
     Ok(remotes)
 }
 
@@ -295,9 +281,14 @@ async fn get_remote(remotes: &[(String, Url)]) -> eyre::Result<Url> {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 struct KeyInfo {
     hosts: BTreeMap<String, HostInfo>,
+    domain_to_name: BTreeMap<String, String>,
 }
 
 impl KeyInfo {
+    fn domain_to_name(&self, domain: &str) -> Option<&str> {
+        self.domain_to_name.get(domain).map(|s| &**s)
+    }
+
     async fn load() -> eyre::Result<Self> {
         let path = directories::ProjectDirs::from("", "Cyborus", "forgejo-cli")
             .ok_or_else(|| eyre!("Could not find data directory"))?
@@ -342,10 +333,13 @@ impl KeyInfo {
         } else {
             host_str.to_owned()
         };
+        let name = self
+            .domain_to_name(&domain)
+            .ok_or_else(|| eyre!("unknown remote"))?;
 
         let (name, host) = self
             .hosts
-            .get_key_value(&domain)
+            .get_key_value(name)
             .ok_or_else(|| eyre!("not signed in to {domain}"))?;
         Ok((name, host, repo_from_url(&remote)?.into()))
     }
@@ -381,9 +375,10 @@ fn repo_from_url(url: &Url) -> eyre::Result<&str> {
     Ok(repo)
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 struct HostInfo {
     default: Option<String>,
+    url: Url,
     users: BTreeMap<String, UserInfo>,
 }
 
@@ -393,10 +388,7 @@ impl HostInfo {
             let (s, k) = self.users.first_key_value().unwrap();
             return Ok((s, k));
         }
-        if let Some(default) = self
-            .default
-            .as_ref()
-        {
+        if let Some(default) = self.default.as_ref() {
             if let Some(default_info) = self.users.get(default) {
                 return Ok((default, default_info));
             }

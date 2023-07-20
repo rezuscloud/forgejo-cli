@@ -1,7 +1,7 @@
+use reqwest::{Client, Request, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
-use url::Url;
 use soft_assert::*;
-use reqwest::{Client, StatusCode, Request};
+use url::Url;
 
 pub struct Forgejo {
     url: Url,
@@ -23,7 +23,7 @@ pub enum ForgejoError {
     #[error("unexpected status code {} {}", .0.as_u16(), .0.canonical_reason().unwrap_or(""))]
     UnexpectedStatusCode(StatusCode),
     #[error("{} {}: {}", .0.as_u16(), .0.canonical_reason().unwrap_or(""), .1)]
-    ApiError(StatusCode, String)
+    ApiError(StatusCode, String),
 }
 
 impl From<reqwest::Error> for ForgejoError {
@@ -37,23 +37,32 @@ impl From<reqwest::Error> for ForgejoError {
 }
 
 impl Forgejo {
-    pub fn new(api_key: &str, url: Url) -> Result<Self, ForgejoError> { 
+    pub fn new(api_key: &str, url: Url) -> Result<Self, ForgejoError> {
         Self::with_user_agent(api_key, url, "forgejo-api-rs")
     }
 
-    pub fn with_user_agent(api_key: &str, url: Url, user_agent: &str) -> Result<Self, ForgejoError> {
-        soft_assert!(matches!(url.scheme(), "http" | "https"), Err(ForgejoError::HttpRequired));
+    pub fn with_user_agent(
+        api_key: &str,
+        url: Url,
+        user_agent: &str,
+    ) -> Result<Self, ForgejoError> {
+        soft_assert!(
+            matches!(url.scheme(), "http" | "https"),
+            Err(ForgejoError::HttpRequired)
+        );
 
         let mut headers = reqwest::header::HeaderMap::new();
-        let mut key_header: reqwest::header::HeaderValue = format!("token {api_key}").try_into().map_err(|_| ForgejoError::KeyNotAscii)?;
+        let mut key_header: reqwest::header::HeaderValue = format!("token {api_key}")
+            .try_into()
+            .map_err(|_| ForgejoError::KeyNotAscii)?;
         // key_header.set_sensitive(true);
         headers.insert("Authorization", key_header);
-        let client = Client::builder().user_agent(user_agent).default_headers(headers).build()?;
+        let client = Client::builder()
+            .user_agent(user_agent)
+            .default_headers(headers)
+            .build()?;
         dbg!(&client);
-        Ok(Self { 
-            url,
-            client,
-        })
+        Ok(Self { url, client })
     }
 
     pub async fn get_repo(&self, user: &str, repo: &str) -> Result<Option<Repo>, ForgejoError> {
@@ -93,29 +102,42 @@ impl Forgejo {
         self.execute_opt(request).await
     }
 
-    async fn post<T: Serialize, U: DeserializeOwned>(&self, path: &str, body: &T) -> Result<U, ForgejoError> {
+    async fn post<T: Serialize, U: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &T,
+    ) -> Result<U, ForgejoError> {
         let url = self.url.join("api/v1/").unwrap().join(path).unwrap();
         let request = self.client.post(url).json(body).build()?;
         self.execute(request).await
-    } 
+    }
 
     async fn execute<T: DeserializeOwned>(&self, request: Request) -> Result<T, ForgejoError> {
         let response = self.client.execute(dbg!(request)).await?;
         match response.status() {
             status if status.is_success() => Ok(response.json::<T>().await?),
-            status if status.is_client_error() => Err(ForgejoError::ApiError(status, response.json::<ErrorMessage>().await?.message)),
-            status => Err(ForgejoError::UnexpectedStatusCode(status))
+            status if status.is_client_error() => Err(ForgejoError::ApiError(
+                status,
+                response.json::<ErrorMessage>().await?.message,
+            )),
+            status => Err(ForgejoError::UnexpectedStatusCode(status)),
         }
     }
 
     /// Like `execute`, but returns `Ok(None)` on 404.
-    async fn execute_opt<T: DeserializeOwned>(&self, request: Request) -> Result<Option<T>, ForgejoError> {
+    async fn execute_opt<T: DeserializeOwned>(
+        &self,
+        request: Request,
+    ) -> Result<Option<T>, ForgejoError> {
         let response = self.client.execute(dbg!(request)).await?;
         match response.status() {
             status if status.is_success() => Ok(Some(response.json::<T>().await?)),
             StatusCode::NOT_FOUND => Ok(None),
-            status if status.is_client_error() => Err(ForgejoError::ApiError(status, response.json::<ErrorMessage>().await?.message)),
-            status => Err(ForgejoError::UnexpectedStatusCode(status))
+            status if status.is_client_error() => Err(ForgejoError::ApiError(
+                status,
+                response.json::<ErrorMessage>().await?.message,
+            )),
+            status => Err(ForgejoError::UnexpectedStatusCode(status)),
         }
     }
 }
@@ -124,14 +146,13 @@ impl Forgejo {
 struct ErrorMessage {
     message: String,
     // intentionally ignored, no need for now
-    // url: Url 
+    // url: Url
 }
-
 
 #[derive(serde::Deserialize, Debug, PartialEq)]
 pub struct Repo {
     pub clone_url: Url,
-    #[serde(with="time::serde::rfc3339")]
+    #[serde(with = "time::serde::rfc3339")]
     pub created_at: time::OffsetDateTime,
     pub default_branch: String,
     pub description: String,
@@ -146,7 +167,7 @@ pub struct Repo {
 pub struct User {
     pub active: bool,
     pub avatar_url: Url,
-    #[serde(with="time::serde::rfc3339")]
+    #[serde(with = "time::serde::rfc3339")]
     pub created: time::OffsetDateTime,
     pub description: String,
     pub email: String,
@@ -156,7 +177,7 @@ pub struct User {
     pub id: u64,
     pub is_admin: bool,
     pub language: String,
-    #[serde(with="time::serde::rfc3339")]
+    #[serde(with = "time::serde::rfc3339")]
     pub last_login: time::OffsetDateTime,
     pub location: String,
     pub login: String,
@@ -189,7 +210,7 @@ pub struct CreateRepoOption {
     pub private: bool,
     pub readme: String,
     pub template: bool,
-    pub trust_model: TrustModel
+    pub trust_model: TrustModel,
 }
 
 #[derive(serde::Serialize, Debug, PartialEq)]
