@@ -119,14 +119,14 @@ async fn main() -> eyre::Result<()> {
                 let upstream = set_upstream.as_deref().unwrap_or("origin");
 
                 let repo = git2::Repository::open(".")?;
-                let remote = if set_upstream.is_some() || push {
-                    repo.remote(upstream, new_repo.clone_url.as_str())?;
+                let mut remote = if set_upstream.is_some() || push {
+                    repo.remote(upstream, new_repo.clone_url.as_str())?
                 } else {
-                    repo.find_remote(upstream)?;
+                    repo.find_remote(upstream)?
                 };
 
                 if push {
-                    remote.push(upstream)?;
+                    remote.push::<&str>(&[], None)?;
                 }
             }
             RepoCommand::Info => {
