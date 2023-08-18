@@ -256,28 +256,3 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     .await?
 }
 
-async fn get_remotes() -> eyre::Result<Vec<(String, Url)>> {
-    let repo = git2::Repository::open(".")?;
-    let remotes = repo
-        .remotes()?
-        .iter()
-        .filter_map(|name| {
-            let name = name?.to_string();
-            let url = Url::parse(repo.find_remote(&name).ok()?.url()?).ok()?;
-            Some((name, url))
-        })
-        .collect::<Vec<_>>();
-    Ok(remotes)
-}
-
-async fn get_remote(remotes: &[(String, Url)]) -> eyre::Result<Url> {
-    let url = if remotes.len() == 1 {
-        remotes[0].1.clone()
-    } else if let Some((_, url)) = remotes.iter().find(|(name, _)| *name == "origin") {
-        url.clone()
-    } else {
-        bail!("could not find remote");
-    };
-    Ok(url)
-}
-
