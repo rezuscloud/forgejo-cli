@@ -1,5 +1,5 @@
-use std::{collections::BTreeMap, io::ErrorKind};
 use eyre::eyre;
+use std::{collections::BTreeMap, io::ErrorKind};
 use tokio::io::AsyncWriteExt;
 use url::Url;
 
@@ -47,17 +47,23 @@ impl KeyInfo {
         let remote_url = get_remote(&repo)?;
         let login_info = self.get_login(&remote_url)?;
 
-        let mut path = remote_url.path_segments().ok_or_else(|| eyre!("bad path"))?.collect::<Vec<_>>();
-        let repo_name = path.pop().ok_or_else(|| eyre!("path does not have repo name"))?.to_string();
-        let owner = path.pop().ok_or_else(|| eyre!("path does not have owner name"))?.to_string();
+        let mut path = remote_url
+            .path_segments()
+            .ok_or_else(|| eyre!("bad path"))?
+            .collect::<Vec<_>>();
+        let repo_name = path
+            .pop()
+            .ok_or_else(|| eyre!("path does not have repo name"))?
+            .to_string();
+        let owner = path
+            .pop()
+            .ok_or_else(|| eyre!("path does not have owner name"))?
+            .to_string();
         let base_path = path.join("/");
 
         let mut url = remote_url;
         url.set_path(&base_path);
-        let host_info = HostInfo {
-            url,
-            login_info,
-        };
+        let host_info = HostInfo { url, login_info };
         let repo_info = RepoInfo {
             owner,
             name: repo_name,
@@ -111,7 +117,7 @@ impl RepoInfo {
     pub fn owner(&self) -> &str {
         &self.owner
     }
-    
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -144,10 +150,7 @@ pub struct LoginInfo {
 
 impl LoginInfo {
     pub fn new(name: String, key: String) -> Self {
-        Self {
-            name,
-            key,
-        }
+        Self { name, key }
     }
 
     pub fn username(&self) -> &str {
@@ -162,10 +165,11 @@ impl LoginInfo {
 fn get_remote(repo: &git2::Repository) -> eyre::Result<Url> {
     let head = repo.head()?;
     let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
-    let remote_name= repo.branch_upstream_remote(branch_name)?;
-    let remote_name = remote_name.as_str().ok_or_else(|| eyre!("remote name not UTF-8"))?;
+    let remote_name = repo.branch_upstream_remote(branch_name)?;
+    let remote_name = remote_name
+        .as_str()
+        .ok_or_else(|| eyre!("remote name not UTF-8"))?;
     let remote = repo.find_remote(remote_name)?;
     let url = Url::parse(std::str::from_utf8(remote.url_bytes())?)?;
     Ok(url)
 }
-
