@@ -132,10 +132,9 @@ async fn main() -> eyre::Result<()> {
             RepoCommand::Browse => {
                 let (host, repo) = keys.get_current()?;
                 let mut url = host.url().clone();
-                let new_path = format!("{}/{}/{}",
-                    url.path()
-                        .strip_suffix("/")
-                        .unwrap_or(url.path()),
+                let new_path = format!(
+                    "{}/{}/{}",
+                    url.path().strip_suffix("/").unwrap_or(url.path()),
                     repo.owner(),
                     repo.name(),
                 );
@@ -146,10 +145,7 @@ async fn main() -> eyre::Result<()> {
         Command::User { host } => {
             let host = host.map(|host| Url::parse(&host)).transpose()?;
             let (url, name) = match host {
-                Some(url) => (
-                    keys.get_login(&url)?.username(),
-                    url,
-                ),
+                Some(url) => (keys.get_login(&url)?.username(), url),
                 None => {
                     let (host, _) = keys.get_current()?;
                     (host.username(), host.url().clone())
@@ -164,20 +160,14 @@ async fn main() -> eyre::Result<()> {
                 // let pass = readline("password: ").await?;
             }
             AuthCommand::Logout { host } => {
-                let info_opt = keys
-                    .hosts
-                    .remove(&host);
+                let info_opt = keys.hosts.remove(&host);
                 if let Some(info) = info_opt {
                     eprintln!("signed out of {}@{}", &info.username(), host);
                 } else {
                     eprintln!("already not signed in to {host}");
                 }
             }
-            AuthCommand::AddKey {
-                host,
-                user,
-                key,
-            } => {
+            AuthCommand::AddKey { host, user, key } => {
                 let key = match key {
                     Some(key) => key,
                     None => readline("new key: ").await?,
@@ -185,10 +175,7 @@ async fn main() -> eyre::Result<()> {
                 if keys.hosts.get(&user).is_none() {
                     keys.hosts.insert(host, LoginInfo::new(user, key));
                 } else {
-                    println!(
-                        "key for {} already exists",
-                        host
-                    );
+                    println!("key for {} already exists", host);
                 }
             }
             AuthCommand::List => {
@@ -216,4 +203,3 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     })
     .await?
 }
-
