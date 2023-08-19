@@ -5,15 +5,10 @@ use url::Url;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct KeyInfo {
-    pub hosts: BTreeMap<String, HostInfo>,
-    pub domain_to_name: BTreeMap<String, String>,
+    pub hosts: BTreeMap<String, LoginInfo>,
 }
 
 impl KeyInfo {
-    fn domain_to_name(&self, domain: &str) -> Option<&str> {
-        self.domain_to_name.get(domain).map(|s| &**s)
-    }
-
     pub async fn load() -> eyre::Result<Self> {
         let path = directories::ProjectDirs::from("", "Cyborus", "forgejo-cli")
             .ok_or_else(|| eyre!("Could not find data directory"))?
@@ -47,37 +42,78 @@ impl KeyInfo {
         Ok(())
     }
 
-    pub async fn get_current_host_and_repo(&self) -> eyre::Result<(&str, &HostInfo, String)> {
-        let remotes = get_remotes().await?;
-        let remote = get_remote(&remotes).await?;
-        let host_str = remote
+    pub fn get_current(&self) -> eyre::Result<(HostInfo<'_>, RepoInfo)> {
+        let repo = git2::Repository::open(".")?;
+        let remote_url = get_remote(&repo)?;
+        let login_info = self.get_login(&remote_url)?;
+
+        let mut path = remote_url.path_segments().ok_or_else(|| eyre!("bad path"))?.collect::<Vec<_>>();
+        let repo_name = path.pop().ok_or_else(|| eyre!("path does not have repo name"))?.to_string();
+        let owner = path.pop().ok_or_else(|| eyre!("path does not have owner name"))?.to_string();
+        let base_path = path.join("/");
+
+        let mut url = remote_url;
+        url.set_path(&base_path);
+        let host_info = HostInfo {
+            url,
+            login_info,
+        };
+        let repo_info = RepoInfo {
+            owner,
+            name: repo_name,
+        };
+        Ok((host_info, repo_info))
+    }
+
+    pub fn get_login(&self, url: &Url) -> eyre::Result<&LoginInfo> {
+        let host_str = url
             .host_str()
             .ok_or_else(|| eyre!("remote url does not have host"))?;
-        let domain = if let Some(port) = remote.port() {
+        let domain = if let Some(port) = url.port() {
             format!("{}:{}", host_str, port)
         } else {
             host_str.to_owned()
         };
-        let name = self
-            .domain_to_name(&domain)
-            .ok_or_else(|| eyre!("unknown remote"))?;
 
-        let (name, host) = self
+        let login_info = self
             .hosts
-            .get_key_value(name)
+            .get(&domain)
             .ok_or_else(|| eyre!("not signed in to {domain}"))?;
-        Ok((name, host, repo_from_url(&remote)?.into()))
+        Ok(login_info)
+    }
+}
+
+pub struct HostInfo<'a> {
+    url: Url,
+    login_info: &'a LoginInfo,
+}
+
+impl<'a> HostInfo<'a> {
+    pub fn api(&self) -> Result<forgejo_api::Forgejo, forgejo_api::ForgejoError> {
+        self.login_info.api_for(self.url())
     }
 
-    pub async fn get_current_host(&self) -> eyre::Result<(&str, &HostInfo)> {
-        let (name, host, _) = self.get_current_host_and_repo().await?;
-        Ok((name, host))
+    pub fn url(&self) -> &Url {
+        &self.url
     }
 
-    async fn get_current_user(&self) -> eyre::Result<(&str, &UserInfo)> {
-        let user = self.get_current_host().await?.1.get_current_user()?;
+    pub fn username(&self) -> &'a str {
+        &self.login_info.name
+    }
+}
 
-        Ok(user)
+pub struct RepoInfo {
+    owner: String,
+    name: String,
+}
+
+impl RepoInfo {
+    pub fn owner(&self) -> &str {
+        &self.owner
+    }
+    
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -100,57 +136,36 @@ fn repo_from_url(url: &Url) -> eyre::Result<&str> {
     Ok(repo)
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct HostInfo {
-    pub default: Option<String>,
-    pub url: Url,
-    pub users: BTreeMap<String, UserInfo>,
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
+pub struct LoginInfo {
+    name: String,
+    key: String,
 }
 
-impl HostInfo {
-    pub fn get_current_user(&self) -> eyre::Result<(&str, &UserInfo)> {
-        if self.users.len() == 1 {
-            let (s, k) = self.users.first_key_value().unwrap();
-            return Ok((s, k));
+impl LoginInfo {
+    pub fn new(name: String, key: String) -> Self {
+        Self {
+            name,
+            key,
         }
-        if let Some(default) = self.default.as_ref() {
-            if let Some(default_info) = self.users.get(default) {
-                return Ok((default, default_info));
-            }
-        }
+    }
 
-        Err(eyre!("could not find user"))
+    pub fn username(&self) -> &str {
+        &self.name
+    }
+
+    pub fn api_for(&self, url: &Url) -> Result<forgejo_api::Forgejo, forgejo_api::ForgejoError> {
+        forgejo_api::Forgejo::new(&self.key, url.clone())
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
-pub struct UserInfo {
-    pub name: String,
-    pub key: String,
-}
-
-async fn get_remotes() -> eyre::Result<Vec<(String, Url)>> {
-    let repo = git2::Repository::open(".")?;
-    let remotes = repo
-        .remotes()?
-        .iter()
-        .filter_map(|name| {
-            let name = name?.to_string();
-            let url = Url::parse(repo.find_remote(&name).ok()?.url()?).ok()?;
-            Some((name, url))
-        })
-        .collect::<Vec<_>>();
-    Ok(remotes)
-}
-
-async fn get_remote(remotes: &[(String, Url)]) -> eyre::Result<Url> {
-    let url = if remotes.len() == 1 {
-        remotes[0].1.clone()
-    } else if let Some((_, url)) = remotes.iter().find(|(name, _)| *name == "origin") {
-        url.clone()
-    } else {
-        eyre::bail!("could not find remote");
-    };
+fn get_remote(repo: &git2::Repository) -> eyre::Result<Url> {
+    let head = repo.head()?;
+    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
+    let remote_name= repo.branch_upstream_remote(branch_name)?;
+    let remote_name = remote_name.as_str().ok_or_else(|| eyre!("remote name not UTF-8"))?;
+    let remote = repo.find_remote(remote_name)?;
+    let url = Url::parse(std::str::from_utf8(remote.url_bytes())?)?;
     Ok(url)
 }
 

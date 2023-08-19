@@ -55,22 +55,12 @@ pub enum AuthCommand {
     Login,
     Logout {
         host: String,
-        user: String,
-    },
-    Switch {
-        /// The host to set the default account for.
-        #[clap(short, long)]
-        host: Option<String>,
-        user: String,
     },
     AddKey {
         /// The domain name of the forgejo instance.
         host: String,
         /// The user that the key is associated with
         user: String,
-        /// The name of the key. If not present, defaults to the username.
-        #[clap(short, long)]
-        name: Option<String>,
         /// The key to add. If not present, the key will be read in from stdin.
         key: Option<String>,
     },
@@ -93,13 +83,9 @@ async fn main() -> eyre::Result<()> {
                 set_upstream,
                 push,
             } => {
-                // let (host_domain, host_keys, repo) = keys.get_current_host_and_repo().await?;
-                let host_info = keys
-                    .hosts
-                    .get(&host)
-                    .ok_or_else(|| eyre!("not a known host"))?;
-                let (_, user) = host_info.get_current_user()?;
-                let api = Forgejo::new(&user.key, host_info.url.clone())?;
+                let host = Url::parse(&host)?;
+                let login = keys.get_login(&host)?;
+                let api = login.api_for(&host)?;
                 let repo_spec = CreateRepoOption {
                     auto_init: false,
                     default_branch: "main".into(),
@@ -116,7 +102,7 @@ async fn main() -> eyre::Result<()> {
                 let new_repo = api.create_repo(repo_spec).await?;
                 eprintln!(
                     "created new repo at {}",
-                    host_info.url.join(&format!("{}/{}", user.name, repo))?
+                    host.join(&format!("{}/{}", login.username(), repo))?
                 );
 
                 let upstream = set_upstream.as_deref().unwrap_or("origin");
@@ -133,10 +119,9 @@ async fn main() -> eyre::Result<()> {
                 }
             }
             RepoCommand::Info => {
-                let (_, host_keys, repo) = keys.get_current_host_and_repo().await?;
-                let (_, user) = host_keys.get_current_user()?;
-                let api = Forgejo::new(&user.key, host_keys.url.clone())?;
-                let repo = api.get_repo(&user.name, &repo).await?;
+                let (host, repo) = keys.get_current()?;
+                let api = host.api()?;
+                let repo = api.get_repo(repo.owner(), repo.name()).await?;
                 match repo {
                     Some(repo) => {
                         dbg!(repo);
@@ -145,26 +130,32 @@ async fn main() -> eyre::Result<()> {
                 }
             }
             RepoCommand::Browse => {
-                let (_, host_keys, repo) = keys.get_current_host_and_repo().await?;
-                let (_, user) = host_keys.get_current_user()?;
-                open::that(
-                    host_keys
-                        .url
-                        .join(&format!("/{}/{repo}", user.name))?
-                        .as_str(),
-                )?;
+                let (host, repo) = keys.get_current()?;
+                let mut url = host.url().clone();
+                let new_path = format!("{}/{}/{}",
+                    url.path()
+                        .strip_suffix("/")
+                        .unwrap_or(url.path()),
+                    repo.owner(),
+                    repo.name(),
+                );
+                url.set_path(&new_path);
+                open::that(url.as_str())?;
             }
         },
         Command::User { host } => {
-            let (_, host_keys) = match host.as_deref() {
-                Some(s) => (
-                    s,
-                    keys.hosts.get(s).ok_or_else(|| eyre!("not a known host"))?,
+            let host = host.map(|host| Url::parse(&host)).transpose()?;
+            let (url, name) = match host {
+                Some(url) => (
+                    keys.get_login(&url)?.username(),
+                    url,
                 ),
-                None => keys.get_current_host().await?,
+                None => {
+                    let (host, _) = keys.get_current()?;
+                    (host.username(), host.url().clone())
+                }
             };
-            let (_, info) = host_keys.get_current_user()?;
-            eprintln!("currently signed in to {}@{}", info.name, host_keys.url);
+            eprintln!("currently signed in to {name}@{url}");
         }
         Command::Auth(auth_subcommand) => match auth_subcommand {
             AuthCommand::Login => {
@@ -172,57 +163,30 @@ async fn main() -> eyre::Result<()> {
                 // let user = readline("username: ").await?;
                 // let pass = readline("password: ").await?;
             }
-            AuthCommand::Logout { host, user } => {
-                let was_signed_in = keys
+            AuthCommand::Logout { host } => {
+                let info_opt = keys
                     .hosts
-                    .get_mut(&host)
-                    .and_then(|host| host.users.remove(&user))
-                    .is_some();
-                if was_signed_in {
-                    eprintln!("signed out of {user}@{host}");
+                    .remove(&host);
+                if let Some(info) = info_opt {
+                    eprintln!("signed out of {}@{}", &info.username(), host);
                 } else {
-                    eprintln!("already not signed in");
-                }
-            }
-            AuthCommand::Switch { host, user } => {
-                let host = host.unwrap_or(keys.get_current_host().await?.0.to_string());
-                let host_info = keys
-                    .hosts
-                    .get_mut(&host)
-                    .ok_or_else(|| eyre!("not a known host"))?;
-                if !host_info.users.contains_key(&user) {
-                    bail!("could not switch user: not signed into {host} as {user}");
-                }
-                let previous = host_info.default.replace(user.clone());
-                print!("set current user for {host} to {user}");
-                match previous {
-                    Some(prev) => println!(" (previously {prev})"),
-                    None => println!(),
+                    eprintln!("already not signed in to {host}");
                 }
             }
             AuthCommand::AddKey {
                 host,
                 user,
-                name,
                 key,
             } => {
-                let host_keys = keys
-                    .hosts
-                    .get_mut(&host)
-                    .ok_or_else(|| eyre!("unknown host {host}"))?;
                 let key = match key {
                     Some(key) => key,
                     None => readline("new key: ").await?,
                 };
-                if host_keys.users.get(&user).is_none() {
-                    host_keys.users.insert(
-                        name.unwrap_or_else(|| user.clone()),
-                        UserInfo { name: user, key },
-                    );
+                if keys.hosts.get(&user).is_none() {
+                    keys.hosts.insert(host, LoginInfo::new(user, key));
                 } else {
                     println!(
-                        "key {} for {} already exists (rename it?)",
-                        name.unwrap_or(user),
+                        "key for {} already exists",
                         host
                     );
                 }
@@ -231,11 +195,8 @@ async fn main() -> eyre::Result<()> {
                 if keys.hosts.is_empty() {
                     println!("No logins.");
                 }
-                for (host_url, host_info) in &keys.hosts {
-                    for (key_name, key_info) in &host_info.users {
-                        let UserInfo { name, key: _ } = key_info;
-                        println!("{key_name}: {name}@{host_url}");
-                    }
+                for (host_url, login_info) in &keys.hosts {
+                    println!("{}@{}", login_info.username(), host_url);
                 }
             }
         },
