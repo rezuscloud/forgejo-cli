@@ -307,6 +307,7 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 [[package]]
 name = "forgejo-api"
 version = "0.1.0"
+source = "git+https://codeberg.org/Cyborus/forgejo-api.git#285fddb2ea3bbc9bfc1116e92167347194594d61"
 dependencies = [
  "reqwest",
  "serde",
