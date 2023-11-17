@@ -118,17 +118,13 @@ impl RepoCommand {
                     host.join(&format!("{}/{}", login.username(), repo))?
                 );
 
-                let upstream = set_upstream.as_deref().unwrap_or("origin");
-
-                let repo = git2::Repository::open(".")?;
-                let mut remote = if set_upstream.is_some() || push {
-                    repo.remote(upstream, new_repo.clone_url.as_str())?
-                } else {
-                    repo.find_remote(upstream)?
-                };
-
-                if push {
-                    remote.push::<&str>(&[], None)?;
+                if set_upstream.is_some() || push {
+                    let repo = git2::Repository::open(".")?;
+                    let upstream = set_upstream.as_deref().unwrap_or("origin");
+                    let mut remote = repo.remote(upstream, new_repo.clone_url.as_str())?;
+                    if push {
+                        remote.push::<&str>(&[], None)?;
+                    }
                 }
             }
             RepoCommand::Info => {
