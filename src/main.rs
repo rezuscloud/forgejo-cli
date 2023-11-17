@@ -9,8 +9,8 @@ use url::Url;
 mod keys;
 use keys::*;
 
-mod repo;
 mod auth;
+mod repo;
 
 #[derive(Parser, Debug)]
 pub struct App {

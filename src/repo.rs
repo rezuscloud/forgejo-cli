@@ -1,6 +1,6 @@
 use clap::Subcommand;
-use url::Url;
 use forgejo_api::CreateRepoOption;
+use url::Url;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {

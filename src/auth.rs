@@ -39,7 +39,8 @@ impl AuthCommand {
                     None => crate::readline("new key: ").await?,
                 };
                 if keys.hosts.get(&user).is_none() {
-                    keys.hosts.insert(host, crate::keys::LoginInfo::new(user, key));
+                    keys.hosts
+                        .insert(host, crate::keys::LoginInfo::new(user, key));
                 } else {
                     println!("key for {} already exists", host);
                 }
@@ -56,4 +57,3 @@ impl AuthCommand {
         Ok(())
     }
 }
-
