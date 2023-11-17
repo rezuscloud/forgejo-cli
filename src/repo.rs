@@ -1,7 +1,7 @@
 use clap::Subcommand;
+use eyre::eyre;
 use forgejo_api::CreateRepoOption;
 use url::Url;
-use eyre::eyre;
 
 pub struct RepoInfo {
     owner: String,
@@ -14,9 +14,7 @@ impl RepoInfo {
         let repo = git2::Repository::open(".")?;
         let url = get_remote(&repo)?;
 
-        let mut path = url
-            .path_segments()
-            .ok_or_else(|| eyre!("bad path"))?;
+        let mut path = url.path_segments().ok_or_else(|| eyre!("bad path"))?;
         let owner = path
             .next()
             .ok_or_else(|| eyre!("path does not have owner name"))?
@@ -26,11 +24,7 @@ impl RepoInfo {
             .ok_or_else(|| eyre!("path does not have repo name"))?;
         let name = name.strip_suffix(".git").unwrap_or(name).to_string();
 
-        let repo_info = RepoInfo {
-            owner,
-            name,
-            url,
-        };
+        let repo_info = RepoInfo { owner, name, url };
         Ok(repo_info)
     }
     pub fn owner(&self) -> &str {
@@ -47,7 +41,10 @@ impl RepoInfo {
 
     pub fn host_url(&self) -> Url {
         let mut url = self.url.clone();
-        url.path_segments_mut().expect("invalid url: cannot be a base").pop().pop();
+        url.path_segments_mut()
+            .expect("invalid url: cannot be a base")
+            .pop()
+            .pop();
         url
     }
 }

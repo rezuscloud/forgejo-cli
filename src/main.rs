@@ -41,9 +41,7 @@ async fn main() -> eyre::Result<()> {
             let host = host.map(|host| Url::parse(&host)).transpose()?;
             let url = match host {
                 Some(url) => url,
-                None => {
-                    repo::RepoInfo::get_current()?.url().clone()
-                }
+                None => repo::RepoInfo::get_current()?.url().clone(),
             };
             let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
@@ -65,4 +63,3 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     })
     .await?
 }
-
