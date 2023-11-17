@@ -1,6 +1,62 @@
 use clap::Subcommand;
 use forgejo_api::CreateRepoOption;
 use url::Url;
+use eyre::eyre;
+
+pub struct RepoInfo {
+    owner: String,
+    name: String,
+    url: Url,
+}
+
+impl RepoInfo {
+    pub fn get_current() -> eyre::Result<Self> {
+        let repo = git2::Repository::open(".")?;
+        let url = get_remote(&repo)?;
+
+        let mut path = url
+            .path_segments()
+            .ok_or_else(|| eyre!("bad path"))?;
+        let owner = path
+            .next()
+            .ok_or_else(|| eyre!("path does not have owner name"))?
+            .to_string();
+        let name = path
+            .next()
+            .ok_or_else(|| eyre!("path does not have repo name"))?
+            .to_string();
+
+        let repo_info = RepoInfo {
+            owner,
+            name,
+            url,
+        };
+        Ok(repo_info)
+    }
+    pub fn owner(&self) -> &str {
+        &self.owner
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
+}
+
+fn get_remote(repo: &git2::Repository) -> eyre::Result<Url> {
+    let head = repo.head()?;
+    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
+    let remote_name = repo.branch_upstream_remote(branch_name)?;
+    let remote_name = remote_name
+        .as_str()
+        .ok_or_else(|| eyre!("remote name not UTF-8"))?;
+    let remote = repo.find_remote(remote_name)?;
+    let url = Url::parse(std::str::from_utf8(remote.url_bytes())?)?;
+    Ok(url)
+}
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
@@ -73,8 +129,8 @@ impl RepoCommand {
                 }
             }
             RepoCommand::Info => {
-                let (host, repo) = keys.get_current()?;
-                let api = host.api()?;
+                let repo = RepoInfo::get_current()?;
+                let api = keys.get_api(repo.url())?;
                 let repo = api.get_repo(repo.owner(), repo.name()).await?;
                 match repo {
                     Some(repo) => {
@@ -84,8 +140,8 @@ impl RepoCommand {
                 }
             }
             RepoCommand::Browse => {
-                let (host, repo) = keys.get_current()?;
-                let mut url = host.url().clone();
+                let repo = RepoInfo::get_current()?;
+                let mut url = repo.url().clone();
                 let new_path = format!(
                     "{}/{}/{}",
                     url.path().strip_suffix("/").unwrap_or(url.path()),

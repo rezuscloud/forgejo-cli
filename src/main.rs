@@ -39,13 +39,13 @@ async fn main() -> eyre::Result<()> {
         Command::Repo(repo_subcommand) => repo_subcommand.run(&keys).await?,
         Command::User { host } => {
             let host = host.map(|host| Url::parse(&host)).transpose()?;
-            let (url, name) = match host {
-                Some(url) => (keys.get_login(&url)?.username(), url),
+            let url = match host {
+                Some(url) => url,
                 None => {
-                    let (host, _) = keys.get_current()?;
-                    (host.username(), host.url().clone())
+                    repo::RepoInfo::get_current()?.url().clone()
                 }
             };
+            let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
         }
         Command::Auth(auth_subcommand) => auth_subcommand.run(&mut keys).await?,
@@ -65,3 +65,4 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     })
     .await?
 }
+
