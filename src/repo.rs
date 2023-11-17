@@ -23,8 +23,8 @@ impl RepoInfo {
             .to_string();
         let name = path
             .next()
-            .ok_or_else(|| eyre!("path does not have repo name"))?
-            .to_string();
+            .ok_or_else(|| eyre!("path does not have repo name"))?;
+        let name = name.strip_suffix(".git").unwrap_or(name).to_string();
 
         let repo_info = RepoInfo {
             owner,
@@ -43,6 +43,12 @@ impl RepoInfo {
 
     pub fn url(&self) -> &Url {
         &self.url
+    }
+
+    pub fn host_url(&self) -> Url {
+        let mut url = self.url.clone();
+        url.path_segments_mut().expect("invalid url: cannot be a base").pop().pop();
+        url
     }
 }
 
@@ -130,7 +136,7 @@ impl RepoCommand {
             }
             RepoCommand::Info => {
                 let repo = RepoInfo::get_current()?;
-                let api = keys.get_api(repo.url())?;
+                let api = keys.get_api(&repo.host_url())?;
                 let repo = api.get_repo(repo.owner(), repo.name()).await?;
                 match repo {
                     Some(repo) => {
@@ -141,7 +147,7 @@ impl RepoCommand {
             }
             RepoCommand::Browse => {
                 let repo = RepoInfo::get_current()?;
-                let mut url = repo.url().clone();
+                let mut url = repo.host_url().clone();
                 let new_path = format!(
                     "{}/{}/{}",
                     url.path().strip_suffix("/").unwrap_or(url.path()),
