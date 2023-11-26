@@ -70,7 +70,7 @@ pub enum RepoCommand {
         // flags
         #[clap(long, short)]
         description: Option<String>,
-        #[clap(long, short)]
+        #[clap(long, short = 'P')]
         private: bool,
         /// Sets the new repo to be the `origin` remote of the current local repo.
         #[clap(long, short)]
