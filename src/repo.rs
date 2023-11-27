@@ -70,7 +70,7 @@ pub enum RepoCommand {
         // flags
         #[clap(long, short)]
         description: Option<String>,
-        #[clap(long, short)]
+        #[clap(long, short = 'P')]
         private: bool,
         /// Sets the new repo to be the `origin` remote of the current local repo.
         #[clap(long, short)]
@@ -120,10 +120,22 @@ impl RepoCommand {
 
                 if set_upstream.is_some() || push {
                     let repo = git2::Repository::open(".")?;
+
                     let upstream = set_upstream.as_deref().unwrap_or("origin");
                     let mut remote = repo.remote(upstream, new_repo.clone_url.as_str())?;
+
                     if push {
-                        remote.push::<&str>(&[], None)?;
+                        let head = repo.head()?;
+                        if !head.is_branch() {
+                            eyre::bail!("HEAD is not on a branch; cannot push to remote");
+                        }
+                        let branch_shorthand = head.shorthand().ok_or_else(|| eyre!("branch name invalid utf-8"))?.to_owned();
+                        let branch_name = std::str::from_utf8(head.name_bytes())?.to_owned();
+                        let mut current_branch = git2::Branch::wrap(head);
+                        current_branch.set_upstream(Some(&dbg!(format!("{upstream}/{branch_shorthand}"))))?;
+
+                        let auth = auth_git2::GitAuthenticator::new();
+                        auth.push(&repo, &mut remote, &[&branch_name])?;
                     }
                 }
             }
