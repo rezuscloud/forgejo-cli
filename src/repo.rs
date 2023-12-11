@@ -97,8 +97,7 @@ impl RepoCommand {
                 push,
             } => {
                 let host = Url::parse(&host)?;
-                let login = keys.get_login(&host)?;
-                let api = login.api_for(&host)?;
+                let api = keys.get_api(&host)?;
                 let repo_spec = CreateRepoOption {
                     auto_init: false,
                     default_branch: "main".into(),
@@ -113,10 +112,7 @@ impl RepoCommand {
                     trust_model: forgejo_api::TrustModel::Default,
                 };
                 let new_repo = api.create_repo(repo_spec).await?;
-                eprintln!(
-                    "created new repo at {}",
-                    host.join(&format!("{}/{}", login.username(), repo))?
-                );
+                eprintln!("created new repo at {}", host.join(&new_repo.full_name)?);
 
                 if set_upstream.is_some() || push {
                     let repo = git2::Repository::open(".")?;
