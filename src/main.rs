@@ -1,8 +1,5 @@
-use std::{collections::BTreeMap, io::ErrorKind};
-
 use clap::{Parser, Subcommand};
-use eyre::{bail, eyre};
-use forgejo_api::{CreateRepoOption, Forgejo};
+use eyre::eyre;
 use tokio::io::AsyncWriteExt;
 use url::Url;
 
@@ -10,6 +7,7 @@ mod keys;
 use keys::*;
 
 mod auth;
+mod issues;
 mod repo;
 
 #[derive(Parser, Debug)]
@@ -22,6 +20,8 @@ pub struct App {
 pub enum Command {
     #[clap(subcommand)]
     Repo(repo::RepoCommand),
+    #[clap(subcommand)]
+    Issue(issues::IssueCommand),
     User {
         #[clap(long, short)]
         host: Option<String>,
@@ -36,7 +36,8 @@ async fn main() -> eyre::Result<()> {
     let mut keys = KeyInfo::load().await?;
 
     match args.command {
-        Command::Repo(repo_subcommand) => repo_subcommand.run(&keys).await?,
+        Command::Repo(subcommand) => subcommand.run(&keys).await?,
+        Command::Issue(subcommand) => subcommand.run(&keys).await?,
         Command::User { host } => {
             let host = host.map(|host| Url::parse(&host)).transpose()?;
             let url = match host {
@@ -46,7 +47,7 @@ async fn main() -> eyre::Result<()> {
             let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
         }
-        Command::Auth(auth_subcommand) => auth_subcommand.run(&mut keys).await?,
+        Command::Auth(subcommand) => subcommand.run(&mut keys).await?,
     }
 
     keys.save().await?;
@@ -62,4 +63,49 @@ async fn readline(msg: &str) -> eyre::Result<String> {
         Ok(input)
     })
     .await?
+}
+
+async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
+    let editor = std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?;
+    
+    let (mut file, path) = tempfile(ext).await?;
+    file.write_all(contents.as_bytes()).await?;
+    drop(file);
+
+    // Closure acting as a try/catch block so that the temp file is deleted even
+    // on errors
+    let res = (|| async {
+        eprint!("waiting on editor\r");
+        let status = tokio::process::Command::new(editor)
+            .arg(&path)
+            .status()
+            .await?;
+        if !status.success() {
+            eyre::bail!("editor exited unsuccessfully");
+        }
+
+        *contents = tokio::fs::read_to_string(&path).await?;
+        eprint!("                 \r");
+
+        Ok(())
+    })().await;
+
+    tokio::fs::remove_file(path).await?;
+    res?;
+    Ok(())
+}
+
+async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std::path::PathBuf)> {
+    let filename = uuid::Uuid::new_v4();
+    let mut path = std::env::temp_dir().join(filename.to_string());
+    if let Some(ext) = ext {
+        path.set_extension(ext);
+    }
+    let file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .await?;
+    Ok((file, path))
 }
