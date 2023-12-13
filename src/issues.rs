@@ -94,7 +94,13 @@ impl IssueCommand {
                 ViewCommand::Comment { idx } => view_comment(&repo, &api, id, idx).await?,
                 ViewCommand::Comments => view_comments(&repo, &api, id).await?,
             },
-            Search { query, labels, creator, assignee, state } => view_issues(&repo, &api, query, labels, creator, assignee, state).await?,
+            Search {
+                query,
+                labels,
+                creator,
+                assignee,
+                state,
+            } => view_issues(&repo, &api, query, labels, creator, assignee, state).await?,
             Edit { issue, command } => match command {
                 EditCommand::Title { new_title } => {
                     edit_title(&repo, &api, issue, new_title).await?
@@ -161,9 +167,11 @@ async fn view_issues(
     labels: Option<String>,
     creator: Option<String>,
     assignee: Option<String>,
-    state: Option<State>
+    state: Option<State>,
 ) -> eyre::Result<()> {
-    let labels = labels.map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<_>>()).unwrap_or_default();
+    let labels = labels
+        .map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
+        .unwrap_or_default();
     let query = forgejo_api::IssueQuery {
         query: query_str,
         labels,
@@ -181,7 +189,10 @@ async fn view_issues(
         println!("{} issues", issues.len());
     }
     for issue in issues {
-        println!("#{}: {} (by {})", issue.number, issue.title, issue.user.login);
+        println!(
+            "#{}: {} (by {})",
+            issue.number, issue.title, issue.user.login
+        );
     }
     Ok(())
 }
