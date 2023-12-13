@@ -70,7 +70,9 @@ async fn readline(msg: &str) -> eyre::Result<String> {
 }
 
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
-    let editor = std::path::PathBuf::from(std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?);
+    let editor = std::path::PathBuf::from(
+        std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?,
+    );
 
     let (mut file, path) = tempfile(ext).await?;
     file.write_all(contents.as_bytes()).await?;
