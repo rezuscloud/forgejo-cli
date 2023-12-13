@@ -70,7 +70,9 @@ async fn readline(msg: &str) -> eyre::Result<String> {
 }
 
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
-    let editor = std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?;
+    let editor = std::path::PathBuf::from(
+        std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?,
+    );
 
     let (mut file, path) = tempfile(ext).await?;
     file.write_all(contents.as_bytes()).await?;
@@ -80,7 +82,9 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     // on errors
     let res = (|| async {
         eprint!("waiting on editor\r");
+        let flags = get_editor_flags(&editor);
         let status = tokio::process::Command::new(editor)
+            .args(flags)
             .arg(&path)
             .status()
             .await?;
@@ -98,6 +102,17 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     tokio::fs::remove_file(path).await?;
     res?;
     Ok(())
+}
+
+fn get_editor_flags(editor_path: &std::path::Path) -> &'static [&'static str] {
+    let editor_name = match editor_path.file_stem().and_then(|s| s.to_str()) {
+        Some(name) => name,
+        None => return &[],
+    };
+    if editor_name == "code" {
+        return &["--wait"];
+    }
+    &[]
 }
 
 async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std::path::PathBuf)> {
