@@ -12,6 +12,8 @@ mod repo;
 
 #[derive(Parser, Debug)]
 pub struct App {
+    #[clap(long, short='R')]
+    remote: Option<String>,
     #[clap(subcommand)]
     command: Command,
 }
@@ -36,13 +38,13 @@ async fn main() -> eyre::Result<()> {
     let mut keys = KeyInfo::load().await?;
 
     match args.command {
-        Command::Repo(subcommand) => subcommand.run(&keys).await?,
-        Command::Issue(subcommand) => subcommand.run(&keys).await?,
+        Command::Repo(subcommand) => subcommand.run(&keys, args.remote.as_deref()).await?,
+        Command::Issue(subcommand) => subcommand.run(&keys, args.remote.as_deref()).await?,
         Command::User { host } => {
             let host = host.map(|host| Url::parse(&host)).transpose()?;
             let url = match host {
                 Some(url) => url,
-                None => repo::RepoInfo::get_current()?.url().clone(),
+                None => repo::RepoInfo::get_current(args.remote.as_deref())?.url().clone(),
             };
             let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
