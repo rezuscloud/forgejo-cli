@@ -10,9 +10,9 @@ pub struct RepoInfo {
 }
 
 impl RepoInfo {
-    pub fn get_current() -> eyre::Result<Self> {
+    pub fn get_current(name: Option<&str>) -> eyre::Result<Self> {
         let repo = git2::Repository::open(".")?;
-        let url = get_remote(&repo)?;
+        let url = get_remote(&repo, name)?;
 
         let mut path = url.path_segments().ok_or_else(|| eyre!("bad path"))?;
         let owner = path
@@ -49,13 +49,19 @@ impl RepoInfo {
     }
 }
 
-fn get_remote(repo: &git2::Repository) -> eyre::Result<Url> {
-    let head = repo.head()?;
-    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
-    let remote_name = repo.branch_upstream_remote(branch_name)?;
-    let remote_name = remote_name
-        .as_str()
-        .ok_or_else(|| eyre!("remote name not UTF-8"))?;
+fn get_remote(repo: &git2::Repository, name: Option<&str>) -> eyre::Result<Url> {
+    let remote_name;
+    let remote_name = match name {
+        Some(name) => name,
+        None => {
+            let head = repo.head()?;
+            let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
+            remote_name = repo.branch_upstream_remote(branch_name)?;
+            remote_name
+                .as_str()
+                .ok_or_else(|| eyre!("remote name not UTF-8"))?
+        }
+    };
     let remote = repo.find_remote(remote_name)?;
     let url = Url::parse(std::str::from_utf8(remote.url_bytes())?)?;
     Ok(url)
@@ -85,7 +91,7 @@ pub enum RepoCommand {
 }
 
 impl RepoCommand {
-    pub async fn run(self, keys: &crate::KeyInfo) -> eyre::Result<()> {
+    pub async fn run(self, keys: &crate::KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
         match self {
             RepoCommand::Create {
                 host,
@@ -140,7 +146,7 @@ impl RepoCommand {
                 }
             }
             RepoCommand::Info => {
-                let repo = RepoInfo::get_current()?;
+                let repo = RepoInfo::get_current(remote_name)?;
                 let api = keys.get_api(&repo.host_url())?;
                 let repo = api.get_repo(repo.owner(), repo.name()).await?;
                 match repo {
@@ -151,7 +157,7 @@ impl RepoCommand {
                 }
             }
             RepoCommand::Browse => {
-                let repo = RepoInfo::get_current()?;
+                let repo = RepoInfo::get_current(remote_name)?;
                 let mut url = repo.host_url().clone();
                 let new_path = format!(
                     "{}/{}/{}",

@@ -83,9 +83,9 @@ pub enum ViewCommand {
 }
 
 impl IssueCommand {
-    pub async fn run(self, keys: &crate::KeyInfo) -> eyre::Result<()> {
+    pub async fn run(self, keys: &crate::KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
         use IssueCommand::*;
-        let repo = RepoInfo::get_current()?;
+        let repo = RepoInfo::get_current(remote_name)?;
         let api = keys.get_api(&repo.host_url())?;
         match self {
             Create { title, body } => create_issue(&repo, &api, title, body).await?,
