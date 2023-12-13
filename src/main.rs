@@ -12,7 +12,7 @@ mod repo;
 
 #[derive(Parser, Debug)]
 pub struct App {
-    #[clap(long, short='R')]
+    #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(subcommand)]
     command: Command,
@@ -44,7 +44,9 @@ async fn main() -> eyre::Result<()> {
             let host = host.map(|host| Url::parse(&host)).transpose()?;
             let url = match host {
                 Some(url) => url,
-                None => repo::RepoInfo::get_current(args.remote.as_deref())?.url().clone(),
+                None => repo::RepoInfo::get_current(args.remote.as_deref())?
+                    .url()
+                    .clone(),
             };
             let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
