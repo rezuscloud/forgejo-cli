@@ -1,6 +1,6 @@
 use clap::Subcommand;
 use eyre::eyre;
-use forgejo_api::{Forgejo, CreateIssueCommentOption, EditIssueOption, IssueCommentQuery, Comment};
+use forgejo_api::{Comment, CreateIssueCommentOption, EditIssueOption, Forgejo, IssueCommentQuery};
 
 use crate::repo::RepoInfo;
 
@@ -52,9 +52,7 @@ pub enum EditCommand {
 #[derive(Subcommand, Clone, Debug)]
 pub enum ViewCommand {
     Body,
-    Comment {
-        idx: usize,
-    },
+    Comment { idx: usize },
     Comments,
 }
 
@@ -68,7 +66,7 @@ impl IssueCommand {
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_issue(&repo, &api, id).await?,
                 ViewCommand::Comment { idx } => view_comment(&repo, &api, id, idx).await?,
-                ViewCommand::Comments => view_comments(&repo, &api, id).await?
+                ViewCommand::Comments => view_comments(&repo, &api, id).await?,
             },
             Edit { issue, command } => match command {
                 EditCommand::Title { new_title } => {
@@ -134,7 +132,9 @@ async fn view_comment(repo: &RepoInfo, api: &Forgejo, id: u64, idx: usize) -> ey
     let comments = api
         .get_issue_comments(repo.owner(), repo.name(), id, IssueCommentQuery::default())
         .await?;
-    let comment = comments.get(idx).ok_or_else(|| eyre!("comment {idx} doesn't exist"))?;
+    let comment = comments
+        .get(idx)
+        .ok_or_else(|| eyre!("comment {idx} doesn't exist"))?;
     print_comment(&comment);
     Ok(())
 }
@@ -309,7 +309,12 @@ async fn edit_comment(
     Ok(())
 }
 
-async fn close_issue(repo: &RepoInfo, api: &Forgejo, issue: u64, message: Option<Option<String>>) -> eyre::Result<()> {
+async fn close_issue(
+    repo: &RepoInfo,
+    api: &Forgejo,
+    issue: u64,
+    message: Option<Option<String>>,
+) -> eyre::Result<()> {
     if let Some(message) = message {
         let body = match message {
             Some(m) => m,
@@ -321,15 +326,16 @@ async fn close_issue(repo: &RepoInfo, api: &Forgejo, issue: u64, message: Option
         };
 
         let opt = CreateIssueCommentOption { body };
-        api.create_comment(repo.owner(), repo.name(), issue, opt).await?;
+        api.create_comment(repo.owner(), repo.name(), issue, opt)
+            .await?;
     }
 
     let edit = EditIssueOption {
         state: Some(forgejo_api::State::Closed),
         ..Default::default()
     };
-    api.edit_issue(repo.owner(), repo.name(), issue, edit).await?;
+    api.edit_issue(repo.owner(), repo.name(), issue, edit)
+        .await?;
 
     Ok(())
-
 }
