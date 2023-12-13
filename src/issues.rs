@@ -25,6 +25,17 @@ pub enum IssueCommand {
         #[clap(long, short)]
         with_msg: Option<Option<String>>,
     },
+    Search {
+        query: Option<String>,
+        #[clap(long, short)]
+        labels: Option<String>,
+        #[clap(long, short)]
+        creator: Option<String>,
+        #[clap(long, short)]
+        assignee: Option<String>,
+        #[clap(long, short)]
+        state: Option<State>,
+    },
     View {
         id: u64,
         #[clap(subcommand)]
@@ -33,6 +44,21 @@ pub enum IssueCommand {
     Browse {
         id: Option<u64>,
     },
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+pub enum State {
+    Open,
+    Closed,
+}
+
+impl From<State> for forgejo_api::State {
+    fn from(value: State) -> Self {
+        match value {
+            State::Open => forgejo_api::State::Open,
+            State::Closed => forgejo_api::State::Closed,
+        }
+    }
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -68,6 +94,13 @@ impl IssueCommand {
                 ViewCommand::Comment { idx } => view_comment(&repo, &api, id, idx).await?,
                 ViewCommand::Comments => view_comments(&repo, &api, id).await?,
             },
+            Search {
+                query,
+                labels,
+                creator,
+                assignee,
+                state,
+            } => view_issues(&repo, &api, query, labels, creator, assignee, state).await?,
             Edit { issue, command } => match command {
                 EditCommand::Title { new_title } => {
                     edit_title(&repo, &api, issue, new_title).await?
@@ -124,6 +157,42 @@ async fn view_issue(repo: &RepoInfo, api: &Forgejo, id: u64) -> eyre::Result<()>
     if !issue.body.is_empty() {
         println!();
         println!("{}", issue.body);
+    }
+    Ok(())
+}
+async fn view_issues(
+    repo: &RepoInfo,
+    api: &Forgejo,
+    query_str: Option<String>,
+    labels: Option<String>,
+    creator: Option<String>,
+    assignee: Option<String>,
+    state: Option<State>,
+) -> eyre::Result<()> {
+    let labels = labels
+        .map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let query = forgejo_api::IssueQuery {
+        query: query_str,
+        labels,
+        created_by: creator,
+        assigned_by: assignee,
+        state: state.map(|s| s.into()),
+        ..Default::default()
+    };
+    let issues = api
+        .get_repo_issues(repo.owner(), repo.name(), query)
+        .await?;
+    if issues.len() == 1 {
+        println!("1 issue");
+    } else {
+        println!("{} issues", issues.len());
+    }
+    for issue in issues {
+        println!(
+            "#{}: {} (by {})",
+            issue.number, issue.title, issue.user.login
+        );
     }
     Ok(())
 }
