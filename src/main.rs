@@ -67,7 +67,7 @@ async fn readline(msg: &str) -> eyre::Result<String> {
 
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     let editor = std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?;
-    
+
     let (mut file, path) = tempfile(ext).await?;
     file.write_all(contents.as_bytes()).await?;
     drop(file);
@@ -88,7 +88,8 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
         eprint!("                 \r");
 
         Ok(())
-    })().await;
+    })()
+    .await;
 
     tokio::fs::remove_file(path).await?;
     res?;

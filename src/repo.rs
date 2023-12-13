@@ -125,10 +125,14 @@ impl RepoCommand {
                         if !head.is_branch() {
                             eyre::bail!("HEAD is not on a branch; cannot push to remote");
                         }
-                        let branch_shorthand = head.shorthand().ok_or_else(|| eyre!("branch name invalid utf-8"))?.to_owned();
+                        let branch_shorthand = head
+                            .shorthand()
+                            .ok_or_else(|| eyre!("branch name invalid utf-8"))?
+                            .to_owned();
                         let branch_name = std::str::from_utf8(head.name_bytes())?.to_owned();
                         let mut current_branch = git2::Branch::wrap(head);
-                        current_branch.set_upstream(Some(&dbg!(format!("{upstream}/{branch_shorthand}"))))?;
+                        current_branch
+                            .set_upstream(Some(&dbg!(format!("{upstream}/{branch_shorthand}"))))?;
 
                         let auth = auth_git2::GitAuthenticator::new();
                         auth.push(&repo, &mut remote, &[&branch_name])?;
