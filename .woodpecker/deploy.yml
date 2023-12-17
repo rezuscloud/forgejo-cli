@@ -1,0 +1,38 @@
+when:
+  - event: deployment
+steps:
+  compile-linux:
+    image: rust:latest
+    commands:
+      - rustup target add x86_64-unknown-linux-gnu
+      - cargo build --target=x86_64-unknown-linux-gnu --release
+      - strip target/x86_64-unknown-linux-gnu/release/fj
+  compile-windows:
+    image: rust:latest
+    commands:
+      - rustup target add x86_64-pc-windows-gnu
+      - cargo build --target=x86_64-pc-windows-gnu --release
+      - strip target/x86_64-pc-windows-gnu/release/fj.exe
+  zip:
+    image: debian:12
+    commands:
+      - apt update
+      - apt install zip -y
+      - zip forgejo-cli-windows.zip target/x86_64-pc-windows-gnu/release/fj.exe
+      - gzip -c target/x86_64-unknown-linux-gnu/release/fj > forgejo-cli-linux.gz
+  deploy-container:
+    image: gcr.io/kaniko-project/executor:debug
+    commands:
+      - export AUTH="$(echo -n Cyborus:$TOKEN | base64)"
+      - echo "{\"auths\":{\"code.cartoon-aa.xyz\":{\"auth\":\"$AUTH\"}}}" > "/kaniko/.docker/config.json"
+      - executor --context ./ --dockerfile ./Dockerfile --destination "codeberg.org/cyborus/forgejo-cli:latest" --destination "codeberg.org/cyborus/forgejo-cli:$VERSION"
+    secrets: [ token ]
+  release:
+    image: codeberg.org/cyborus/forgejo-cli:latest
+    pull: true
+    commands:
+      - echo $TOKEN | fj auth add-key codeberg.org Cyborus
+      - fj release create $VERSION --create-tag --branch $BRANCH --attach forgejo-cli-windows.zip --attach forgejo-cli-windows.gz
+      - fj auth logout codeberg.org
+    secrets: [ token ]
+
