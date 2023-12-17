@@ -25,16 +25,18 @@ steps:
   deploy-container:
     image: gcr.io/kaniko-project/executor:debug
     commands:
-      - export AUTH="$(echo -n Cyborus:$TOKEN | base64)"
-      - echo "{\"auths\":{\"codeberg.org\":{\"auth\":\"$AUTH\"}}}" > "/kaniko/.docker/config.json"
-      - executor --context ./ --dockerfile ./Dockerfile --destination "codeberg.org/cyborus/forgejo-cli:latest" 
+      - export FORGE_HOST=$(echo $CI_FORGE_URL | sed -E 's_^https?://__')
+      - export AUTH="$(echo -n $CI_REPO_OWNER:$TOKEN | base64)"
+      - echo "{\"auths\":{\"$FORGE_HOST\":{\"auth\":\"$AUTH\"}}}" > "/kaniko/.docker/config.json"
+      - export CONTAINER_OWNER=$(echo $CI_REPO_OWNER | awk '{print tolower($0)}')
+      - executor --context ./ --dockerfile ./Dockerfile --destination "$FORGE_HOST/$CONTAINER_OWNER/forgejo-cli:latest" 
     secrets: [ token ]
   release:
     image: codeberg.org/cyborus/forgejo-cli:latest
     pull: true
     commands:
-      - fj auth add-key codeberg.org Cyborus $TOKEN
+      - fj auth add-key $FORGE_HOST $CI_REPO_OWNER $TOKEN
       - fj --remote $CI_REPO_URL release create $VERSION --create-tag --branch $BRANCH --attach forgejo-cli-windows.zip --attach forgejo-cli-windows.gz
-      - fj auth logout codeberg.org
+      - fj auth logout $FORGE_HOST
     secrets: [ token ]
 
