@@ -24,8 +24,8 @@ steps:
     image: gcr.io/kaniko-project/executor:debug
     commands:
       - export AUTH="$(echo -n Cyborus:$TOKEN | base64)"
-      - echo "{\"auths\":{\"code.cartoon-aa.xyz\":{\"auth\":\"$AUTH\"}}}" > "/kaniko/.docker/config.json"
-      - executor --context ./ --dockerfile ./Dockerfile --destination "codeberg.org/cyborus/forgejo-cli:latest" --destination "codeberg.org/cyborus/forgejo-cli:$VERSION"
+      - echo "{\"auths\":{\"codeberg.org\":{\"auth\":\"$AUTH\"}}}" > "/kaniko/.docker/config.json"
+      - executor --context ./ --dockerfile ./Dockerfile --destination "codeberg.org/cyborus/forgejo-cli:latest" 
     secrets: [ token ]
   release:
     image: codeberg.org/cyborus/forgejo-cli:latest
