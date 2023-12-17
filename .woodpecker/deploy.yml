@@ -34,7 +34,7 @@ steps:
     pull: true
     commands:
       - echo $TOKEN | fj auth add-key codeberg.org Cyborus
-      - fj release create $VERSION --create-tag --branch $BRANCH --attach forgejo-cli-windows.zip --attach forgejo-cli-windows.gz
+      - fj --remote $CI_REPO_URL release create $VERSION --create-tag --branch $BRANCH --attach forgejo-cli-windows.zip --attach forgejo-cli-windows.gz
       - fj auth logout codeberg.org
     secrets: [ token ]
 
