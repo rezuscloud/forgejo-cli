@@ -8,6 +8,7 @@ use keys::*;
 
 mod auth;
 mod issues;
+mod release;
 mod repo;
 
 #[derive(Parser, Debug)]
@@ -30,6 +31,8 @@ pub enum Command {
     },
     #[clap(subcommand)]
     Auth(auth::AuthCommand),
+    #[clap(subcommand)]
+    Release(release::ReleaseCommand),
 }
 
 #[tokio::main]
@@ -37,21 +40,21 @@ async fn main() -> eyre::Result<()> {
     let args = App::parse();
     let mut keys = KeyInfo::load().await?;
 
+    let remote_name = args.remote.as_deref();
     match args.command {
-        Command::Repo(subcommand) => subcommand.run(&keys, args.remote.as_deref()).await?,
-        Command::Issue(subcommand) => subcommand.run(&keys, args.remote.as_deref()).await?,
+        Command::Repo(subcommand) => subcommand.run(&keys, remote_name).await?,
+        Command::Issue(subcommand) => subcommand.run(&keys, remote_name).await?,
         Command::User { host } => {
             let host = host.map(|host| Url::parse(&host)).transpose()?;
             let url = match host {
                 Some(url) => url,
-                None => repo::RepoInfo::get_current(args.remote.as_deref())?
-                    .url()
-                    .clone(),
+                None => repo::RepoInfo::get_current(remote_name)?.url().clone(),
             };
             let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
         }
         Command::Auth(subcommand) => subcommand.run(&mut keys).await?,
+        Command::Release(subcommand) => subcommand.run(&mut keys, remote_name).await?,
     }
 
     keys.save().await?;
