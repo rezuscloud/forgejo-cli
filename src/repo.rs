@@ -10,9 +10,9 @@ pub struct RepoInfo {
 }
 
 impl RepoInfo {
-    pub fn get_current(name: Option<&str>) -> eyre::Result<Self> {
+    pub fn get_current(remote: Option<&str>) -> eyre::Result<Self> {
         let repo = git2::Repository::open(".")?;
-        let url = get_remote(&repo, name)?;
+        let url = get_remote(&repo, remote)?;
 
         let mut path = url.path_segments().ok_or_else(|| eyre!("bad path"))?;
         let owner = path
@@ -50,6 +50,11 @@ impl RepoInfo {
 }
 
 fn get_remote(repo: &git2::Repository, name: Option<&str>) -> eyre::Result<Url> {
+    if let Some(name) = name {
+        if let Ok(url) = Url::parse(name) {
+            return Ok(url);
+        }
+    }
     let remote_name;
     let remote_name = match name {
         Some(name) => name,
