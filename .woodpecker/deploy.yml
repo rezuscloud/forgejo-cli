@@ -11,6 +11,7 @@ steps:
     image: rust:latest
     commands:
       - rustup target add x86_64-pc-windows-gnu
+      - apt install gcc-mingw-w64-x86-64:w
       - cargo build --target=x86_64-pc-windows-gnu --release
       - strip target/x86_64-pc-windows-gnu/release/fj.exe
   zip:
