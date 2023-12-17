@@ -35,6 +35,7 @@ steps:
     image: codeberg.org/cyborus/forgejo-cli:latest
     pull: true
     commands:
+      - export FORGE_HOST=$(echo $CI_FORGE_URL | sed -E 's_^https?://__')
       - fj auth add-key $FORGE_HOST $CI_REPO_OWNER $TOKEN
       - fj --remote $CI_REPO_URL release create $VERSION --create-tag --branch $BRANCH --attach forgejo-cli-windows.zip --attach forgejo-cli-windows.gz
       - fj auth logout $FORGE_HOST
