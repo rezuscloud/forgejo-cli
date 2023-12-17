@@ -140,7 +140,7 @@ impl ReleaseCommand {
                     name,
                 } => create_asset(&repo, &api, release, path, name).await?,
                 AssetCommand::Delete { release, asset } => {
-                    delete_asset(&repo, &api, release, asset ).await?
+                    delete_asset(&repo, &api, release, asset).await?
                 }
                 AssetCommand::Download {
                     release,
@@ -399,15 +399,22 @@ async fn download_asset(
 ) -> eyre::Result<()> {
     let release = find_release(repo, api, &release).await?;
     let file = match &*asset {
-        "source.zip" => api.download_release_zip(repo.owner(), repo.name(), release.id).await?,
-        "source.tar.gz" => api.download_release_tarball(repo.owner(), repo.name(), release.id).await?,
+        "source.zip" => {
+            api.download_release_zip(repo.owner(), repo.name(), release.id)
+                .await?
+        }
+        "source.tar.gz" => {
+            api.download_release_tarball(repo.owner(), repo.name(), release.id)
+                .await?
+        }
         name => {
             let asset = release
                 .assets
                 .iter()
                 .find(|a| a.name == name)
                 .ok_or_else(|| eyre!("asset not found"))?;
-            api.download_release_attachment(repo.owner(), repo.name(), release.id, asset.id).await?
+            api.download_release_attachment(repo.owner(), repo.name(), release.id, asset.id)
+                .await?
         }
     };
     let file = file.ok_or_else(|| eyre!("asset not found"))?;
