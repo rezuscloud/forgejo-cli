@@ -36,7 +36,7 @@ impl AuthCommand {
             AuthCommand::AddKey { host, user, key } => {
                 let key = match key {
                     Some(key) => key,
-                    None => crate::readline("new key: ").await?,
+                    None => crate::readline("new key: ").await?.trim().to_string(),
                 };
                 if keys.hosts.get(&user).is_none() {
                     keys.hosts
