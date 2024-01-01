@@ -80,6 +80,6 @@ impl LoginInfo {
     }
 
     pub fn api_for(&self, url: &Url) -> Result<forgejo_api::Forgejo, forgejo_api::ForgejoError> {
-        forgejo_api::Forgejo::new(&self.key, url.clone())
+        forgejo_api::Forgejo::new(forgejo_api::Auth::Token(&self.key), url.clone())
     }
 }

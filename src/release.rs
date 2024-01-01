@@ -400,11 +400,11 @@ async fn download_asset(
     let release = find_release(repo, api, &release).await?;
     let file = match &*asset {
         "source.zip" => {
-            api.download_release_zip(repo.owner(), repo.name(), release.id)
+            api.download_zip_archive(repo.owner(), repo.name(), &release.tag_name)
                 .await?
         }
         "source.tar.gz" => {
-            api.download_release_tarball(repo.owner(), repo.name(), release.id)
+            api.download_tarball_archive(repo.owner(), repo.name(), &release.tag_name)
                 .await?
         }
         name => {
