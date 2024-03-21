@@ -1,6 +1,6 @@
 use clap::Subcommand;
 use eyre::eyre;
-use forgejo_api::CreateRepoOption;
+use forgejo_api::structs::CreateRepoOption;
 use url::Url;
 
 pub struct RepoInfo {
@@ -110,26 +110,34 @@ impl RepoCommand {
                 let host = Url::parse(&host)?;
                 let api = keys.get_api(&host)?;
                 let repo_spec = CreateRepoOption {
-                    auto_init: false,
-                    default_branch: "main".into(),
+                    auto_init: Some(false),
+                    default_branch: Some("main".into()),
                     description,
-                    gitignores: String::new(),
-                    issue_labels: String::new(),
-                    license: String::new(),
+                    gitignores: None,
+                    issue_labels: None,
+                    license: None,
                     name: repo.clone(),
-                    private,
-                    readme: String::new(),
-                    template: false,
-                    trust_model: forgejo_api::TrustModel::Default,
+                    private: Some(private),
+                    readme: Some(String::new()),
+                    template: Some(false),
+                    trust_model: Some(forgejo_api::structs::CreateRepoOptionTrustModel::Default),
                 };
-                let new_repo = api.create_repo(repo_spec).await?;
-                eprintln!("created new repo at {}", host.join(&new_repo.full_name)?);
+                let new_repo = api.create_current_user_repo(repo_spec).await?;
+                let full_name = new_repo
+                    .full_name
+                    .as_ref()
+                    .ok_or_else(|| eyre::eyre!("new_repo does not have full_name"))?;
+                eprintln!("created new repo at {}", host.join(&full_name)?);
 
                 if set_upstream.is_some() || push {
                     let repo = git2::Repository::open(".")?;
 
                     let upstream = set_upstream.as_deref().unwrap_or("origin");
-                    let mut remote = repo.remote(upstream, new_repo.clone_url.as_str())?;
+                    let clone_url = new_repo
+                        .clone_url
+                        .as_ref()
+                        .ok_or_else(|| eyre::eyre!("new_repo does not have clone_url"))?;
+                    let mut remote = repo.remote(upstream, clone_url.as_str())?;
 
                     if push {
                         let head = repo.head()?;
@@ -153,13 +161,8 @@ impl RepoCommand {
             RepoCommand::Info => {
                 let repo = RepoInfo::get_current(remote_name)?;
                 let api = keys.get_api(&repo.host_url())?;
-                let repo = api.get_repo(repo.owner(), repo.name()).await?;
-                match repo {
-                    Some(repo) => {
-                        dbg!(repo);
-                    }
-                    None => eprintln!("repo not found"),
-                }
+                let repo = api.repo_get(repo.owner(), repo.name()).await?;
+                dbg!(repo);
             }
             RepoCommand::Browse => {
                 let repo = RepoInfo::get_current(remote_name)?;
