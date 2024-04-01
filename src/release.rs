@@ -1,6 +1,9 @@
 use clap::Subcommand;
 use eyre::{bail, eyre};
-use forgejo_api::Forgejo;
+use forgejo_api::{
+    structs::{RepoCreateReleaseAttachmentQuery, RepoListReleasesQuery},
+    Forgejo,
+};
 use tokio::io::AsyncWriteExt;
 
 use crate::{keys::KeyInfo, repo::RepoInfo};
@@ -170,12 +173,12 @@ async fn create_release(
         (Some(tag), None) => tag,
         (None, Some(tag)) => {
             let tag = tag.unwrap_or_else(|| name.clone());
-            let opt = forgejo_api::CreateTagOption {
+            let opt = forgejo_api::structs::CreateTagOption {
                 message: None,
                 tag_name: tag.clone(),
                 target: branch,
             };
-            api.create_tag(repo.owner(), repo.name(), opt).await?;
+            api.repo_create_tag(repo.owner(), repo.name(), opt).await?;
             tag
         }
         (Some(_), Some(_)) => {
@@ -184,25 +187,25 @@ async fn create_release(
     };
 
     let body = match body {
-        Some(Some(body)) => body,
+        Some(Some(body)) => Some(body),
         Some(None) => {
             let mut s = String::new();
             crate::editor(&mut s, Some("md")).await?;
-            s
+            Some(s)
         }
-        None => String::new(),
+        None => None,
     };
 
-    let release_opt = forgejo_api::CreateReleaseOption {
+    let release_opt = forgejo_api::structs::CreateReleaseOption {
         body,
-        draft,
-        name,
-        prerelease,
+        draft: Some(draft),
+        name: Some(name),
+        prerelease: Some(prerelease),
         tag_name,
         target_commitish: None,
     };
     let release = api
-        .create_release(repo.owner(), repo.name(), release_opt)
+        .repo_create_release(repo.owner(), repo.name(), release_opt)
         .await?;
 
     for attachment in attachments {
@@ -218,12 +221,18 @@ async fn create_release(
                 (file, asset)
             }
         };
-        api.create_release_attachment(
+        let query = RepoCreateReleaseAttachmentQuery {
+            name: Some(asset.into()),
+        };
+        let id = release
+            .id
+            .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+        api.repo_create_release_attachment(
             repo.owner(),
             repo.name(),
-            release.id,
-            asset,
+            id,
             tokio::fs::read(file).await?,
+            query,
         )
         .await?;
     }
@@ -245,13 +254,16 @@ async fn edit_release(
     let body = match body {
         Some(Some(body)) => Some(body),
         Some(None) => {
-            let mut s = release.body.clone();
+            let mut s = release
+                .body
+                .clone()
+                .ok_or_else(|| eyre::eyre!("release does not have body"))?;
             crate::editor(&mut s, Some("md")).await?;
             Some(s)
         }
         None => None,
     };
-    let release_edit = forgejo_api::EditReleaseOption {
+    let release_edit = forgejo_api::structs::EditReleaseOption {
         name: rename,
         tag_name: tag,
         body,
@@ -259,7 +271,10 @@ async fn edit_release(
         prerelease,
         target_commitish: None,
     };
-    api.edit_release(repo.owner(), repo.name(), release.id, release_edit)
+    let id = release
+        .id
+        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+    api.repo_edit_release(repo.owner(), repo.name(), id, release_edit)
         .await?;
     Ok(())
 }
@@ -270,15 +285,31 @@ async fn list_releases(
     prerelease: bool,
     draft: bool,
 ) -> eyre::Result<()> {
-    let query = forgejo_api::ReleaseQuery {
-        prerelease: Some(prerelease),
+    let query = forgejo_api::structs::RepoListReleasesQuery {
+        pre_release: Some(prerelease),
         draft: Some(draft),
-        ..Default::default()
+        per_page: None,
+        page: None,
+        limit: None,
     };
-    let releases = api.get_releases(repo.owner(), repo.name(), query).await?;
+    let releases = api
+        .repo_list_releases(repo.owner(), repo.name(), query)
+        .await?;
     for release in releases {
-        print!("{}", release.name);
-        match (release.draft, release.prerelease) {
+        let name = release
+            .name
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("release does not have name"))?;
+        let draft = release
+            .draft
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("release does not have draft"))?;
+        let prerelease = release
+            .prerelease
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("release does not have prerelease"))?;
+        print!("{}", name);
+        match (draft, prerelease) {
             (false, false) => (),
             (true, false) => print!(" (draft)"),
             (false, true) => print!(" (prerelease)"),
@@ -296,30 +327,56 @@ async fn view_release(
     by_tag: bool,
 ) -> eyre::Result<()> {
     let release = if by_tag {
-        api.get_release_by_tag(repo.owner(), repo.name(), &name)
+        api.repo_get_release_by_tag(repo.owner(), repo.name(), &name)
             .await?
-            .ok_or_else(|| eyre!("release not found"))?
     } else {
         find_release(repo, api, &name).await?
     };
-    println!("{}", release.name);
-    print!("By {} on ", release.author.login);
-    release.created_at.format_into(
+    let name = release
+        .name
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("release does not have name"))?;
+    let author = release
+        .author
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("release does not have author"))?;
+    let login = author
+        .login
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("autho does not have login"))?;
+    let created_at = release
+        .created_at
+        .ok_or_else(|| eyre::eyre!("release does not have created_at"))?;
+    println!("{}", name);
+    print!("By {} on ", login);
+    created_at.format_into(
         &mut std::io::stdout(),
         &time::format_description::well_known::Rfc2822,
     )?;
     println!();
-    if !release.body.is_empty() {
+    let body = release
+        .body
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("release does not have body"))?;
+    if !body.is_empty() {
         println!();
-        for line in release.body.lines() {
+        for line in body.lines() {
             println!("> {line}");
         }
         println!();
     }
-    if !release.assets.is_empty() {
-        println!("{} assets", release.assets.len() + 2);
-        for asset in release.assets {
-            println!("- {}", asset.name);
+    let assets = release
+        .assets
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("release does not have assets"))?;
+    if !assets.is_empty() {
+        println!("{} assets", assets.len() + 2);
+        for asset in assets {
+            let name = asset
+                .name
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("asset does not have name"))?;
+            println!("- {}", name);
         }
         println!("- source.zip");
         println!("- source.tar.gz");
@@ -331,7 +388,11 @@ async fn browse_release(repo: &RepoInfo, api: &Forgejo, name: Option<String>) ->
     match name {
         Some(name) => {
             let release = find_release(repo, api, &name).await?;
-            open::that(release.html_url.as_str())?;
+            let html_url = release
+                .html_url
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("release does not have html_url"))?;
+            open::that(html_url.as_str())?;
         }
         None => {
             let mut url = repo.url().clone();
@@ -360,13 +421,19 @@ async fn create_asset(
             (&*file, asset)
         }
     };
-    let id = find_release(repo, api, &release).await?.id;
-    api.create_release_attachment(
+    let id = find_release(repo, api, &release)
+        .await?
+        .id
+        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+    let query = RepoCreateReleaseAttachmentQuery {
+        name: Some(asset.to_owned()),
+    };
+    api.repo_create_release_attachment(
         repo.owner(),
         repo.name(),
         id,
-        asset,
         tokio::fs::read(file).await?,
+        query,
     )
     .await?;
 
@@ -380,12 +447,21 @@ async fn delete_asset(
     asset: String,
 ) -> eyre::Result<()> {
     let release = find_release(repo, api, &release).await?;
-    let asset = release
+    let assets = release
         .assets
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("release does not have assets"))?;
+    let asset = assets
         .iter()
-        .find(|a| a.name == asset)
+        .find(|a| a.name.as_ref() == Some(&asset))
         .ok_or_else(|| eyre!("asset not found"))?;
-    api.delete_release_attachment(repo.owner(), repo.name(), release.id, asset.id)
+    let release_id = release
+        .id
+        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+    let asset_id = asset
+        .id
+        .ok_or_else(|| eyre::eyre!("asset does not have id"))?;
+    api.repo_delete_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
         .await?;
     Ok(())
 }
@@ -400,24 +476,41 @@ async fn download_asset(
     let release = find_release(repo, api, &release).await?;
     let file = match &*asset {
         "source.zip" => {
-            api.download_zip_archive(repo.owner(), repo.name(), &release.tag_name)
+            let tag_name = release
+                .tag_name
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("release does not have tag_name"))?;
+            api.repo_get_archive(repo.owner(), repo.name(), &format!("{}.zip", tag_name))
                 .await?
         }
         "source.tar.gz" => {
-            api.download_tarball_archive(repo.owner(), repo.name(), &release.tag_name)
+            let tag_name = release
+                .tag_name
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("release does not have tag_name"))?;
+            api.repo_get_archive(repo.owner(), repo.name(), &format!("{}.tar.gz", tag_name))
                 .await?
         }
         name => {
-            let asset = release
+            let assets = release
                 .assets
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("release does not have assets"))?;
+            let asset = assets
                 .iter()
-                .find(|a| a.name == name)
+                .find(|a| a.name.as_deref() == Some(name))
                 .ok_or_else(|| eyre!("asset not found"))?;
-            api.download_release_attachment(repo.owner(), repo.name(), release.id, asset.id)
+            let release_id = release
+                .id
+                .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+            let asset_id = asset
+                .id
+                .ok_or_else(|| eyre::eyre!("asset does not have id"))?;
+            api.download_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
                 .await?
+                .to_vec()
         }
     };
-    let file = file.ok_or_else(|| eyre!("asset not found"))?;
     let output = output
         .as_deref()
         .unwrap_or_else(|| std::path::Path::new(&asset));
@@ -436,17 +529,20 @@ async fn find_release(
     repo: &RepoInfo,
     api: &Forgejo,
     name: &str,
-) -> eyre::Result<forgejo_api::Release> {
+) -> eyre::Result<forgejo_api::structs::Release> {
+    let query = RepoListReleasesQuery {
+        draft: None,
+        pre_release: None,
+        per_page: None,
+        page: None,
+        limit: None,
+    };
     let mut releases = api
-        .get_releases(
-            repo.owner(),
-            repo.name(),
-            forgejo_api::ReleaseQuery::default(),
-        )
+        .repo_list_releases(repo.owner(), repo.name(), query)
         .await?;
     let idx = releases
         .iter()
-        .position(|r| r.name == name)
+        .position(|r| r.name.as_deref() == Some(name))
         .ok_or_else(|| eyre!("release not found"))?;
     Ok(releases.swap_remove(idx))
 }
@@ -458,11 +554,15 @@ async fn delete_release(
     by_tag: bool,
 ) -> eyre::Result<()> {
     if by_tag {
-        api.delete_release_by_tag(repo.owner(), repo.name(), &name)
+        api.repo_delete_release_by_tag(repo.owner(), repo.name(), &name)
             .await?;
     } else {
-        let id = find_release(repo, api, &name).await?.id;
-        api.delete_release(repo.owner(), repo.name(), id).await?;
+        let id = find_release(repo, api, &name)
+            .await?
+            .id
+            .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+        api.repo_delete_release(repo.owner(), repo.name(), id)
+            .await?;
     }
     Ok(())
 }

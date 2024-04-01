@@ -1,6 +1,9 @@
 use clap::Subcommand;
 use eyre::eyre;
-use forgejo_api::{Comment, CreateIssueCommentOption, EditIssueOption, Forgejo, IssueCommentQuery};
+use forgejo_api::structs::{
+    Comment, CreateIssueCommentOption, CreateIssueOption, EditIssueOption, IssueGetCommentsQuery,
+};
+use forgejo_api::Forgejo;
 
 use crate::repo::RepoInfo;
 
@@ -52,11 +55,11 @@ pub enum State {
     Closed,
 }
 
-impl From<State> for forgejo_api::State {
+impl From<State> for forgejo_api::structs::IssueListIssuesQueryState {
     fn from(value: State) -> Self {
         match value {
-            State::Open => forgejo_api::State::Open,
-            State::Closed => forgejo_api::State::Closed,
+            State::Open => forgejo_api::structs::IssueListIssuesQueryState::Open,
+            State::Closed => forgejo_api::structs::IssueListIssuesQueryState::Closed,
         }
     }
 }
@@ -133,30 +136,52 @@ async fn create_issue(
         }
     };
     let issue = api
-        .create_issue(
+        .issue_create_issue(
             repo.owner(),
             repo.name(),
-            forgejo_api::CreateIssueOption {
+            CreateIssueOption {
                 body: Some(body),
                 title,
-                ..Default::default()
+                assignee: None,
+                assignees: None,
+                closed: None,
+                due_date: None,
+                labels: None,
+                milestone: None,
+                r#ref: None,
             },
         )
         .await?;
-    eprintln!("created issue #{}: {}", issue.number, issue.title);
+    let number = issue
+        .number
+        .ok_or_else(|| eyre::eyre!("issue does not have number"))?;
+    let title = issue
+        .title
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("issue does not have title"))?;
+    eprintln!("created issue #{}: {}", number, title);
     Ok(())
 }
 
 async fn view_issue(repo: &RepoInfo, api: &Forgejo, id: u64) -> eyre::Result<()> {
-    let issue = api
-        .get_issue(repo.owner(), repo.name(), id)
-        .await?
-        .ok_or_else(|| eyre!("issue {id} does not exist"))?;
-    println!("#{}: {}", id, issue.title);
-    println!("By {}", issue.user.login);
-    if !issue.body.is_empty() {
+    let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
+    let title = issue
+        .title
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("issue does not have title"))?;
+    let user = issue
+        .user
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("issue does not have creator"))?;
+    let username = user
+        .login
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("user does not have login"))?;
+    println!("#{}: {}", id, title);
+    println!("By {}", username);
+    if let Some(body) = &issue.body {
         println!();
-        println!("{}", issue.body);
+        println!("{}", body);
     }
     Ok(())
 }
@@ -172,16 +197,22 @@ async fn view_issues(
     let labels = labels
         .map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
         .unwrap_or_default();
-    let query = forgejo_api::IssueQuery {
-        query: query_str,
-        labels,
+    let query = forgejo_api::structs::IssueListIssuesQuery {
+        q: query_str,
+        labels: Some(labels.join(",")),
         created_by: creator,
         assigned_by: assignee,
         state: state.map(|s| s.into()),
-        ..Default::default()
+        r#type: None,
+        milestones: None,
+        since: None,
+        before: None,
+        mentioned_by: None,
+        page: None,
+        limit: None,
     };
     let issues = api
-        .get_repo_issues(repo.owner(), repo.name(), query)
+        .issue_list_issues(repo.owner(), repo.name(), query)
         .await?;
     if issues.len() == 1 {
         println!("1 issue");
@@ -189,58 +220,97 @@ async fn view_issues(
         println!("{} issues", issues.len());
     }
     for issue in issues {
-        println!(
-            "#{}: {} (by {})",
-            issue.number, issue.title, issue.user.login
-        );
+        let number = issue
+            .number
+            .ok_or_else(|| eyre::eyre!("issue does not have number"))?;
+        let title = issue
+            .title
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("issue does not have title"))?;
+        let user = issue
+            .user
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("issue does not have creator"))?;
+        let username = user
+            .login
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("user does not have login"))?;
+        println!("#{}: {} (by {})", number, title, username);
     }
     Ok(())
 }
 
 async fn view_comment(repo: &RepoInfo, api: &Forgejo, id: u64, idx: usize) -> eyre::Result<()> {
+    let query = IssueGetCommentsQuery {
+        since: None,
+        before: None,
+    };
     let comments = api
-        .get_issue_comments(repo.owner(), repo.name(), id, IssueCommentQuery::default())
+        .issue_get_comments(repo.owner(), repo.name(), id, query)
         .await?;
     let comment = comments
         .get(idx)
         .ok_or_else(|| eyre!("comment {idx} doesn't exist"))?;
-    print_comment(&comment);
+    print_comment(&comment)?;
     Ok(())
 }
 
 async fn view_comments(repo: &RepoInfo, api: &Forgejo, id: u64) -> eyre::Result<()> {
+    let query = IssueGetCommentsQuery {
+        since: None,
+        before: None,
+    };
     let comments = api
-        .get_issue_comments(repo.owner(), repo.name(), id, IssueCommentQuery::default())
+        .issue_get_comments(repo.owner(), repo.name(), id, query)
         .await?;
     for comment in comments {
-        print_comment(&comment);
+        print_comment(&comment)?;
     }
     Ok(())
 }
 
-fn print_comment(comment: &Comment) {
-    println!("{} said:", comment.user.login);
-    println!("{}", comment.body);
-    if !comment.assets.is_empty() {
-        println!("({} attachments)", comment.assets.len());
+fn print_comment(comment: &Comment) -> eyre::Result<()> {
+    let body = comment
+        .body
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("comment does not have body"))?;
+    let user = comment
+        .user
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("comment does not have user"))?;
+    let username = user
+        .login
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("user does not have login"))?;
+    println!("{} said:", username);
+    println!("{}", body);
+    let assets = comment
+        .assets
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("comment does not have assets"))?;
+    if !assets.is_empty() {
+        println!("({} attachments)", assets.len());
     }
+    Ok(())
 }
 
 async fn browse_issue(repo: &RepoInfo, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
     match id {
         Some(id) => {
-            let issue = api
-                .get_issue(repo.owner(), repo.name(), id)
-                .await?
-                .ok_or_else(|| eyre!("issue {id} does not exist"))?;
-            open::that(issue.html_url.as_str())?;
+            let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
+            let html_url = issue
+                .html_url
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("issue does not have html_url"))?;
+            open::that(html_url.as_str())?;
         }
         None => {
-            let repo = api
-                .get_repo(repo.owner(), repo.name())
-                .await?
-                .ok_or_else(|| eyre!("repo {}/{} does not exist", repo.owner(), repo.name()))?;
-            open::that(format!("{}/issues", repo.html_url))?;
+            let repo = api.repo_get(repo.owner(), repo.name()).await?;
+            let html_url = repo
+                .html_url
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("issue does not have html_url"))?;
+            open::that(format!("{}/issues", html_url))?;
         }
     }
     Ok(())
@@ -260,13 +330,13 @@ async fn add_comment(
             body
         }
     };
-    api.create_comment(
+    api.issue_create_comment(
         repo.owner(),
         repo.name(),
         issue,
-        forgejo_api::CreateIssueCommentOption {
+        forgejo_api::structs::CreateIssueCommentOption {
             body,
-            ..Default::default()
+            updated_at: None,
         },
     )
     .await?;
@@ -282,12 +352,14 @@ async fn edit_title(
     let new_title = match new_title {
         Some(s) => s,
         None => {
-            let mut issue_info = api
-                .get_issue(repo.owner(), repo.name(), issue)
-                .await?
-                .ok_or_else(|| eyre!("issue {issue} does not exist"))?;
-            crate::editor(&mut issue_info.title, Some("md")).await?;
-            issue_info.title
+            let issue_info = api
+                .issue_get_issue(repo.owner(), repo.name(), issue)
+                .await?;
+            let mut title = issue_info
+                .title
+                .ok_or_else(|| eyre::eyre!("issue does not have title"))?;
+            crate::editor(&mut title, Some("md")).await?;
+            title
         }
     };
     if new_title.is_empty() {
@@ -296,13 +368,21 @@ async fn edit_title(
     if new_title.contains('\n') {
         eyre::bail!("title cannot contain newlines");
     }
-    api.edit_issue(
+    api.issue_edit_issue(
         repo.owner(),
         repo.name(),
         issue,
-        forgejo_api::EditIssueOption {
+        forgejo_api::structs::EditIssueOption {
             title: Some(new_title.trim().to_owned()),
-            ..Default::default()
+            assignee: None,
+            assignees: None,
+            body: None,
+            due_date: None,
+            milestone: None,
+            r#ref: None,
+            state: None,
+            unset_due_date: None,
+            updated_at: None,
         },
     )
     .await?;
@@ -318,21 +398,31 @@ async fn edit_body(
     let new_body = match new_body {
         Some(s) => s,
         None => {
-            let mut issue_info = api
-                .get_issue(repo.owner(), repo.name(), issue)
-                .await?
-                .ok_or_else(|| eyre!("issue {issue} does not exist"))?;
-            crate::editor(&mut issue_info.body, Some("md")).await?;
-            issue_info.body
+            let issue_info = api
+                .issue_get_issue(repo.owner(), repo.name(), issue)
+                .await?;
+            let mut body = issue_info
+                .body
+                .ok_or_else(|| eyre::eyre!("issue does not have body"))?;
+            crate::editor(&mut body, Some("md")).await?;
+            body
         }
     };
-    api.edit_issue(
+    api.issue_edit_issue(
         repo.owner(),
         repo.name(),
         issue,
-        forgejo_api::EditIssueOption {
+        forgejo_api::structs::EditIssueOption {
             body: Some(new_body),
-            ..Default::default()
+            assignee: None,
+            assignees: None,
+            due_date: None,
+            milestone: None,
+            r#ref: None,
+            state: None,
+            title: None,
+            unset_due_date: None,
+            updated_at: None,
         },
     )
     .await?;
@@ -347,11 +437,14 @@ async fn edit_comment(
     new_body: Option<String>,
 ) -> eyre::Result<()> {
     let comments = api
-        .get_issue_comments(
+        .issue_get_comments(
             repo.owner(),
             repo.name(),
             issue,
-            forgejo_api::IssueCommentQuery::default(),
+            IssueGetCommentsQuery {
+                since: None,
+                before: None,
+            },
         )
         .await?;
     let comment = comments
@@ -360,18 +453,24 @@ async fn edit_comment(
     let new_body = match new_body {
         Some(s) => s,
         None => {
-            let mut body = comment.body.clone();
+            let mut body = comment
+                .body
+                .clone()
+                .ok_or_else(|| eyre::eyre!("issue does not have body"))?;
             crate::editor(&mut body, Some("md")).await?;
             body
         }
     };
-    api.edit_comment(
+    let id = comment
+        .id
+        .ok_or_else(|| eyre::eyre!("comment does not have id"))?;
+    api.issue_edit_comment(
         repo.owner(),
         repo.name(),
-        comment.id,
-        forgejo_api::EditIssueCommentOption {
+        id,
+        forgejo_api::structs::EditIssueCommentOption {
             body: new_body,
-            ..Default::default()
+            updated_at: None,
         },
     )
     .await?;
@@ -394,16 +493,27 @@ async fn close_issue(
             }
         };
 
-        let opt = CreateIssueCommentOption { body };
-        api.create_comment(repo.owner(), repo.name(), issue, opt)
+        let opt = CreateIssueCommentOption {
+            body,
+            updated_at: None,
+        };
+        api.issue_create_comment(repo.owner(), repo.name(), issue, opt)
             .await?;
     }
 
     let edit = EditIssueOption {
-        state: Some(forgejo_api::State::Closed),
-        ..Default::default()
+        state: Some("closed".into()),
+        assignee: None,
+        assignees: None,
+        body: None,
+        due_date: None,
+        milestone: None,
+        r#ref: None,
+        title: None,
+        unset_due_date: None,
+        updated_at: None,
     };
-    api.edit_issue(repo.owner(), repo.name(), issue, edit)
+    api.issue_edit_issue(repo.owner(), repo.name(), issue, edit)
         .await?;
 
     Ok(())
