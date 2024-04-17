@@ -1,14 +1,24 @@
-use clap::Subcommand;
-use eyre::eyre;
+use clap::{Args, Subcommand};
+use eyre::{eyre, OptionExt};
 use forgejo_api::structs::{
     Comment, CreateIssueCommentOption, CreateIssueOption, EditIssueOption, IssueGetCommentsQuery,
 };
 use forgejo_api::Forgejo;
 
-use crate::repo::RepoInfo;
+use crate::repo::{RepoInfo, RepoName};
+
+#[derive(Args, Clone, Debug)]
+pub struct IssueCommand {
+    #[clap(long, short = 'R')]
+    remote: Option<String>,
+    #[clap(long, short)]
+    repo: Option<String>,
+    #[clap(subcommand)]
+    command: IssueSubcommand,
+}
 
 #[derive(Subcommand, Clone, Debug)]
-pub enum IssueCommand {
+pub enum IssueSubcommand {
     Create {
         title: String,
         #[clap(long)]
@@ -86,11 +96,14 @@ pub enum ViewCommand {
 }
 
 impl IssueCommand {
-    pub async fn run(self, keys: &crate::KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
-        use IssueCommand::*;
-        let repo = RepoInfo::get_current(remote_name)?;
-        let api = keys.get_api(&repo.host_url())?;
-        match self {
+    pub async fn run(self, keys: &crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
+        use IssueSubcommand::*;
+        let repo = RepoInfo::get_current(host_name, self.repo.as_deref(), self.remote.as_deref())?;
+        let api = keys.get_api(repo.host_url())?;
+        let repo = repo
+            .name()
+            .ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
+        match self.command {
             Create { title, body } => create_issue(&repo, &api, title, body).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_issue(&repo, &api, id).await?,
@@ -122,7 +135,7 @@ impl IssueCommand {
 }
 
 async fn create_issue(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     title: String,
     body: Option<String>,
@@ -163,7 +176,7 @@ async fn create_issue(
     Ok(())
 }
 
-async fn view_issue(repo: &RepoInfo, api: &Forgejo, id: u64) -> eyre::Result<()> {
+async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
     let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
     let title = issue
         .title
@@ -186,7 +199,7 @@ async fn view_issue(repo: &RepoInfo, api: &Forgejo, id: u64) -> eyre::Result<()>
     Ok(())
 }
 async fn view_issues(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     query_str: Option<String>,
     labels: Option<String>,
@@ -240,7 +253,7 @@ async fn view_issues(
     Ok(())
 }
 
-async fn view_comment(repo: &RepoInfo, api: &Forgejo, id: u64, idx: usize) -> eyre::Result<()> {
+async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -255,7 +268,7 @@ async fn view_comment(repo: &RepoInfo, api: &Forgejo, id: u64, idx: usize) -> ey
     Ok(())
 }
 
-async fn view_comments(repo: &RepoInfo, api: &Forgejo, id: u64) -> eyre::Result<()> {
+async fn view_comments(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -294,7 +307,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
     Ok(())
 }
 
-async fn browse_issue(repo: &RepoInfo, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
+async fn browse_issue(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
     match id {
         Some(id) => {
             let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
@@ -317,7 +330,7 @@ async fn browse_issue(repo: &RepoInfo, api: &Forgejo, id: Option<u64>) -> eyre::
 }
 
 async fn add_comment(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     issue: u64,
     body: Option<String>,
@@ -344,7 +357,7 @@ async fn add_comment(
 }
 
 async fn edit_title(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     issue: u64,
     new_title: Option<String>,
@@ -390,7 +403,7 @@ async fn edit_title(
 }
 
 async fn edit_body(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     issue: u64,
     new_body: Option<String>,
@@ -430,7 +443,7 @@ async fn edit_body(
 }
 
 async fn edit_comment(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     issue: u64,
     idx: usize,
@@ -478,7 +491,7 @@ async fn edit_comment(
 }
 
 async fn close_issue(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     issue: u64,
     message: Option<Option<String>>,

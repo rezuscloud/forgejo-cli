@@ -1,32 +1,241 @@
 use clap::Subcommand;
-use eyre::eyre;
+use eyre::{eyre, OptionExt};
 use forgejo_api::structs::CreateRepoOption;
 use url::Url;
 
 pub struct RepoInfo {
-    owner: String,
-    name: String,
     url: Url,
+    name: Option<RepoName>,
 }
 
 impl RepoInfo {
-    pub fn get_current(remote: Option<&str>) -> eyre::Result<Self> {
-        let repo = git2::Repository::open(".")?;
-        let url = get_remote(&repo, remote)?;
+    pub fn get_current(
+        host: Option<&str>,
+        repo: Option<&str>,
+        remote: Option<&str>,
+    ) -> eyre::Result<Self> {
+        // l = domain/owner/name
+        // s = owner/name
+        // x = is present
+        // i = found locally by git
+        //
+        // | repo | host | remote | ans-host | ans-repo |
+        // |------|------|--------|----------|----------|
+        // | l    | x    | x      | repo     | repo     |
+        // | l    | x    | i      | repo     | repo     |
+        // | l    | x    |        | repo     | repo     |
+        // | l    |      | x      | repo     | repo     |
+        // | l    |      | i      | repo     | repo     |
+        // | l    |      |        | repo     | repo     |
+        // | s    | x    | x      | host     | repo     |
+        // | s    | x    | i      | host     | repo     |
+        // | s    | x    |        | host     | repo     |
+        // | s    |      | x      | remote   | repo     |
+        // | s    |      | i      | remote   | repo     |
+        // | s    |      |        | err      | repo     |
+        // |      | x    | x      | remote   | remote   |
+        // |      | x    | i      | host     | ?remote  |
+        // |      | x    |        | host     | none     |
+        // |      |      | x      | remote   | remote   |
+        // |      |      | i      | remote   | remote   |
+        // |      |      |        | err      | remote   |
+        //
+        // | repo | host | remote | ans-host | ans-repo |
+        // |------|------|--------|----------|----------|
+        // | l    | x    | x      | repo     | repo     |
+        // | l    | x    |        | repo     | repo     |
+        // | l    |      | x      | repo     | repo     |
+        // | l    |      |        | repo     | repo     |
+        // | s    | x    | x      | host     | repo     |
+        // | s    | x    |        | host     | repo     |
+        // | s    |      | x      | remote   | repo     |
+        // | s    |      |        | err      | repo     |
+        // |      | x    | x      | remote   | remote   |
+        // |      | x    |        | remote   | remote   |
+        // |      |      | x      | remote   | remote   |
+        // |      |      |        | err      | remote   |
 
-        let mut path = url.path_segments().ok_or_else(|| eyre!("bad path"))?;
-        let owner = path
-            .next()
-            .ok_or_else(|| eyre!("path does not have owner name"))?
-            .to_string();
-        let name = path
-            .next()
-            .ok_or_else(|| eyre!("path does not have repo name"))?;
-        let name = name.strip_suffix(".git").unwrap_or(name).to_string();
+        // let repo_name;
+        //
+        // let repo_url;
+        // let remote;
+        // let host;
+        //
+        // let url = if repo_url { repo_url }
+        // else if repo_name { host.or(remote) }
+        // else { remote.or_host() }
+        //
+        // let name = repo_name.or(remote)
 
-        let repo_info = RepoInfo { owner, name, url };
-        Ok(repo_info)
+        let mut repo_url: Option<Url> = None;
+        let mut repo_name: Option<RepoName> = None;
+
+        if let Some(repo) = repo {
+            let (head, name) = repo
+                .rsplit_once("/")
+                .ok_or_eyre("repo name must contain owner and name")?;
+            let name = name.strip_suffix(".git").unwrap_or(name);
+            match head.rsplit_once("/") {
+                Some((url, owner)) => {
+                    if let Ok(url) = Url::parse(url) {
+                        repo_url = Some(url);
+                    } else if let Ok(url) = Url::parse(&format!("https://{url}/")) {
+                        repo_url = Some(url);
+                    }
+                    repo_name = Some(RepoName {
+                        owner: owner.to_owned(),
+                        name: name.to_owned(),
+                    });
+                }
+                None => {
+                    repo_name = Some(RepoName {
+                        owner: head.to_owned(),
+                        name: name.to_owned(),
+                    });
+                }
+            }
+        }
+
+        let repo_url = repo_url;
+        let repo_name = repo_name;
+
+        let host_url = host.and_then(|host| {
+            Url::parse(host)
+                .ok()
+                .or_else(|| Url::parse(&format!("https://{host}/")).ok())
+        });
+
+        let (remote_url, remote_repo_name) = {
+            let mut out = (None, None);
+            if let Ok(local_repo) = git2::Repository::open(".") {
+                let tmp;
+                let mut name = remote;
+
+                // if the user didn't specify a remote, try guessing other ways
+                let mut tmp2;
+                if name.is_none() {
+                    let all_remotes = local_repo.remotes()?;
+                    // if there's only one remote, use that
+                    if all_remotes.len() == 1 {
+                        if let Some(remote_name) = all_remotes.get(0) {
+                            tmp2 = Some(remote_name.to_owned());
+                            name = tmp2.as_deref();
+                        }
+                    // if there's a remote whose host url matches the one
+                    // specified with `--host`, use that
+                    //
+                    // This is different than using `--host` itself, since this
+                    // will include the repo name, which `--host` can't do.
+                    } else if let Some(host_url) = &host_url {
+                        for remote_name in all_remotes.iter() {
+                            let Some(remote_name) = remote_name else {
+                                continue;
+                            };
+                            let remote = local_repo.find_remote(remote_name)?;
+
+                            if let Some(url) = remote.url() {
+                                let (url, _) = url_strip_repo_name(Url::parse(url)?)?;
+                                if url.host_str() == host_url.host_str()
+                                    && url.path() == host_url.path()
+                                {
+                                    tmp2 = Some(remote_name.to_owned());
+                                    name = tmp2.as_deref();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // if there isn't an obvious answer, guess from the current
+                // branch's tracking remote
+                if name.is_none() {
+                    let head = local_repo.head()?;
+                    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
+                    tmp = local_repo.branch_upstream_remote(branch_name).ok();
+                    name = tmp
+                        .as_ref()
+                        .map(|remote| {
+                            remote
+                                .as_str()
+                                .ok_or_else(|| eyre!("remote name not UTF-8"))
+                        })
+                        .transpose()?;
+                }
+
+                if let Some(name) = name {
+                    if let Ok(remote) = local_repo.find_remote(name) {
+                        let url_s = std::str::from_utf8(remote.url_bytes())?;
+                        let url = Url::parse(url_s)?;
+                        let (url, name) = url_strip_repo_name(url)?;
+
+                        out = (Some(url), Some(name))
+                    }
+                }
+            } else {
+                eyre::ensure!(remote.is_none(), "remote specified but no git repo found");
+            }
+            out
+        };
+
+        let (url, name) = if repo_url.is_some() {
+            (repo_url, repo_name)
+        } else if repo_name.is_some() {
+            (host_url.or(remote_url), repo_name)
+        } else {
+            if remote.is_some() {
+                (remote_url, remote_repo_name)
+            } else if host_url.is_none() || remote_url == host_url {
+                (remote_url, remote_repo_name)
+            } else {
+                (host_url, None)
+            }
+        };
+
+        let info = match (url, name) {
+            (Some(url), name) => RepoInfo { url, name },
+            (None, Some(_)) => eyre::bail!("cannot find repo, no host specified"),
+            (None, None) => eyre::bail!("no repo info specified"),
+        };
+
+        Ok(info)
     }
+
+    pub fn name(&self) -> Option<&RepoName> {
+        self.name.as_ref()
+    }
+
+    pub fn host_url(&self) -> &Url {
+        &self.url
+    }
+}
+
+fn url_strip_repo_name(mut url: Url) -> eyre::Result<(Url, RepoName)> {
+    let mut iter = url
+        .path_segments()
+        .ok_or_eyre("repo url cannot be a base")?
+        .rev();
+
+    let name = iter.next().ok_or_eyre("repo url too short")?;
+    let name = name.strip_suffix(".git").unwrap_or(name).to_owned();
+
+    let owner = iter.next().ok_or_eyre("repo url too short")?.to_owned();
+
+    // Remove the username and repo name from the url
+    url.path_segments_mut()
+        .map_err(|_| eyre!("repo url cannot be a base"))?
+        .pop()
+        .pop();
+
+    Ok((url, RepoName { owner, name }))
+}
+
+#[derive(Debug)]
+pub struct RepoName {
+    owner: String,
+    name: String,
+}
+
+impl RepoName {
     pub fn owner(&self) -> &str {
         &self.owner
     }
@@ -34,48 +243,11 @@ impl RepoInfo {
     pub fn name(&self) -> &str {
         &self.name
     }
-
-    pub fn url(&self) -> &Url {
-        &self.url
-    }
-
-    pub fn host_url(&self) -> Url {
-        let mut url = self.url.clone();
-        url.path_segments_mut()
-            .expect("invalid url: cannot be a base")
-            .pop()
-            .pop();
-        url
-    }
-}
-
-fn get_remote(repo: &git2::Repository, name: Option<&str>) -> eyre::Result<Url> {
-    if let Some(name) = name {
-        if let Ok(url) = Url::parse(name) {
-            return Ok(url);
-        }
-    }
-    let remote_name;
-    let remote_name = match name {
-        Some(name) => name,
-        None => {
-            let head = repo.head()?;
-            let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
-            remote_name = repo.branch_upstream_remote(branch_name)?;
-            remote_name
-                .as_str()
-                .ok_or_else(|| eyre!("remote name not UTF-8"))?
-        }
-    };
-    let remote = repo.find_remote(remote_name)?;
-    let url = Url::parse(std::str::from_utf8(remote.url_bytes())?)?;
-    Ok(url)
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
     Create {
-        host: String,
         repo: String,
 
         // flags
@@ -91,15 +263,22 @@ pub enum RepoCommand {
         #[clap(long, short)]
         push: bool,
     },
-    Info,
-    Browse,
+    Info {
+        name: Option<String>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
+    Browse {
+        name: Option<String>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
 }
 
 impl RepoCommand {
-    pub async fn run(self, keys: &crate::KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
+    pub async fn run(self, keys: &crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         match self {
             RepoCommand::Create {
-                host,
                 repo,
 
                 description,
@@ -107,8 +286,8 @@ impl RepoCommand {
                 set_upstream,
                 push,
             } => {
-                let host = Url::parse(&host)?;
-                let api = keys.get_api(&host)?;
+                let host = RepoInfo::get_current(host_name, None, None)?;
+                let api = keys.get_api(host.host_url())?;
                 let repo_spec = CreateRepoOption {
                     auto_init: Some(false),
                     default_branch: Some("main".into()),
@@ -127,7 +306,7 @@ impl RepoCommand {
                     .full_name
                     .as_ref()
                     .ok_or_else(|| eyre::eyre!("new_repo does not have full_name"))?;
-                eprintln!("created new repo at {}", host.join(&full_name)?);
+                eprintln!("created new repo at {}", host.host_url().join(&full_name)?);
 
                 if set_upstream.is_some() || push {
                     let repo = git2::Repository::open(".")?;
@@ -158,22 +337,26 @@ impl RepoCommand {
                     }
                 }
             }
-            RepoCommand::Info => {
-                let repo = RepoInfo::get_current(remote_name)?;
+            RepoCommand::Info { name, remote } => {
+                let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
                 let api = keys.get_api(&repo.host_url())?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
                 let repo = api.repo_get(repo.owner(), repo.name()).await?;
+
                 dbg!(repo);
             }
-            RepoCommand::Browse => {
-                let repo = RepoInfo::get_current(remote_name)?;
+            RepoCommand::Browse { name, remote } => {
+                let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
                 let mut url = repo.host_url().clone();
-                let new_path = format!(
-                    "{}/{}/{}",
-                    url.path().strip_suffix("/").unwrap_or(url.path()),
-                    repo.owner(),
-                    repo.name(),
-                );
-                url.set_path(&new_path);
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                url.path_segments_mut()
+                    .map_err(|_| eyre!("url invalid"))?
+                    .extend([repo.owner(), repo.name()]);
+
                 open::that(url.as_str())?;
             }
         };
