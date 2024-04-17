@@ -43,7 +43,10 @@ async fn main() -> eyre::Result<()> {
         Command::Repo(subcommand) => subcommand.run(&keys, host_name).await?,
         Command::Issue(subcommand) => subcommand.run(&keys, host_name).await?,
         Command::User { remote } => {
-            let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref()).wrap_err("could not find host, try specifying with --host")?.host_url().clone();
+            let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref())
+                .wrap_err("could not find host, try specifying with --host")?
+                .host_url()
+                .clone();
             let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
         }

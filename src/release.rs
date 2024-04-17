@@ -1,4 +1,4 @@
-use clap::{Subcommand, Args};
+use clap::{Args, Subcommand};
 use eyre::{bail, eyre, OptionExt};
 use forgejo_api::{
     structs::{RepoCreateReleaseAttachmentQuery, RepoListReleasesQuery},
@@ -6,7 +6,10 @@ use forgejo_api::{
 };
 use tokio::io::AsyncWriteExt;
 
-use crate::{keys::KeyInfo, repo::{RepoInfo, RepoName}};
+use crate::{
+    keys::KeyInfo,
+    repo::{RepoInfo, RepoName},
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct ReleaseCommand {
@@ -113,9 +116,12 @@ pub enum AssetCommand {
 
 impl ReleaseCommand {
     pub async fn run(self, keys: &KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
-        let repo = RepoInfo::get_current(remote_name, self.repo.as_deref(), self.remote.as_deref())?;
+        let repo =
+            RepoInfo::get_current(remote_name, self.repo.as_deref(), self.remote.as_deref())?;
         let api = keys.get_api(&repo.host_url())?;
-        let repo = repo.name().ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
+        let repo = repo
+            .name()
+            .ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
         match self.command {
             ReleaseSubcommand::Create {
                 name,
@@ -140,12 +146,16 @@ impl ReleaseCommand {
                 draft,
                 prerelease,
             } => edit_release(&repo, &api, name, rename, tag, body, draft, prerelease).await?,
-            ReleaseSubcommand::Delete { name, by_tag } => delete_release(&repo, &api, name, by_tag).await?,
+            ReleaseSubcommand::Delete { name, by_tag } => {
+                delete_release(&repo, &api, name, by_tag).await?
+            }
             ReleaseSubcommand::List {
                 include_prerelease,
                 include_draft,
             } => list_releases(&repo, &api, include_prerelease, include_draft).await?,
-            ReleaseSubcommand::View { name, by_tag } => view_release(&repo, &api, name, by_tag).await?,
+            ReleaseSubcommand::View { name, by_tag } => {
+                view_release(&repo, &api, name, by_tag).await?
+            }
             ReleaseSubcommand::Browse { name } => browse_release(&repo, &api, name).await?,
             ReleaseSubcommand::Asset(subcommand) => match subcommand {
                 AssetCommand::Create {

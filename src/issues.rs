@@ -100,7 +100,9 @@ impl IssueCommand {
         use IssueSubcommand::*;
         let repo = RepoInfo::get_current(host_name, self.repo.as_deref(), self.remote.as_deref())?;
         let api = keys.get_api(repo.host_url())?;
-        let repo = repo.name().ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
+        let repo = repo
+            .name()
+            .ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
         match self.command {
             Create { title, body } => create_issue(&repo, &api, title, body).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
