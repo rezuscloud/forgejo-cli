@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
-use eyre::eyre;
+use eyre::{eyre, Context};
 use tokio::io::AsyncWriteExt;
-use url::Url;
 
 mod keys;
 use keys::*;
@@ -13,8 +12,8 @@ mod repo;
 
 #[derive(Parser, Debug)]
 pub struct App {
-    #[clap(long, short = 'R')]
-    remote: Option<String>,
+    #[clap(long, short = 'H')]
+    host: Option<String>,
     #[clap(subcommand)]
     command: Command,
 }
@@ -23,15 +22,13 @@ pub struct App {
 pub enum Command {
     #[clap(subcommand)]
     Repo(repo::RepoCommand),
-    #[clap(subcommand)]
     Issue(issues::IssueCommand),
     User {
         #[clap(long, short)]
-        host: Option<String>,
+        remote: Option<String>,
     },
     #[clap(subcommand)]
     Auth(auth::AuthCommand),
-    #[clap(subcommand)]
     Release(release::ReleaseCommand),
 }
 
@@ -40,21 +37,18 @@ async fn main() -> eyre::Result<()> {
     let args = App::parse();
     let mut keys = KeyInfo::load().await?;
 
-    let remote_name = args.remote.as_deref();
+    let host_name = args.host.as_deref();
+    // let remote = repo::RepoInfo::get_current(host_name, remote_name)?;
     match args.command {
-        Command::Repo(subcommand) => subcommand.run(&keys, remote_name).await?,
-        Command::Issue(subcommand) => subcommand.run(&keys, remote_name).await?,
-        Command::User { host } => {
-            let host = host.map(|host| Url::parse(&host)).transpose()?;
-            let url = match host {
-                Some(url) => url,
-                None => repo::RepoInfo::get_current(remote_name)?.url().clone(),
-            };
+        Command::Repo(subcommand) => subcommand.run(&keys, host_name).await?,
+        Command::Issue(subcommand) => subcommand.run(&keys, host_name).await?,
+        Command::User { remote } => {
+            let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref()).wrap_err("could not find host, try specifying with --host")?.host_url().clone();
             let name = keys.get_login(&url)?.username();
             eprintln!("currently signed in to {name}@{url}");
         }
         Command::Auth(subcommand) => subcommand.run(&mut keys).await?,
-        Command::Release(subcommand) => subcommand.run(&mut keys, remote_name).await?,
+        Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
     }
 
     keys.save().await?;

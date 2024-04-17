@@ -1,15 +1,25 @@
-use clap::Subcommand;
-use eyre::{bail, eyre};
+use clap::{Subcommand, Args};
+use eyre::{bail, eyre, OptionExt};
 use forgejo_api::{
     structs::{RepoCreateReleaseAttachmentQuery, RepoListReleasesQuery},
     Forgejo,
 };
 use tokio::io::AsyncWriteExt;
 
-use crate::{keys::KeyInfo, repo::RepoInfo};
+use crate::{keys::KeyInfo, repo::{RepoInfo, RepoName}};
+
+#[derive(Args, Clone, Debug)]
+pub struct ReleaseCommand {
+    #[clap(long, short = 'R')]
+    remote: Option<String>,
+    #[clap(long, short)]
+    repo: Option<String>,
+    #[clap(subcommand)]
+    command: ReleaseSubcommand,
+}
 
 #[derive(Subcommand, Clone, Debug)]
-pub enum ReleaseCommand {
+pub enum ReleaseSubcommand {
     Create {
         name: String,
         #[clap(long, short = 'T')]
@@ -103,10 +113,11 @@ pub enum AssetCommand {
 
 impl ReleaseCommand {
     pub async fn run(self, keys: &KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
-        let repo = RepoInfo::get_current(remote_name)?;
+        let repo = RepoInfo::get_current(remote_name, self.repo.as_deref(), self.remote.as_deref())?;
         let api = keys.get_api(&repo.host_url())?;
-        match self {
-            Self::Create {
+        let repo = repo.name().ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
+        match self.command {
+            ReleaseSubcommand::Create {
                 name,
                 create_tag,
                 tag,
@@ -121,7 +132,7 @@ impl ReleaseCommand {
                 )
                 .await?
             }
-            Self::Edit {
+            ReleaseSubcommand::Edit {
                 name,
                 rename,
                 tag,
@@ -129,14 +140,14 @@ impl ReleaseCommand {
                 draft,
                 prerelease,
             } => edit_release(&repo, &api, name, rename, tag, body, draft, prerelease).await?,
-            Self::Delete { name, by_tag } => delete_release(&repo, &api, name, by_tag).await?,
-            Self::List {
+            ReleaseSubcommand::Delete { name, by_tag } => delete_release(&repo, &api, name, by_tag).await?,
+            ReleaseSubcommand::List {
                 include_prerelease,
                 include_draft,
             } => list_releases(&repo, &api, include_prerelease, include_draft).await?,
-            Self::View { name, by_tag } => view_release(&repo, &api, name, by_tag).await?,
-            Self::Browse { name } => browse_release(&repo, &api, name).await?,
-            Self::Asset(subcommand) => match subcommand {
+            ReleaseSubcommand::View { name, by_tag } => view_release(&repo, &api, name, by_tag).await?,
+            ReleaseSubcommand::Browse { name } => browse_release(&repo, &api, name).await?,
+            ReleaseSubcommand::Asset(subcommand) => match subcommand {
                 AssetCommand::Create {
                     release,
                     path,
@@ -157,7 +168,7 @@ impl ReleaseCommand {
 }
 
 async fn create_release(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     name: String,
     create_tag: Option<Option<String>>,
@@ -241,7 +252,7 @@ async fn create_release(
 }
 
 async fn edit_release(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     name: String,
     rename: Option<String>,
@@ -280,7 +291,7 @@ async fn edit_release(
 }
 
 async fn list_releases(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     prerelease: bool,
     draft: bool,
@@ -321,7 +332,7 @@ async fn list_releases(
 }
 
 async fn view_release(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     name: String,
     by_tag: bool,
@@ -384,7 +395,7 @@ async fn view_release(
     Ok(())
 }
 
-async fn browse_release(repo: &RepoInfo, api: &Forgejo, name: Option<String>) -> eyre::Result<()> {
+async fn browse_release(repo: &RepoName, api: &Forgejo, name: Option<String>) -> eyre::Result<()> {
     match name {
         Some(name) => {
             let release = find_release(repo, api, &name).await?;
@@ -395,16 +406,20 @@ async fn browse_release(repo: &RepoInfo, api: &Forgejo, name: Option<String>) ->
             open::that(html_url.as_str())?;
         }
         None => {
-            let mut url = repo.url().clone();
-            url.path_segments_mut().unwrap().push("releases");
-            open::that(url.as_str())?;
+            let repo_data = api.repo_get(repo.owner(), repo.name()).await?;
+            let mut html_url = repo_data
+                .html_url
+                .clone()
+                .ok_or_else(|| eyre::eyre!("repository does not have html_url"))?;
+            html_url.path_segments_mut().unwrap().push("releases");
+            open::that(html_url.as_str())?;
         }
     }
     Ok(())
 }
 
 async fn create_asset(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     release: String,
     file: std::path::PathBuf,
@@ -441,7 +456,7 @@ async fn create_asset(
 }
 
 async fn delete_asset(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     release: String,
     asset: String,
@@ -467,7 +482,7 @@ async fn delete_asset(
 }
 
 async fn download_asset(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     release: String,
     asset: String,
@@ -526,7 +541,7 @@ async fn download_asset(
 }
 
 async fn find_release(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     name: &str,
 ) -> eyre::Result<forgejo_api::structs::Release> {
@@ -548,7 +563,7 @@ async fn find_release(
 }
 
 async fn delete_release(
-    repo: &RepoInfo,
+    repo: &RepoName,
     api: &Forgejo,
     name: String,
     by_tag: bool,
