@@ -6,7 +6,7 @@ CLI tool for interacting with Forgejo
 
 ### Pre-built
 
-Pre-built binaries are available for x86 Windows and Linux (GNU) on the
+Pre-built binaries are available for `x86_64` Windows and Linux (GNU) on the
 [releases tab](https://codeberg.org/Cyborus/forgejo-cli/releases/latest).
 
 ### From source
