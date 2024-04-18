@@ -345,7 +345,100 @@ impl RepoCommand {
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 let repo = api.repo_get(repo.owner(), repo.name()).await?;
 
-                dbg!(repo);
+                println!("{}", repo.full_name.ok_or_eyre("no full name")?);
+
+                if let Some(parent) = &repo.parent {
+                    println!(
+                        "Fork of {}",
+                        parent.full_name.as_ref().ok_or_eyre("no full name")?
+                    );
+                }
+                if repo.mirror == Some(true) {
+                    if let Some(original) = &repo.original_url {
+                        println!("Mirror of {original}")
+                    }
+                }
+                let desc = repo.description.as_deref().unwrap_or_default();
+                if !desc.is_empty() {
+                    if desc.lines().count() > 1 {
+                        println!();
+                    }
+                    for line in desc.lines() {
+                        println!("> {line}");
+                    }
+                }
+                println!();
+
+                let lang = repo.language.as_deref().unwrap_or_default();
+                if !lang.is_empty() {
+                    println!("Primary language is {lang}");
+                }
+
+                let stars = repo.stars_count.unwrap_or_default();
+                if stars == 1 {
+                    print!("{stars} star - ");
+                } else {
+                    print!("{stars} stars - ");
+                }
+
+                let watchers = repo.watchers_count.unwrap_or_default();
+                print!("{watchers} watching - ");
+
+                let forks = repo.forks_count.unwrap_or_default();
+                if forks == 1 {
+                    print!("{forks} fork");
+                } else {
+                    print!("{forks} forks");
+                }
+                println!();
+
+                let mut first = true;
+                if repo.has_issues.unwrap_or_default() && repo.external_tracker.is_none() {
+                    let issues = repo.open_issues_count.unwrap_or_default();
+                    if issues == 1 {
+                        print!("{issues} issue");
+                    } else {
+                        print!("{issues} issues");
+                    }
+                    first = false;
+                }
+                if repo.has_pull_requests.unwrap_or_default() {
+                    if !first {
+                        print!(" - ");
+                    }
+                    let pulls = repo.open_pr_counter.unwrap_or_default();
+                    if pulls == 1 {
+                        print!("{pulls} PR");
+                    } else {
+                        print!("{pulls} PRs");
+                    }
+                    first = false;
+                }
+                if repo.has_releases.unwrap_or_default() {
+                    if !first {
+                        print!(" - ");
+                    }
+                    let releases = repo.release_counter.unwrap_or_default();
+                    if releases == 1 {
+                        print!("{releases} release");
+                    } else {
+                        print!("{releases} releases");
+                    }
+                    first = false;
+                }
+                if !first {
+                    println!();
+                }
+                if let Some(external_tracker) = &repo.external_tracker {
+                    if let Some(tracker_url) = &external_tracker.external_tracker_url {
+                        println!("Issue tracker is at {tracker_url}");
+                    }
+                }
+
+                if let Some(html_url) = &repo.html_url {
+                    println!();
+                    println!("View online at {html_url}");
+                }
             }
             RepoCommand::Browse { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
