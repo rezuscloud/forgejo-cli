@@ -15,7 +15,7 @@ Install with `cargo install`
 
 ```
 # Latest version
-cargo install --git https://codeberg.org/Cyborus/forgejo-cli.git --tag v0.0.3
+cargo install --git https://codeberg.org/Cyborus/forgejo-cli.git --tag v0.0.4
 # From `main`
 cargo install --git https://codeberg.org/Cyborus/forgejo-cli.git --branch main
 ```
