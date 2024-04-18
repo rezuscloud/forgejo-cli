@@ -23,7 +23,8 @@ pub enum Command {
     #[clap(subcommand)]
     Repo(repo::RepoCommand),
     Issue(issues::IssueCommand),
-    User {
+    #[command(name = "whoami")]
+    WhoAmI {
         #[clap(long, short)]
         remote: Option<String>,
     },
@@ -42,7 +43,7 @@ async fn main() -> eyre::Result<()> {
     match args.command {
         Command::Repo(subcommand) => subcommand.run(&keys, host_name).await?,
         Command::Issue(subcommand) => subcommand.run(&keys, host_name).await?,
-        Command::User { remote } => {
+        Command::WhoAmI { remote } => {
             let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref())
                 .wrap_err("could not find host, try specifying with --host")?
                 .host_url()
