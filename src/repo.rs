@@ -348,7 +348,10 @@ impl RepoCommand {
                 println!("{}", repo.full_name.ok_or_eyre("no full name")?);
 
                 if let Some(parent) = &repo.parent {
-                    println!("Fork of {}", parent.full_name.as_ref().ok_or_eyre("no full name")?);
+                    println!(
+                        "Fork of {}",
+                        parent.full_name.as_ref().ok_or_eyre("no full name")?
+                    );
                 }
                 if repo.mirror == Some(true) {
                     if let Some(original) = &repo.original_url {
