@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use eyre::{eyre, Context};
+use eyre::{eyre, Context, OptionExt};
 use tokio::io::AsyncWriteExt;
 
 mod keys;
@@ -48,7 +48,14 @@ async fn main() -> eyre::Result<()> {
                 .host_url()
                 .clone();
             let name = keys.get_login(&url)?.username();
-            eprintln!("currently signed in to {name}@{url}");
+            let host = url
+                .host_str()
+                .ok_or_eyre("instance url does not have host")?;
+            if url.path() == "/" || url.path().is_empty() {
+                println!("currently signed in to {name}@{host}");
+            } else {
+                println!("currently signed in to {name}@{host}{}", url.path());
+            }
         }
         Command::Auth(subcommand) => subcommand.run(&mut keys).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
