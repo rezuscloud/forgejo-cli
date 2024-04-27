@@ -309,7 +309,6 @@ async fn list_releases(
     let query = forgejo_api::structs::RepoListReleasesQuery {
         pre_release: Some(prerelease),
         draft: Some(draft),
-        per_page: None,
         page: None,
         limit: None,
     };
@@ -558,7 +557,6 @@ async fn find_release(
     let query = RepoListReleasesQuery {
         draft: None,
         pre_release: None,
-        per_page: None,
         page: None,
         limit: None,
     };
