@@ -296,6 +296,7 @@ impl RepoCommand {
                     issue_labels: None,
                     license: None,
                     name: repo.clone(),
+                    object_format_name: None,
                     private: Some(private),
                     readme: Some(String::new()),
                     template: Some(false),
