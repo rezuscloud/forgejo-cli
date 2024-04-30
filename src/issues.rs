@@ -176,7 +176,7 @@ async fn create_issue(
     Ok(())
 }
 
-async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
     let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
     let title = issue
         .title
@@ -253,7 +253,7 @@ async fn view_issues(
     Ok(())
 }
 
-async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -> eyre::Result<()> {
+pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -268,7 +268,7 @@ async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -> ey
     Ok(())
 }
 
-async fn view_comments(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn view_comments(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -307,7 +307,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
     Ok(())
 }
 
-async fn browse_issue(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
+pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
     match id {
         Some(id) => {
             let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
@@ -329,7 +329,7 @@ async fn browse_issue(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::
     Ok(())
 }
 
-async fn add_comment(
+pub async fn add_comment(
     repo: &RepoName,
     api: &Forgejo,
     issue: u64,
@@ -356,7 +356,7 @@ async fn add_comment(
     Ok(())
 }
 
-async fn edit_title(
+pub async fn edit_title(
     repo: &RepoName,
     api: &Forgejo,
     issue: u64,
@@ -402,7 +402,7 @@ async fn edit_title(
     Ok(())
 }
 
-async fn edit_body(
+pub async fn edit_body(
     repo: &RepoName,
     api: &Forgejo,
     issue: u64,
@@ -442,7 +442,7 @@ async fn edit_body(
     Ok(())
 }
 
-async fn edit_comment(
+pub async fn edit_comment(
     repo: &RepoName,
     api: &Forgejo,
     issue: u64,
@@ -490,7 +490,7 @@ async fn edit_comment(
     Ok(())
 }
 
-async fn close_issue(
+pub async fn close_issue(
     repo: &RepoName,
     api: &Forgejo,
     issue: u64,
