@@ -108,25 +108,46 @@ impl RepoInfo {
         let (remote_url, remote_repo_name) = {
             let mut out = (None, None);
             if let Ok(local_repo) = git2::Repository::open(".") {
+                // help to escape scopes
                 let tmp;
+                let mut tmp2;
+
                 let mut name = remote;
 
-                // if the user didn't specify a remote, try guessing other ways
-                let mut tmp2;
+                // if there's only one remote, use that
                 if name.is_none() {
                     let all_remotes = local_repo.remotes()?;
-                    // if there's only one remote, use that
                     if all_remotes.len() == 1 {
                         if let Some(remote_name) = all_remotes.get(0) {
                             tmp2 = Some(remote_name.to_owned());
                             name = tmp2.as_deref();
                         }
-                    // if there's a remote whose host url matches the one
-                    // specified with `--host`, use that
-                    //
-                    // This is different than using `--host` itself, since this
-                    // will include the repo name, which `--host` can't do.
-                    } else if let Some(host_url) = &host_url {
+                    }
+                }
+
+                // if the current branch is tracking a remote branch, use that remote
+                if name.is_none() {
+                    let head = local_repo.head()?;
+                    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
+                    tmp = local_repo.branch_upstream_remote(branch_name).ok();
+                    name = tmp
+                        .as_ref()
+                        .map(|remote| {
+                            remote
+                                .as_str()
+                                .ok_or_else(|| eyre!("remote name not UTF-8"))
+                        })
+                        .transpose()?;
+                }
+
+                // if there's a remote whose host url matches the one
+                // specified with `--host`, use that
+                //
+                // This is different than using `--host` itself, since this
+                // will include the repo name, which `--host` can't do.
+                if name.is_none() {
+                    if let Some(host_url) = &host_url {
+                        let all_remotes = local_repo.remotes()?;
                         for remote_name in all_remotes.iter() {
                             let Some(remote_name) = remote_name else {
                                 continue;
@@ -144,22 +165,6 @@ impl RepoInfo {
                             }
                         }
                     }
-                }
-
-                // if there isn't an obvious answer, guess from the current
-                // branch's tracking remote
-                if name.is_none() {
-                    let head = local_repo.head()?;
-                    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
-                    tmp = local_repo.branch_upstream_remote(branch_name).ok();
-                    name = tmp
-                        .as_ref()
-                        .map(|remote| {
-                            remote
-                                .as_str()
-                                .ok_or_else(|| eyre!("remote name not UTF-8"))
-                        })
-                        .transpose()?;
                 }
 
                 if let Some(name) = name {
