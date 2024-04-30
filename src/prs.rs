@@ -1,7 +1,10 @@
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
-    structs::{CreatePullRequestOption, MergePullRequestOption},
+    structs::{
+        CreatePullRequestOption, MergePullRequestOption, RepoGetPullRequestCommitsQuery,
+        RepoGetPullRequestFilesQuery,
+    },
     Forgejo,
 };
 
@@ -107,8 +110,24 @@ pub enum EditCommand {
 #[derive(Subcommand, Clone, Debug)]
 pub enum ViewCommand {
     Body,
-    Comment { idx: usize },
+    Comment {
+        idx: usize,
+    },
     Comments,
+    Diff {
+        /// Get the diff in patch format
+        #[clap(long, short)]
+        patch: bool,
+        /// View the diff in your text editor
+        #[clap(long, short)]
+        editor: bool,
+    },
+    Files,
+    Commits {
+        /// View one commit per line
+        #[clap(long, short)]
+        oneline: bool,
+    },
 }
 
 impl PrCommand {
@@ -133,6 +152,13 @@ impl PrCommand {
                     crate::issues::view_comment(&repo, &api, id, idx).await?
                 }
                 ViewCommand::Comments => crate::issues::view_comments(&repo, &api, id).await?,
+                ViewCommand::Diff { patch, editor } => {
+                    view_diff(&repo, &api, id, patch, editor).await?
+                }
+                ViewCommand::Files => view_pr_files(&repo, &api, id).await?,
+                ViewCommand::Commits { oneline } => {
+                    view_pr_commits(&repo, &api, id, oneline).await?
+                }
             },
             Search {
                 query,
@@ -305,6 +331,149 @@ async fn view_prs(
             .as_ref()
             .ok_or_else(|| eyre::eyre!("user does not have login"))?;
         println!("#{}: {} (by {})", number, title, username);
+    }
+    Ok(())
+}
+
+async fn view_diff(
+    repo: &RepoName,
+    api: &Forgejo,
+    pr: u64,
+    patch: bool,
+    editor: bool,
+) -> eyre::Result<()> {
+    let diff_type = if patch { "patch" } else { "diff" };
+    let diff = api
+        .repo_download_pull_diff_or_patch(
+            repo.owner(),
+            repo.name(),
+            pr,
+            diff_type,
+            forgejo_api::structs::RepoDownloadPullDiffOrPatchQuery::default(),
+        )
+        .await?;
+    if editor {
+        let mut view = diff.clone();
+        crate::editor(&mut view, Some(diff_type)).await?;
+        if view != diff {
+            println!("changes made to the diff will not persist");
+        }
+    } else {
+        println!("{diff}");
+    }
+    Ok(())
+}
+
+async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: u64) -> eyre::Result<()> {
+    let query = RepoGetPullRequestFilesQuery {
+        limit: Some(u32::MAX),
+        ..Default::default()
+    };
+    let (headers, files) = api
+        .repo_get_pull_request_files(repo.owner(), repo.name(), pr, query)
+        .await?;
+    let max_additions = files
+        .iter()
+        .map(|x| x.additions.unwrap_or_default())
+        .max()
+        .unwrap_or_default();
+    let max_deletions = files
+        .iter()
+        .map(|x| x.deletions.unwrap_or_default())
+        .max()
+        .unwrap_or_default();
+
+    let additions_width = max_additions.checked_ilog10().unwrap_or_default() as usize + 1;
+    let deletions_width = max_deletions.checked_ilog10().unwrap_or_default() as usize + 1;
+
+    for file in files {
+        let name = file.filename.as_deref().unwrap_or("???");
+        let additions = file.additions.unwrap_or_default();
+        let deletions = file.deletions.unwrap_or_default();
+        println!("\x1b[92m+{additions:<additions_width$} \x1b[91m-{deletions:<deletions_width$}\x1b[0m {name}");
+    }
+    Ok(())
+}
+
+async fn view_pr_commits(
+    repo: &RepoName,
+    api: &Forgejo,
+    pr: u64,
+    oneline: bool,
+) -> eyre::Result<()> {
+    let query = RepoGetPullRequestCommitsQuery {
+        limit: Some(u32::MAX),
+        files: Some(false),
+        ..Default::default()
+    };
+    let (_headers, commits) = api
+        .repo_get_pull_request_commits(repo.owner(), repo.name(), pr, query)
+        .await?;
+
+    let max_additions = commits
+        .iter()
+        .filter_map(|x| x.stats.as_ref())
+        .map(|x| x.additions.unwrap_or_default())
+        .max()
+        .unwrap_or_default();
+    let max_deletions = commits
+        .iter()
+        .filter_map(|x| x.stats.as_ref())
+        .map(|x| x.deletions.unwrap_or_default())
+        .max()
+        .unwrap_or_default();
+
+    let additions_width = max_additions.checked_ilog10().unwrap_or_default() as usize + 1;
+    let deletions_width = max_deletions.checked_ilog10().unwrap_or_default() as usize + 1;
+
+    for commit in commits {
+        let repo_commit = commit
+            .commit
+            .as_ref()
+            .ok_or_eyre("commit does not have commit?")?;
+
+        let message = repo_commit.message.as_deref().unwrap_or("[no msg]");
+        let name = message.lines().next().unwrap_or(&message);
+
+        let sha = commit
+            .sha
+            .as_deref()
+            .ok_or_eyre("commit does not have sha")?;
+        let short_sha = &sha[..7];
+
+        let stats = commit
+            .stats
+            .as_ref()
+            .ok_or_eyre("commit does not have stats")?;
+        let additions = stats.additions.unwrap_or_default();
+        let deletions = stats.deletions.unwrap_or_default();
+
+        if oneline {
+            println!("\x1b[33m{short_sha}\x1b[0m \x1b[92m+{additions:<additions_width$} \x1b[91m-{deletions:<deletions_width$}\x1b[0m {name}");
+        } else {
+            let author = repo_commit
+                .author
+                .as_ref()
+                .ok_or_eyre("commit has no author")?;
+            let author_name = author.name.as_deref().ok_or_eyre("author has no name")?;
+            let author_email = author.email.as_deref().ok_or_eyre("author has no email")?;
+            let date = commit
+                .created
+                .as_ref()
+                .ok_or_eyre("commit as no creation date")?;
+
+            println!("\x1b[33mcommit {sha}\x1b[0m (\x1b[92m+{additions}\x1b[0m, \x1b[91m-{deletions}\x1b[0m)");
+            println!("Author: {author_name} <{author_email}>");
+            print!("Date:   ");
+            let format = time::macros::format_description!("[weekday repr:short] [month repr:short] [day] [hour repr:24]:[minute]:[second] [year] [offset_hour sign:mandatory][offset_minute]");
+            date.format_into(&mut std::io::stdout().lock(), format)?;
+            println!();
+            println!();
+            for line in message.lines() {
+                println!("    {line}");
+            }
+            println!();
+        }
     }
     Ok(())
 }
