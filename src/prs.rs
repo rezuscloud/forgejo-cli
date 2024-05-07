@@ -187,6 +187,16 @@ impl PrCommand {
 }
 
 pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+    let crate::SpecialRender {
+        dash,
+        body_prefix,
+
+        bright_red,
+        bright_green,
+        reset,
+        ..
+    } = crate::special_render();
+
     let mut additions = 0;
     let mut deletions = 0;
     let query = RepoGetPullRequestFilesQuery {
@@ -217,13 +227,13 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
     println!("#{}: {}", id, title);
     println!(
-        "By {} - \x1b[92m+{additions} \x1b[91m-{deletions}\x1b[0m",
+        "By {} {dash} {bright_green}+{additions} {bright_red}-{deletions}{reset}",
         username
     );
     if let Some(body) = &pr.body {
         println!();
         for line in body.lines() {
-            println!("  {line}");
+            println!("{body_prefix} {line}");
         }
         println!();
     }
@@ -409,6 +419,13 @@ async fn view_diff(
 }
 
 async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: u64) -> eyre::Result<()> {
+    let crate::SpecialRender {
+        bright_red,
+        bright_green,
+        reset,
+        ..
+    } = crate::special_render();
+
     let query = RepoGetPullRequestFilesQuery {
         limit: Some(u32::MAX),
         ..Default::default()
@@ -434,7 +451,7 @@ async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: u64) -> eyre::Result<
         let name = file.filename.as_deref().unwrap_or("???");
         let additions = file.additions.unwrap_or_default();
         let deletions = file.deletions.unwrap_or_default();
-        println!("\x1b[92m+{additions:<additions_width$} \x1b[91m-{deletions:<deletions_width$}\x1b[0m {name}");
+        println!("{bright_green}+{additions:<additions_width$} {bright_red}-{deletions:<deletions_width$}{reset} {name}");
     }
     Ok(())
 }
@@ -470,6 +487,13 @@ async fn view_pr_commits(
     let additions_width = max_additions.checked_ilog10().unwrap_or_default() as usize + 1;
     let deletions_width = max_deletions.checked_ilog10().unwrap_or_default() as usize + 1;
 
+    let crate::SpecialRender {
+        bright_red,
+        bright_green,
+        yellow,
+        reset,
+        ..
+    } = crate::special_render();
     for commit in commits {
         let repo_commit = commit
             .commit
@@ -493,7 +517,7 @@ async fn view_pr_commits(
         let deletions = stats.deletions.unwrap_or_default();
 
         if oneline {
-            println!("\x1b[33m{short_sha}\x1b[0m \x1b[92m+{additions:<additions_width$} \x1b[91m-{deletions:<deletions_width$}\x1b[0m {name}");
+            println!("{yellow}{short_sha} {bright_green}+{additions:<additions_width$} {bright_red}-{deletions:<deletions_width$}{reset} {name}");
         } else {
             let author = repo_commit
                 .author
@@ -506,7 +530,7 @@ async fn view_pr_commits(
                 .as_ref()
                 .ok_or_eyre("commit as no creation date")?;
 
-            println!("\x1b[33mcommit {sha}\x1b[0m (\x1b[92m+{additions}\x1b[0m, \x1b[91m-{deletions}\x1b[0m)");
+            println!("{yellow}commit {sha}{reset} ({bright_green}+{additions}{reset}, {bright_red}-{deletions}{reset})");
             println!("Author: {author_name} <{author_email}>");
             print!("Date:   ");
             let format = time::macros::format_description!("[weekday repr:short] [month repr:short] [day] [hour repr:24]:[minute]:[second] [year] [offset_hour sign:mandatory][offset_minute]");
