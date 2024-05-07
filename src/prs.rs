@@ -147,7 +147,7 @@ impl PrCommand {
             } => create_pr(&repo, &api, title, base, head, body).await?,
             Merge { pr, method, delete } => merge_pr(&repo, &api, pr, method, delete).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
-                ViewCommand::Body => crate::issues::view_issue(&repo, &api, id).await?,
+                ViewCommand::Body => view_pr(&repo, &api, id).await?,
                 ViewCommand::Comment { idx } => {
                     crate::issues::view_comment(&repo, &api, id, idx).await?
                 }
@@ -184,6 +184,50 @@ impl PrCommand {
         }
         Ok(())
     }
+}
+
+pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+    let mut additions = 0;
+    let mut deletions = 0;
+    let query = RepoGetPullRequestFilesQuery {
+        limit: Some(u32::MAX),
+        ..Default::default()
+    };
+    let (_, files) = api
+        .repo_get_pull_request_files(repo.owner(), repo.name(), id, query)
+        .await?;
+    for file in files {
+        additions += file.additions.unwrap_or_default();
+        deletions += file.deletions.unwrap_or_default();
+    }
+    let pr = api
+        .repo_get_pull_request(repo.owner(), repo.name(), id)
+        .await?;
+    let title = pr
+        .title
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("pr does not have title"))?;
+    let user = pr
+        .user
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("pr does not have creator"))?;
+    let username = user
+        .login
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("user does not have login"))?;
+    println!("#{}: {}", id, title);
+    println!(
+        "By {} - \x1b[92m+{additions} \x1b[91m-{deletions}\x1b[0m",
+        username
+    );
+    if let Some(body) = &pr.body {
+        println!();
+        for line in body.lines() {
+            println!("  {line}");
+        }
+        println!();
+    }
+    Ok(())
 }
 
 async fn create_pr(
