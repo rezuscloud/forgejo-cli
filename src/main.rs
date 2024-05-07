@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use clap::{Parser, Subcommand};
 use eyre::{eyre, Context, OptionExt};
 use tokio::io::AsyncWriteExt;
@@ -14,6 +16,8 @@ mod repo;
 pub struct App {
     #[clap(long, short = 'H')]
     host: Option<String>,
+    #[clap(long)]
+    style: Option<Style>,
     #[clap(subcommand)]
     command: Command,
 }
@@ -36,6 +40,9 @@ pub enum Command {
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let args = App::parse();
+
+    let _ = SPECIAL_RENDER.set(SpecialRender::new(args.style.unwrap_or_default()));
+
     let mut keys = KeyInfo::load().await?;
 
     let host_name = args.host.as_deref();
@@ -136,4 +143,109 @@ async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std:
         .open(&path)
         .await?;
     Ok((file, path))
+}
+
+use std::sync::OnceLock;
+static SPECIAL_RENDER: OnceLock<SpecialRender> = OnceLock::new();
+
+fn special_render() -> &'static SpecialRender {
+    SPECIAL_RENDER
+        .get()
+        .expect("attempted to get special characters before that was initialized")
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Default)]
+enum Style {
+    /// Use special characters, and colors.
+    #[default]
+    Fancy,
+    /// No special characters and no colors. Always used in non-terminal contexts (i.e. pipes)
+    Minimal,
+}
+
+struct SpecialRender {
+    dash: char,
+    bullet: char,
+    body_prefix: char,
+
+    red: &'static str,
+    bright_red: &'static str,
+    green: &'static str,
+    bright_green: &'static str,
+    blue: &'static str,
+    bright_blue: &'static str,
+    cyan: &'static str,
+    bright_cyan: &'static str,
+    yellow: &'static str,
+    bright_yellow: &'static str,
+    magenta: &'static str,
+    bright_magenta: &'static str,
+    black: &'static str,
+    dark_grey: &'static str,
+    light_grey: &'static str,
+    white: &'static str,
+    reset: &'static str,
+}
+
+impl SpecialRender {
+    fn new(display: Style) -> Self {
+        let is_tty = std::io::stdout().is_terminal();
+        match display {
+            _ if !is_tty => Self::minimal(),
+            Style::Fancy => Self::fancy(),
+            Style::Minimal => Self::minimal(),
+        }
+    }
+
+    fn fancy() -> Self {
+        Self {
+            dash: '—',
+            bullet: '•',
+            body_prefix: '▌',
+
+            red: "\x1b[31m",
+            bright_red: "\x1b[91m",
+            green: "\x1b[32m",
+            bright_green: "\x1b[92m",
+            blue: "\x1b[34m",
+            bright_blue: "\x1b[94m",
+            cyan: "\x1b[36m",
+            bright_cyan: "\x1b[96m",
+            yellow: "\x1b[33m",
+            bright_yellow: "\x1b[93m",
+            magenta: "\x1b[35m",
+            bright_magenta: "\x1b[95m",
+            black: "\x1b[30m",
+            dark_grey: "\x1b[90m",
+            light_grey: "\x1b[37m",
+            white: "\x1b[97m",
+            reset: "\x1b[0m",
+        }
+    }
+
+    fn minimal() -> Self {
+        Self {
+            dash: '-',
+            bullet: '-',
+            body_prefix: '>',
+
+            red: "",
+            bright_red: "",
+            green: "",
+            bright_green: "",
+            blue: "",
+            bright_blue: "",
+            cyan: "",
+            bright_cyan: "",
+            yellow: "",
+            bright_yellow: "",
+            magenta: "",
+            bright_magenta: "",
+            black: "",
+            dark_grey: "",
+            light_grey: "",
+            white: "",
+            reset: "",
+        }
+    }
 }

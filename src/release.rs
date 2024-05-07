@@ -9,6 +9,7 @@ use tokio::io::AsyncWriteExt;
 use crate::{
     keys::KeyInfo,
     repo::{RepoInfo, RepoName},
+    SpecialRender,
 };
 
 #[derive(Args, Clone, Debug)]
@@ -374,6 +375,13 @@ async fn view_release(
         &time::format_description::well_known::Rfc2822,
     )?;
     println!();
+    let SpecialRender {
+        bullet,
+        body_prefix,
+        dark_grey,
+        reset,
+        ..
+    } = crate::special_render();
     let body = release
         .body
         .as_ref()
@@ -381,7 +389,7 @@ async fn view_release(
     if !body.is_empty() {
         println!();
         for line in body.lines() {
-            println!("> {line}");
+            println!("{dark_grey}{body_prefix}{reset} {line}");
         }
         println!();
     }
@@ -396,10 +404,10 @@ async fn view_release(
                 .name
                 .as_ref()
                 .ok_or_else(|| eyre::eyre!("asset does not have name"))?;
-            println!("- {}", name);
+            println!("{bullet} {}", name);
         }
-        println!("- source.zip");
-        println!("- source.tar.gz");
+        println!("{bullet} source.zip");
+        println!("{bullet} source.tar.gz");
     }
     Ok(())
 }

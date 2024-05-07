@@ -3,6 +3,8 @@ use eyre::{eyre, OptionExt};
 use forgejo_api::structs::CreateRepoOption;
 use url::Url;
 
+use crate::SpecialRender;
+
 pub struct RepoInfo {
     url: Url,
     name: Option<RepoName>,
@@ -351,6 +353,14 @@ impl RepoCommand {
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 let repo = api.repo_get(repo.owner(), repo.name()).await?;
 
+                let SpecialRender {
+                    dash,
+                    body_prefix,
+                    dark_grey,
+                    reset,
+                    ..
+                } = crate::special_render();
+
                 println!("{}", repo.full_name.ok_or_eyre("no full name")?);
 
                 if let Some(parent) = &repo.parent {
@@ -370,7 +380,7 @@ impl RepoCommand {
                         println!();
                     }
                     for line in desc.lines() {
-                        println!("> {line}");
+                        println!("{dark_grey}{body_prefix}{reset} {line}");
                     }
                 }
                 println!();
@@ -382,13 +392,13 @@ impl RepoCommand {
 
                 let stars = repo.stars_count.unwrap_or_default();
                 if stars == 1 {
-                    print!("{stars} star - ");
+                    print!("{stars} star {dash} ");
                 } else {
-                    print!("{stars} stars - ");
+                    print!("{stars} stars {dash} ");
                 }
 
                 let watchers = repo.watchers_count.unwrap_or_default();
-                print!("{watchers} watching - ");
+                print!("{watchers} watching {dash} ");
 
                 let forks = repo.forks_count.unwrap_or_default();
                 if forks == 1 {
@@ -410,7 +420,7 @@ impl RepoCommand {
                 }
                 if repo.has_pull_requests.unwrap_or_default() {
                     if !first {
-                        print!(" - ");
+                        print!(" {dash} ");
                     }
                     let pulls = repo.open_pr_counter.unwrap_or_default();
                     if pulls == 1 {
@@ -422,7 +432,7 @@ impl RepoCommand {
                 }
                 if repo.has_releases.unwrap_or_default() {
                     if !first {
-                        print!(" - ");
+                        print!(" {dash} ");
                     }
                     let releases = repo.release_counter.unwrap_or_default();
                     if releases == 1 {
