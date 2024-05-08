@@ -236,6 +236,11 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()
 
         bright_red,
         bright_green,
+        bright_magenta,
+        yellow,
+        dark_grey,
+        light_grey,
+        white,
         reset,
         ..
     } = crate::special_render();
@@ -258,8 +263,55 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()
         .await?;
     let title = pr
         .title
-        .as_ref()
+        .as_deref()
         .ok_or_else(|| eyre::eyre!("pr does not have title"))?;
+    let title_no_wip = title
+        .strip_prefix("WIP: ")
+        .or_else(|| title.strip_prefix("WIP:"));
+    let (title, is_draft) = match title_no_wip {
+        Some(title) => (title, true),
+        None => (title, false),
+    };
+    let state = pr
+        .state
+        .as_deref()
+        .ok_or_else(|| eyre::eyre!("pr does not have state"))?;
+    let state = match state {
+        "open" if is_draft => format!("{light_grey}Draft{reset}"),
+        "open" => format!("{bright_green}Open{reset}"),
+        "closed" if pr.merged.unwrap_or_default() => format!("{bright_magenta}Merged{reset}"),
+        "closed" => format!("{bright_red}Closed{reset}"),
+        _ => "Unknown".to_owned(),
+    };
+    let base = pr.base.as_ref().ok_or_eyre("pr does not have base")?;
+    let base_repo = base
+        .repo
+        .as_ref()
+        .ok_or_eyre("base does not have repo")?
+        .full_name
+        .as_deref()
+        .ok_or_eyre("base repo does not have name")?;
+    let base_name = base
+        .label
+        .as_deref()
+        .ok_or_eyre("base does not have label")?;
+    let head = pr.head.as_ref().ok_or_eyre("pr does not have head")?;
+    let head_repo = head
+        .repo
+        .as_ref()
+        .ok_or_eyre("head does not have repo")?
+        .full_name
+        .as_deref()
+        .ok_or_eyre("head repo does not have name")?;
+    let head_name = head
+        .label
+        .as_deref()
+        .ok_or_eyre("head does not have label")?;
+    let head_name = if base_repo != head_repo {
+        format!("{head_repo}:{head_name}")
+    } else {
+        head_name.to_owned()
+    };
     let user = pr
         .user
         .as_ref()
@@ -268,17 +320,26 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()
         .login
         .as_ref()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
-    println!("#{}: {}", id, title);
+    let comments = pr.comments.unwrap_or_default();
+    println!("{yellow}{title}{reset} {dark_grey}#{id}{reset}");
     println!(
-        "By {} {dash} {bright_green}+{additions} {bright_red}-{deletions}{reset}",
-        username
+        "By {white}{username}{reset} {dash} {state} {dash} {bright_green}+{additions} {bright_red}-{deletions}{reset}"
     );
+    println!("From `{head_name}` into `{base_name}`");
+
     if let Some(body) = &pr.body {
-        println!();
-        for line in body.lines() {
-            println!("{body_prefix} {line}");
+        if !body.trim().is_empty() {
+            println!();
+            for line in body.lines() {
+                println!("{dark_grey}{body_prefix}{reset} {line}");
+            }
         }
-        println!();
+    }
+    println!();
+    if comments == 1 {
+        println!("1 comment");
+    } else {
+        println!("{comments} comments");
     }
     Ok(())
 }
