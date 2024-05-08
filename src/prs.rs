@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
@@ -66,6 +68,17 @@ pub enum PrSubcommand {
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
+    Checkout {
+        /// The pull request to check out.
+        ///
+        /// Prefix with ^ to get a pull request from the parent repo.
+        pr: PrNumber,
+        /// The name to give the newly created branch.
+        ///
+        /// Defaults to naming after the host url, repo owner, and PR number.
+        #[clap(long, id = "NAME")]
+        branch_name: Option<String>,
+    },
     Browse {
         id: Option<u64>,
     },
@@ -78,6 +91,33 @@ pub enum MergeMethod {
     RebaseMerge,
     Squash,
     Manual,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PrNumber {
+    This(u64),
+    Parent(u64),
+}
+
+impl PrNumber {
+    fn number(self) -> u64 {
+        match self {
+            PrNumber::This(x) => x,
+            PrNumber::Parent(x) => x,
+        }
+    }
+}
+
+impl FromStr for PrNumber {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some(num) = s.strip_prefix("^") {
+            Ok(Self::Parent(num.parse()?))
+        } else {
+            Ok(Self::This(s.parse()?))
+        }
+    }
 }
 
 impl From<MergeMethod> for forgejo_api::structs::MergePullRequestOptionDo {
@@ -179,6 +219,9 @@ impl PrCommand {
                 }
             },
             Close { pr, with_msg } => crate::issues::close_issue(&repo, &api, pr, with_msg).await?,
+            Checkout { pr, branch_name } => {
+                checkout_pr(&repo, &api, pr, self.repo.is_some(), branch_name).await?
+            }
             Browse { id } => crate::issues::browse_issue(&repo, &api, id).await?,
             Comment { pr, body } => crate::issues::add_comment(&repo, &api, pr, body).await?,
         }
@@ -331,6 +374,112 @@ async fn merge_pr(
     };
     api.repo_merge_pull_request(repo.owner(), repo.name(), pr, body)
         .await?;
+    Ok(())
+}
+
+async fn checkout_pr(
+    repo: &RepoName,
+    api: &Forgejo,
+    pr: PrNumber,
+    repo_specified: bool,
+    branch_name: Option<String>,
+) -> eyre::Result<()> {
+    // this is so you don't checkout a pull request from an entirely different
+    // repository. i.e. in this repo I could run
+    // `fj pr -r codeberg.org/forgejo/forgejo checkout [num]` and have forgejo
+    // appear in this repo.
+    eyre::ensure!(
+        !repo_specified,
+        "Cannot checkout PR, `--repo` is not allowed when checking out a pull request"
+    );
+
+    let local_repo = git2::Repository::open(".").unwrap();
+
+    let has_no_uncommited = local_repo.statuses(None).unwrap().is_empty();
+    eyre::ensure!(
+        has_no_uncommited,
+        "Cannot checkout PR, working directory has uncommited changes"
+    );
+
+    let remote_repo = match pr {
+        PrNumber::Parent(_) => {
+            let mut this_repo = api.repo_get(repo.owner(), repo.name()).await?;
+            let name = this_repo.full_name.as_deref().unwrap_or("???/???");
+            *this_repo
+                .parent
+                .take()
+                .ok_or_else(|| eyre::eyre!("cannot get parent repo, {name} is not a fork"))?
+        }
+        PrNumber::This(_) => api.repo_get(repo.owner(), repo.name()).await?,
+    };
+
+    let repo_owner = remote_repo
+        .owner
+        .as_ref()
+        .ok_or_eyre("repo does not have owner")?
+        .login
+        .as_deref()
+        .ok_or_eyre("owner does not have login")?;
+    let repo_name = remote_repo
+        .name
+        .as_ref()
+        .ok_or_eyre("repo does not have name")?;
+
+    let pull_data = api
+        .repo_get_pull_request(repo_owner, repo_name, pr.number())
+        .await?;
+
+    let url = remote_repo
+        .clone_url
+        .as_ref()
+        .ok_or_eyre("repo has no clone url")?;
+    let mut remote = local_repo.remote_anonymous(url.as_str())?;
+    let branch_name = branch_name.unwrap_or_else(|| {
+        format!(
+            "pr-{}-{}-{}",
+            url.host_str().unwrap_or("unknown"),
+            repo_owner,
+            pr.number(),
+        )
+    });
+
+    remote.fetch(&[&format!("pull/{}/head", pr.number())], None, None)?;
+
+    let reference = local_repo.find_reference("FETCH_HEAD")?.resolve()?;
+    let commit = reference.peel_to_commit()?;
+
+    let mut branch_is_new = true;
+    let branch =
+        if let Ok(mut branch) = local_repo.find_branch(&branch_name, git2::BranchType::Local) {
+            branch_is_new = false;
+            branch
+                .get_mut()
+                .set_target(commit.id(), "update pr branch")?;
+            branch
+        } else {
+            local_repo.branch(&branch_name, &commit, false)?
+        };
+    let branch_ref = branch
+        .get()
+        .name()
+        .ok_or_eyre("branch does not have name")?;
+
+    local_repo.set_head(branch_ref)?;
+    local_repo
+        // for some reason, `.force()` is required to make it actually update
+        // file contents. thank you git2 examples for noticing this too, I would
+        // have pulled out so much hair figuring this out myself.
+        .checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+        .unwrap();
+
+    let pr_title = pull_data.title.as_deref().ok_or_eyre("pr has no title")?;
+    println!("Checked out PR #{}: {pr_title}", pr.number());
+    if branch_is_new {
+        println!("On new branch {branch_name}");
+    } else {
+        println!("Updated branch to latest commit");
+    }
+
     Ok(())
 }
 
