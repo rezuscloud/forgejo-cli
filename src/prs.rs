@@ -504,7 +504,12 @@ async fn checkout_pr(
         )
     });
 
-    remote.fetch(&[&format!("pull/{}/head", pr.number())], None, None)?;
+    auth_git2::GitAuthenticator::new().fetch(
+        &local_repo,
+        &mut remote,
+        &[&format!("pull/{}/head", pr.number())],
+        None,
+    )?;
 
     let reference = local_repo.find_reference("FETCH_HEAD")?.resolve()?;
     let commit = reference.peel_to_commit()?;
