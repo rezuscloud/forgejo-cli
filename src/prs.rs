@@ -29,6 +29,18 @@ pub struct PrCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum PrSubcommand {
+    /// Search a repository's pull requests
+    Search {
+        query: Option<String>,
+        #[clap(long, short)]
+        labels: Option<String>,
+        #[clap(long, short)]
+        creator: Option<String>,
+        #[clap(long, short)]
+        assignee: Option<String>,
+        #[clap(long, short)]
+        state: Option<crate::issues::State>,
+    },
     /// Create a new pull request
     Create {
         /// The branch to merge onto.
@@ -44,55 +56,6 @@ pub enum PrSubcommand {
         /// Leaving this out will open your editor.
         #[clap(long)]
         body: Option<String>,
-    },
-    /// Edit the contents of a pull request
-    Edit {
-        /// The pull request to edit.
-        pr: u64,
-        #[clap(subcommand)]
-        command: EditCommand,
-    },
-    /// Merge a pull request
-    Merge {
-        /// The pull request to merge.
-        pr: u64,
-        /// The merge style to use.
-        #[clap(long, short)]
-        method: Option<MergeMethod>,
-        /// Option to delete the corresponding branch afterwards.
-        #[clap(long, short)]
-        delete: bool,
-    },
-    /// Add a comment on a pull request
-    Comment {
-        /// The pull request to comment on.
-        pr: u64,
-        /// The text content of the comment.
-        ///
-        /// Not including this in the command will open your editor.
-        body: Option<String>,
-    },
-    /// Close a pull request, without merging.
-    Close {
-        /// The pull request to close.
-        pr: u64,
-        /// A comment to add before closing.
-        ///
-        /// Adding without an argument will open your editor
-        #[clap(long, short)]
-        with_msg: Option<Option<String>>,
-    },
-    /// Search a repository's pull requests
-    Search {
-        query: Option<String>,
-        #[clap(long, short)]
-        labels: Option<String>,
-        #[clap(long, short)]
-        creator: Option<String>,
-        #[clap(long, short)]
-        assignee: Option<String>,
-        #[clap(long, short)]
-        state: Option<crate::issues::State>,
     },
     /// View the contents of a pull request
     View {
@@ -112,6 +75,43 @@ pub enum PrSubcommand {
         /// Defaults to naming after the host url, repo owner, and PR number.
         #[clap(long, id = "NAME")]
         branch_name: Option<String>,
+    },
+    /// Add a comment on a pull request
+    Comment {
+        /// The pull request to comment on.
+        pr: u64,
+        /// The text content of the comment.
+        ///
+        /// Not including this in the command will open your editor.
+        body: Option<String>,
+    },
+    /// Edit the contents of a pull request
+    Edit {
+        /// The pull request to edit.
+        pr: u64,
+        #[clap(subcommand)]
+        command: EditCommand,
+    },
+    /// Close a pull request, without merging.
+    Close {
+        /// The pull request to close.
+        pr: u64,
+        /// A comment to add before closing.
+        ///
+        /// Adding without an argument will open your editor
+        #[clap(long, short)]
+        with_msg: Option<Option<String>>,
+    },
+    /// Merge a pull request
+    Merge {
+        /// The pull request to merge.
+        pr: u64,
+        /// The merge style to use.
+        #[clap(long, short)]
+        method: Option<MergeMethod>,
+        /// Option to delete the corresponding branch afterwards.
+        #[clap(long, short)]
+        delete: bool,
     },
     /// Open a pull request in your browser
     Browse {
