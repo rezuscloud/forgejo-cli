@@ -17,8 +17,10 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct PrCommand {
+    /// The git remote to operate on.
     #[clap(long, short = 'R')]
     remote: Option<String>,
+    /// The name of the remote repository to operate on.
     #[clap(long, short)]
     repo: Option<String>,
     #[clap(subcommand)]
@@ -27,34 +29,60 @@ pub struct PrCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum PrSubcommand {
+    /// Create a new pull request
     Create {
+        /// The branch to merge onto.
         base: String,
+        /// The branch to pull changes from.
         head: String,
+        /// What to name the new pull request.
+        ///
+        /// Prefix with "WIP: " to mark this PR as a draft.
         title: String,
+        /// The text body of the pull request.
+        ///
+        /// Leaving this out will open your editor.
         #[clap(long)]
         body: Option<String>,
     },
+    /// Edit the contents of a pull request
     Edit {
+        /// The pull request to edit.
         pr: u64,
         #[clap(subcommand)]
         command: EditCommand,
     },
+    /// Merge a pull request
     Merge {
+        /// The pull request to merge.
         pr: u64,
+        /// The merge style to use.
         #[clap(long, short)]
         method: Option<MergeMethod>,
+        /// Option to delete the corresponding branch afterwards.
         #[clap(long, short)]
         delete: bool,
     },
+    /// Add a comment on a pull request
     Comment {
+        /// The pull request to comment on.
         pr: u64,
+        /// The text content of the comment.
+        ///
+        /// Not including this in the command will open your editor.
         body: Option<String>,
     },
+    /// Close a pull request, without merging.
     Close {
+        /// The pull request to close.
         pr: u64,
+        /// A comment to add before closing.
+        ///
+        /// Adding without an argument will open your editor
         #[clap(long, short)]
         with_msg: Option<Option<String>>,
     },
+    /// Search a repository's pull requests
     Search {
         query: Option<String>,
         #[clap(long, short)]
@@ -66,11 +94,14 @@ pub enum PrSubcommand {
         #[clap(long, short)]
         state: Option<crate::issues::State>,
     },
+    /// View the contents of a pull request
     View {
+        /// The pull request to view.
         id: u64,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
+    /// Checkout a pull request in a new branch
     Checkout {
         /// The pull request to check out.
         ///
@@ -82,7 +113,11 @@ pub enum PrSubcommand {
         #[clap(long, id = "NAME")]
         branch_name: Option<String>,
     },
+    /// Open a pull request in your browser
     Browse {
+        /// The pull request to open in your browser.
+        ///
+        /// Leave this out to open the list of PRs.
         id: Option<u64>,
     },
 }
@@ -138,26 +173,45 @@ impl From<MergeMethod> for forgejo_api::structs::MergePullRequestOptionDo {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum EditCommand {
+    /// Edit the title
     Title {
+        /// New PR title.
+        ///
+        /// Leaving this out will open the current title in your editor.
         new_title: Option<String>,
     },
+    /// Edit the text body
     Body {
+        /// New PR body.
+        ///
+        /// Leaving this out will open the current body in your editor.
         new_body: Option<String>,
     },
+    /// Edit a comment
     Comment {
+        /// The index of the comment to edit, 0-indexed.
         idx: usize,
+        /// New comment body.
+        ///
+        /// Leaving this out will open the current body in your editor.
         new_body: Option<String>,
     },
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ViewCommand {
+    /// View the title and body of a pull request.
     Body,
+    /// View a comment on a pull request.
     Comment {
+        /// The index of the comment to view, 0-indexed.
         idx: usize,
     },
+    /// View all comments on a pull request.
     Comments,
+    /// View the labels applied to a pull request.
     Labels,
+    /// View the diff between the base and head branches of a pull request.
     Diff {
         /// Get the diff in patch format
         #[clap(long, short)]
@@ -166,6 +220,7 @@ pub enum ViewCommand {
         #[clap(long, short)]
         editor: bool,
     },
+    /// View the files changed in a pull request.
     Files,
     Commits {
         /// View one commit per line
