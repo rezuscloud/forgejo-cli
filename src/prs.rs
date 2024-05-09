@@ -230,6 +230,7 @@ pub enum ViewCommand {
     },
     /// View the files changed in a pull request.
     Files,
+    /// View the commits in a pull request.
     Commits {
         /// View one commit per line
         #[clap(long, short)]
