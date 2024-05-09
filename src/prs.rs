@@ -196,6 +196,14 @@ pub enum EditCommand {
         /// Leaving this out will open the current body in your editor.
         new_body: Option<String>,
     },
+    Labels {
+        /// The labels to add.
+        #[clap(long, short)]
+        add: Vec<String>,
+        /// The labels to remove.
+        #[clap(long, short)]
+        rm: Vec<String>,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -277,6 +285,7 @@ impl PrCommand {
                 EditCommand::Comment { idx, new_body } => {
                     crate::issues::edit_comment(&repo, &api, pr, idx, new_body).await?
                 }
+                EditCommand::Labels { add, rm } => edit_pr_labels(&repo, &api, pr, add, rm).await?,
             },
             Close { pr, with_msg } => crate::issues::close_issue(&repo, &api, pr, with_msg).await?,
             Checkout { pr, branch_name } => {
@@ -483,6 +492,83 @@ fn darken(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
         ((g as f32) * 0.85) as u8,
         ((b as f32) * 0.85) as u8,
     )
+}
+
+async fn edit_pr_labels(
+    repo: &RepoName,
+    api: &Forgejo,
+    pr: u64,
+    add: Vec<String>,
+    rm: Vec<String>,
+) -> eyre::Result<()> {
+    let query = forgejo_api::structs::IssueListLabelsQuery {
+        limit: Some(u32::MAX),
+        ..Default::default()
+    };
+    let mut labels = api
+        .issue_list_labels(repo.owner(), repo.name(), query)
+        .await?;
+    let query = forgejo_api::structs::OrgListLabelsQuery {
+        limit: Some(u32::MAX),
+        ..Default::default()
+    };
+    let org_labels = api
+        .org_list_labels(repo.owner(), query)
+        .await
+        .unwrap_or_default();
+    labels.extend(org_labels);
+
+    let mut unknown_labels = Vec::new();
+
+    let mut add_ids = Vec::with_capacity(add.len());
+    for label_name in &add {
+        let maybe_label = labels
+            .iter()
+            .find(|label| label.name.as_ref() == Some(&label_name));
+        if let Some(label) = maybe_label {
+            add_ids.push(label.id.ok_or_eyre("label does not have id")?);
+        } else {
+            unknown_labels.push(label_name);
+        }
+    }
+
+    let mut rm_ids = Vec::with_capacity(add.len());
+    for label_name in &rm {
+        let maybe_label = labels
+            .iter()
+            .find(|label| label.name.as_ref() == Some(&label_name));
+        if let Some(label) = maybe_label {
+            rm_ids.push(label.id.ok_or_eyre("label does not have id")?);
+        } else {
+            unknown_labels.push(label_name);
+        }
+    }
+
+    let opts = forgejo_api::structs::IssueLabelsOption {
+        labels: Some(add_ids),
+        updated_at: None,
+    };
+    api.issue_add_label(repo.owner(), repo.name(), pr, opts)
+        .await?;
+    let opts = forgejo_api::structs::DeleteLabelsOption { updated_at: None };
+    for id in rm_ids {
+        api.issue_remove_label(repo.owner(), repo.name(), pr, id, opts.clone())
+            .await?;
+    }
+
+    if !unknown_labels.is_empty() {
+        if unknown_labels.len() == 1 {
+            println!("'{}' doesn't exist", &unknown_labels[0]);
+        } else {
+            let SpecialRender { bullet, .. } = *crate::special_render();
+            println!("The following labels don't exist:");
+            for unknown_label in unknown_labels {
+                println!("{bullet} {unknown_label}");
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn create_pr(
