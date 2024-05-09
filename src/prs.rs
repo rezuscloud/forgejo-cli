@@ -10,7 +10,10 @@ use forgejo_api::{
     Forgejo,
 };
 
-use crate::repo::{RepoInfo, RepoName};
+use crate::{
+    repo::{RepoInfo, RepoName},
+    SpecialRender,
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct PrCommand {
@@ -154,6 +157,7 @@ pub enum ViewCommand {
         idx: usize,
     },
     Comments,
+    Labels,
     Diff {
         /// Get the diff in patch format
         #[clap(long, short)]
@@ -192,6 +196,7 @@ impl PrCommand {
                     crate::issues::view_comment(&repo, &api, id, idx).await?
                 }
                 ViewCommand::Comments => crate::issues::view_comments(&repo, &api, id).await?,
+                ViewCommand::Labels => view_pr_labels(&repo, &api, id).await?,
                 ViewCommand::Diff { patch, editor } => {
                     view_diff(&repo, &api, id, patch, editor).await?
                 }
@@ -342,6 +347,87 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()
         println!("{comments} comments");
     }
     Ok(())
+}
+
+async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: u64) -> eyre::Result<()> {
+    let pr = api
+        .repo_get_pull_request(repo.owner(), repo.name(), pr)
+        .await?;
+    let labels = pr.labels.as_deref().unwrap_or_default();
+    let SpecialRender {
+        colors,
+        black,
+        white,
+        reset,
+        ..
+    } = *crate::special_render();
+    if colors {
+        let mut total_width = 0;
+        for label in labels {
+            let name = label.name.as_deref().unwrap_or("???").trim();
+            if total_width + name.len() > 40 {
+                println!();
+                total_width = 0;
+            }
+            let color_s = label.color.as_deref().unwrap_or("FFFFFF");
+            let (r, g, b) = parse_color(color_s)?;
+            let text_color = if luma(r, g, b) > 0.5 { black } else { white };
+            let rgb_bg = format!("\x1b[48;2;{r};{g};{b}m");
+            if label.exclusive.unwrap_or_default() {
+                let (r2, g2, b2) = darken(r, g, b);
+                let (category, name) = name
+                    .split_once("/")
+                    .ok_or_eyre("label is exclusive but does not have slash")?;
+                let rgb_fg = format!("\x1b[38;2;{r};{g};{b}m");
+                let rgb_bg_dark = format!("\x1b[48;2;{r2};{g2};{b2}m");
+                print!("{rgb_bg_dark}{text_color} {category} {rgb_bg} {name} {reset} ");
+            } else {
+                print!("{rgb_bg}{text_color} {name} {reset} ");
+            }
+            total_width += name.len();
+        }
+        println!();
+    } else {
+        for label in labels {
+            let name = label.name.as_deref().unwrap_or("???");
+            println!("{name}");
+        }
+    }
+    Ok(())
+}
+
+fn parse_color(color: &str) -> eyre::Result<(u8, u8, u8)> {
+    eyre::ensure!(color.len() == 6, "color string wrong length");
+    let mut iter = color.chars();
+    let mut next_digit = || {
+        iter.next()
+            .unwrap()
+            .to_digit(16)
+            .ok_or_eyre("invalid digit")
+    };
+    let r1 = next_digit()?;
+    let r2 = next_digit()?;
+    let g1 = next_digit()?;
+    let g2 = next_digit()?;
+    let b1 = next_digit()?;
+    let b2 = next_digit()?;
+    let r = ((r1 << 4) | (r2)) as u8;
+    let g = ((g1 << 4) | (g2)) as u8;
+    let b = ((b1 << 4) | (b2)) as u8;
+    Ok((r, g, b))
+}
+
+// Thanks, wikipedia.
+fn luma(r: u8, g: u8, b: u8) -> f32 {
+    ((0.299 * (r as f32)) + (0.578 * (g as f32)) + (0.114 * (b as f32))) / 255.0
+}
+
+fn darken(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
+    (
+        ((r as f32) * 0.85) as u8,
+        ((g as f32) * 0.85) as u8,
+        ((b as f32) * 0.85) as u8,
+    )
 }
 
 async fn create_pr(

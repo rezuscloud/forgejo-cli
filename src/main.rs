@@ -167,6 +167,8 @@ enum Style {
 }
 
 struct SpecialRender {
+    colors: bool,
+
     dash: char,
     bullet: char,
     body_prefix: char,
@@ -202,6 +204,8 @@ impl SpecialRender {
 
     fn fancy() -> Self {
         Self {
+            colors: true,
+
             dash: '—',
             bullet: '•',
             body_prefix: '▌',
@@ -228,6 +232,8 @@ impl SpecialRender {
 
     fn minimal() -> Self {
         Self {
+            colors: false,
+
             dash: '-',
             bullet: '-',
             body_prefix: '>',
