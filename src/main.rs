@@ -9,6 +9,7 @@ use keys::*;
 
 mod auth;
 mod issues;
+mod prs;
 mod release;
 mod repo;
 
@@ -27,6 +28,7 @@ pub enum Command {
     #[clap(subcommand)]
     Repo(repo::RepoCommand),
     Issue(issues::IssueCommand),
+    Pr(prs::PrCommand),
     #[command(name = "whoami")]
     WhoAmI {
         #[clap(long, short)]
@@ -50,6 +52,7 @@ async fn main() -> eyre::Result<()> {
     match args.command {
         Command::Repo(subcommand) => subcommand.run(&keys, host_name).await?,
         Command::Issue(subcommand) => subcommand.run(&keys, host_name).await?,
+        Command::Pr(subcommand) => subcommand.run(&keys, host_name).await?,
         Command::WhoAmI { remote } => {
             let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref())
                 .wrap_err("could not find host, try specifying with --host")?
@@ -164,6 +167,8 @@ enum Style {
 }
 
 struct SpecialRender {
+    colors: bool,
+
     dash: char,
     bullet: char,
     body_prefix: char,
@@ -199,6 +204,8 @@ impl SpecialRender {
 
     fn fancy() -> Self {
         Self {
+            colors: true,
+
             dash: '—',
             bullet: '•',
             body_prefix: '▌',
@@ -225,6 +232,8 @@ impl SpecialRender {
 
     fn minimal() -> Self {
         Self {
+            colors: false,
+
             dash: '-',
             bullet: '-',
             body_prefix: '>',
