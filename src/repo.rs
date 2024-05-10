@@ -127,21 +127,6 @@ impl RepoInfo {
                     }
                 }
 
-                // if the current branch is tracking a remote branch, use that remote
-                if name.is_none() {
-                    let head = local_repo.head()?;
-                    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
-                    tmp = local_repo.branch_upstream_remote(branch_name).ok();
-                    name = tmp
-                        .as_ref()
-                        .map(|remote| {
-                            remote
-                                .as_str()
-                                .ok_or_else(|| eyre!("remote name not UTF-8"))
-                        })
-                        .transpose()?;
-                }
-
                 // if there's a remote whose host url matches the one
                 // specified with `--host`, use that
                 //
@@ -167,6 +152,21 @@ impl RepoInfo {
                             }
                         }
                     }
+                }
+
+                // if the current branch is tracking a remote branch, use that remote
+                if name.is_none() {
+                    let head = local_repo.head()?;
+                    let branch_name = head.name().ok_or_else(|| eyre!("branch name not UTF-8"))?;
+                    tmp = local_repo.branch_upstream_remote(branch_name).ok();
+                    name = tmp
+                        .as_ref()
+                        .map(|remote| {
+                            remote
+                                .as_str()
+                                .ok_or_else(|| eyre!("remote name not UTF-8"))
+                        })
+                        .transpose()?;
                 }
 
                 if let Some(name) = name {
