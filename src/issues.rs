@@ -375,6 +375,7 @@ pub async fn edit_title(
             title
         }
     };
+    let new_title = new_title.trim();
     if new_title.is_empty() {
         eyre::bail!("title cannot be empty");
     }
@@ -386,7 +387,7 @@ pub async fn edit_title(
         repo.name(),
         issue,
         forgejo_api::structs::EditIssueOption {
-            title: Some(new_title.trim().to_owned()),
+            title: Some(new_title.to_owned()),
             assignee: None,
             assignees: None,
             body: None,
