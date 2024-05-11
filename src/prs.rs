@@ -684,7 +684,9 @@ async fn checkout_pr(
 
     let local_repo = git2::Repository::open(".").unwrap();
 
-    let has_no_uncommited = local_repo.statuses(None).unwrap().is_empty();
+    let mut options = git2::StatusOptions::new();
+    options.include_ignored(false);
+    let has_no_uncommited = local_repo.statuses(Some(&mut options)).unwrap().is_empty();
     eyre::ensure!(
         has_no_uncommited,
         "Cannot checkout PR, working directory has uncommited changes"
