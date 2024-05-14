@@ -275,6 +275,12 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    Star {
+        repo: String,
+    },
+    Unstar {
+        repo: String,
+    },
     Browse {
         name: Option<String>,
         #[clap(long, short = 'R')]
@@ -455,6 +461,21 @@ impl RepoCommand {
                     println!();
                     println!("View online at {html_url}");
                 }
+            }
+            RepoCommand::Star { repo } => {
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let api = keys.get_api(&repo.host_url())?;
+                let name = repo.name().unwrap();
+                api.user_current_put_star(name.owner(), name.name()).await?;
+                println!("Starred {}/{}!", name.owner(), name.name());
+            }
+            RepoCommand::Unstar { repo } => {
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let api = keys.get_api(&repo.host_url())?;
+                let name = repo.name().unwrap();
+                api.user_current_delete_star(name.owner(), name.name())
+                    .await?;
+                println!("Removed star from {}/{}", name.owner(), name.name());
             }
             RepoCommand::Browse { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
