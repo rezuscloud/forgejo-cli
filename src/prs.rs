@@ -292,7 +292,7 @@ impl PrCommand {
             Checkout { pr, branch_name } => {
                 checkout_pr(&repo, &api, pr, self.repo.is_some(), branch_name).await?
             }
-            Browse { id } => crate::issues::browse_issue(&repo, &api, id).await?,
+            Browse { id } => browse_pr(&repo, &api, id).await?,
             Comment { pr, body } => crate::issues::add_comment(&repo, &api, pr, body).await?,
         }
         Ok(())
@@ -984,6 +984,30 @@ async fn view_pr_commits(
                 println!("    {line}");
             }
             println!();
+        }
+    }
+    Ok(())
+}
+
+pub async fn browse_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
+    match id {
+        Some(id) => {
+            let pr = api
+                .repo_get_pull_request(repo.owner(), repo.name(), id)
+                .await?;
+            let html_url = pr
+                .html_url
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("pr does not have html_url"))?;
+            open::that(html_url.as_str())?;
+        }
+        None => {
+            let repo = api.repo_get(repo.owner(), repo.name()).await?;
+            let html_url = repo
+                .html_url
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("repo does not have html_url"))?;
+            open::that(format!("{}/pulls", html_url))?;
         }
     }
     Ok(())
