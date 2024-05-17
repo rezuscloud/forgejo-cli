@@ -262,11 +262,11 @@ pub enum RepoCommand {
         description: Option<String>,
         #[clap(long, short = 'P')]
         private: bool,
-        /// Sets the new repo to be the `origin` remote of the current local repo.
+        /// Creates a new remote with the given name for the new repo
         #[clap(long, short)]
-        set_upstream: Option<String>,
+        remote: Option<String>,
         /// Pushes the current branch to the default branch on the new repo.
-        /// Implies `--set-upstream=origin` (setting upstream manual overrides this)
+        /// Implies `--remote=origin` (setting remote manually overrides this)
         #[clap(long, short)]
         push: bool,
     },
@@ -296,9 +296,17 @@ impl RepoCommand {
 
                 description,
                 private,
-                set_upstream,
+                remote,
                 push,
             } => {
+                if remote.is_some() || push {
+                    let repo = git2::Repository::open(".")?;
+
+                    let upstream = remote.as_deref().unwrap_or("origin");
+                    if repo.find_remote(upstream).is_ok() {
+                        eyre::bail!("A remote named \"{upstream}\" already exists");
+                    }
+                }
                 let host = RepoInfo::get_current(host_name, None, None)?;
                 let api = keys.get_api(host.host_url())?;
                 let repo_spec = CreateRepoOption {
@@ -316,16 +324,16 @@ impl RepoCommand {
                     trust_model: Some(forgejo_api::structs::CreateRepoOptionTrustModel::Default),
                 };
                 let new_repo = api.create_current_user_repo(repo_spec).await?;
-                let full_name = new_repo
-                    .full_name
+                let html_url = new_repo
+                    .html_url
                     .as_ref()
-                    .ok_or_else(|| eyre::eyre!("new_repo does not have full_name"))?;
-                eprintln!("created new repo at {}", host.host_url().join(&full_name)?);
+                    .ok_or_else(|| eyre::eyre!("new_repo does not have html_url"))?;
+                println!("created new repo at {}", html_url);
 
-                if set_upstream.is_some() || push {
+                if remote.is_some() || push {
                     let repo = git2::Repository::open(".")?;
 
-                    let upstream = set_upstream.as_deref().unwrap_or("origin");
+                    let upstream = remote.as_deref().unwrap_or("origin");
                     let clone_url = new_repo
                         .clone_url
                         .as_ref()
@@ -342,12 +350,15 @@ impl RepoCommand {
                             .ok_or_else(|| eyre!("branch name invalid utf-8"))?
                             .to_owned();
                         let branch_name = std::str::from_utf8(head.name_bytes())?.to_owned();
-                        let mut current_branch = git2::Branch::wrap(head);
-                        current_branch
-                            .set_upstream(Some(&dbg!(format!("{upstream}/{branch_shorthand}"))))?;
 
                         let auth = auth_git2::GitAuthenticator::new();
                         auth.push(&repo, &mut remote, &[&branch_name])?;
+
+                        remote.fetch(&[&branch_shorthand], None, None)?;
+
+                        let mut current_branch = git2::Branch::wrap(head);
+                        current_branch
+                            .set_upstream(Some(&format!("{upstream}/{branch_shorthand}")))?;
                     }
                 }
             }
