@@ -41,33 +41,6 @@ impl RepoInfo {
         // |      |      | x      | remote   | remote   |
         // |      |      | i      | remote   | remote   |
         // |      |      |        | err      | remote   |
-        //
-        // | repo | host | remote | ans-host | ans-repo |
-        // |------|------|--------|----------|----------|
-        // | l    | x    | x      | repo     | repo     |
-        // | l    | x    |        | repo     | repo     |
-        // | l    |      | x      | repo     | repo     |
-        // | l    |      |        | repo     | repo     |
-        // | s    | x    | x      | host     | repo     |
-        // | s    | x    |        | host     | repo     |
-        // | s    |      | x      | remote   | repo     |
-        // | s    |      |        | err      | repo     |
-        // |      | x    | x      | remote   | remote   |
-        // |      | x    |        | remote   | remote   |
-        // |      |      | x      | remote   | remote   |
-        // |      |      |        | err      | remote   |
-
-        // let repo_name;
-        //
-        // let repo_url;
-        // let remote;
-        // let host;
-        //
-        // let url = if repo_url { repo_url }
-        // else if repo_name { host.or(remote) }
-        // else { remote.or_host() }
-        //
-        // let name = repo_name.or(remote)
 
         let mut repo_url: Option<Url> = None;
         let mut repo_name: Option<RepoName> = None;
