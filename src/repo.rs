@@ -243,7 +243,7 @@ pub enum RepoCommand {
         #[clap(long, short)]
         push: bool,
     },
-    Info {
+    View {
         name: Option<String>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
@@ -335,7 +335,7 @@ impl RepoCommand {
                     }
                 }
             }
-            RepoCommand::Info { name, remote } => {
+            RepoCommand::View { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
                 let api = keys.get_api(&repo.host_url())?;
                 let repo = repo
