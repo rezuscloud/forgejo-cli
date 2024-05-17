@@ -190,6 +190,10 @@ struct SpecialRender {
     light_grey: &'static str,
     white: &'static str,
     reset: &'static str,
+
+    hide_cursor: &'static str,
+    show_cursor: &'static str,
+    clear_line: &'static str,
 }
 
 impl SpecialRender {
@@ -227,6 +231,10 @@ impl SpecialRender {
             light_grey: "\x1b[37m",
             white: "\x1b[97m",
             reset: "\x1b[0m",
+
+            hide_cursor: "\x1b[?25l",
+            show_cursor: "\x1b[?25h",
+            clear_line: "\x1b[2K",
         }
     }
 
@@ -255,6 +263,10 @@ impl SpecialRender {
             light_grey: "",
             white: "",
             reset: "",
+
+            hide_cursor: "",
+            show_cursor: "",
+            clear_line: "",
         }
     }
 }

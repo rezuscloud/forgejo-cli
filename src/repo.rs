@@ -1,3 +1,5 @@
+use std::{io::Write, path::PathBuf};
+
 use clap::Subcommand;
 use eyre::{eyre, OptionExt};
 use forgejo_api::structs::CreateRepoOption;
@@ -248,6 +250,10 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    Clone {
+        repo: String,
+        path: Option<PathBuf>,
+    },
     Star {
         repo: String,
     },
@@ -444,6 +450,92 @@ impl RepoCommand {
                 if let Some(html_url) = &repo.html_url {
                     println!();
                     println!("View online at {html_url}");
+                }
+            }
+            RepoCommand::Clone { repo, path } => {
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let api = keys.get_api(&repo.host_url())?;
+                let name = repo.name().unwrap();
+
+                let repo_data = api.repo_get(name.owner(), name.name()).await?;
+                let clone_url = repo_data
+                    .clone_url
+                    .as_ref()
+                    .ok_or_eyre("repo does not have clone url")?;
+
+                let repo_name = repo_data
+                    .name
+                    .as_deref()
+                    .ok_or_eyre("repo does not have name")?;
+                let repo_full_name = repo_data
+                    .full_name
+                    .as_deref()
+                    .ok_or_eyre("repo does not have full name")?;
+
+                let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
+
+                let SpecialRender {
+                    colors, // actually using it to indicate fanciness FIXME
+                    hide_cursor,
+                    show_cursor,
+                    clear_line,
+                    ..
+                } = *crate::special_render();
+
+                let mut options = git2::FetchOptions::new();
+
+                if colors {
+                    print!("{hide_cursor}");
+                    print!("   Preparing...");
+                    let _ = std::io::stdout().flush();
+
+                    let mut callbacks = git2::RemoteCallbacks::new();
+                    callbacks.transfer_progress(|progress| {
+                        print!("{clear_line}\r");
+                        if progress.received_objects() == progress.total_objects() {
+                            if progress.indexed_deltas() == progress.total_deltas() {
+                                print!("Finishing up...");
+                            } else {
+                                let percent = 100.0 * (progress.indexed_deltas() as f64)
+                                    / (progress.total_deltas() as f64);
+                                print!("   Resolving... {percent:.01}%");
+                            }
+                        } else {
+                            let bytes = progress.received_bytes();
+                            let percent = 100.0 * (progress.received_objects() as f64)
+                                / (progress.total_objects() as f64);
+                            print!(" Downloading... {percent:.01}%");
+                            match bytes {
+                                0..=1023 => print!(" ({}b)", bytes),
+                                1024..=1048575 => print!(" ({:.01}kb)", (bytes as f64) / 1024.0),
+                                1048576..=1073741823 => {
+                                    print!(" ({:.01}mb)", (bytes as f64) / 1048576.0)
+                                }
+                                1073741824.. => {
+                                    print!(" ({:.01}gb)", (bytes as f64) / 1073741824.0)
+                                }
+                            }
+                        }
+                        let _ = std::io::stdout().flush();
+                        true
+                    });
+                    options.remote_callbacks(callbacks);
+                }
+
+                let local_repo = git2::build::RepoBuilder::new()
+                    .fetch_options(options)
+                    .clone(clone_url.as_str(), &path)?;
+                if colors {
+                    print!("{clear_line}{show_cursor}\r");
+                }
+                println!("Cloned {} into {}", repo_full_name, path.display());
+
+                if let Some(parent) = repo_data.parent.as_deref() {
+                    let parent_clone_url = parent
+                        .clone_url
+                        .as_ref()
+                        .ok_or_eyre("parent repo does not have clone url")?;
+                    local_repo.remote("upstream", parent_clone_url.as_str())?;
                 }
             }
             RepoCommand::Star { repo } => {
