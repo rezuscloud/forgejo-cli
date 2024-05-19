@@ -482,14 +482,18 @@ impl RepoCommand {
                     ..
                 } = *crate::special_render();
 
+                let auth = auth_git2::GitAuthenticator::new();
+                let git_config = git2::Config::open_default()?;
+
                 let mut options = git2::FetchOptions::new();
+                let mut callbacks = git2::RemoteCallbacks::new();
+                callbacks.credentials(auth.credentials(&git_config));
 
                 if colors {
                     print!("{hide_cursor}");
                     print!("   Preparing...");
                     let _ = std::io::stdout().flush();
 
-                    let mut callbacks = git2::RemoteCallbacks::new();
                     callbacks.transfer_progress(|progress| {
                         print!("{clear_line}\r");
                         if progress.received_objects() == progress.total_objects() {
