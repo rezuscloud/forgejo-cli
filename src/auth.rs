@@ -39,8 +39,13 @@ impl AuthCommand {
                     None => crate::readline("new key: ").await?.trim().to_string(),
                 };
                 if keys.hosts.get(&user).is_none() {
-                    keys.hosts
-                        .insert(host, crate::keys::LoginInfo::new(user, key));
+                    keys.hosts.insert(
+                        host,
+                        crate::keys::LoginInfo::Token {
+                            name: user,
+                            token: key,
+                        },
+                    );
                 } else {
                     println!("key for {} already exists", host);
                 }
@@ -56,4 +61,13 @@ impl AuthCommand {
         }
         Ok(())
     }
+}
+
+pub fn get_client_info_for(url: &url::Url) -> Option<(&'static str, &'static str)> {
+    let host = url.host_str()?;
+    let client_info = match (url.host_str()?, url.path()) {
+        ("codeberg.org", "/") => option_env!("CLIENT_INFO_CODEBERG"),
+        _ => None,
+    };
+    client_info.and_then(|info| info.split_once(":"))
 }

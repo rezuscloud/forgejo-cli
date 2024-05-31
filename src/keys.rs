@@ -42,7 +42,7 @@ impl KeyInfo {
         Ok(())
     }
 
-    pub fn get_login(&self, url: &Url) -> eyre::Result<&LoginInfo> {
+    pub fn get_login(&mut self, url: &Url) -> eyre::Result<&mut LoginInfo> {
         let host_str = url
             .host_str()
             .ok_or_else(|| eyre!("remote url does not have host"))?;
@@ -54,32 +54,76 @@ impl KeyInfo {
 
         let login_info = self
             .hosts
-            .get(&domain)
+            .get_mut(&domain)
             .ok_or_else(|| eyre!("not signed in to {domain}"))?;
         Ok(login_info)
     }
 
-    pub fn get_api(&self, url: &Url) -> eyre::Result<forgejo_api::Forgejo> {
-        self.get_login(url)?.api_for(url).map_err(Into::into)
+    pub async fn get_api(&mut self, url: &Url) -> eyre::Result<forgejo_api::Forgejo> {
+        self.get_login(url)?.api_for(url).await.map_err(Into::into)
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
-pub struct LoginInfo {
-    name: String,
-    key: String,
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum LoginInfo {
+    Token {
+        name: String,
+        token: String,
+    },
+    OAuth {
+        name: String,
+        token: String,
+        refresh_token: String,
+        expires_at: time::OffsetDateTime,
+    },
 }
 
 impl LoginInfo {
-    pub fn new(name: String, key: String) -> Self {
-        Self { name, key }
-    }
-
     pub fn username(&self) -> &str {
-        &self.name
+        match self {
+            LoginInfo::Token { name, .. } => name,
+            LoginInfo::OAuth { name, .. } => name,
+        }
     }
 
-    pub fn api_for(&self, url: &Url) -> Result<forgejo_api::Forgejo, forgejo_api::ForgejoError> {
-        forgejo_api::Forgejo::new(forgejo_api::Auth::Token(&self.key), url.clone())
+    pub async fn api_for(&mut self, url: &Url) -> eyre::Result<forgejo_api::Forgejo> {
+        match self {
+            LoginInfo::Token { token, .. } => {
+                let api = forgejo_api::Forgejo::new(forgejo_api::Auth::Token(token), url.clone())?;
+                Ok(api)
+            }
+            LoginInfo::OAuth {
+                token,
+                refresh_token,
+                expires_at,
+                ..
+            } => {
+                if time::OffsetDateTime::now_utc() >= *expires_at {
+                    let api = forgejo_api::Forgejo::new(forgejo_api::Auth::None, url.clone())?;
+                    let (client_id, client_secret) = crate::auth::get_client_info_for(url)
+                        .ok_or_else(|| {
+                            eyre::eyre!("Can't refresh token; no client info for {url}. How did this happen?")
+                        })?;
+                    let response = api
+                        .oauth_get_access_token(forgejo_api::structs::OAuthTokenRequest::Refresh {
+                            refresh_token,
+                            client_id,
+                            client_secret,
+                        })
+                        .await?;
+                    *token = response.access_token;
+                    *refresh_token = response.refresh_token;
+                    // A minute less, in case any weirdness happens at the exact moment it
+                    // expires. Better to refresh slightly too soon than slightly too late.
+                    let expires_in = std::time::Duration::from_secs(
+                        response.expires_in.saturating_sub(60) as u64,
+                    );
+                    *expires_at = time::OffsetDateTime::now_utc() + expires_in;
+                }
+                let api = forgejo_api::Forgejo::new(forgejo_api::Auth::Token(token), url.clone())?;
+                Ok(api)
+            }
+        }
     }
 }

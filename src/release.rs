@@ -116,10 +116,10 @@ pub enum AssetCommand {
 }
 
 impl ReleaseCommand {
-    pub async fn run(self, keys: &KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
+    pub async fn run(self, keys: &mut KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
         let repo =
             RepoInfo::get_current(remote_name, self.repo.as_deref(), self.remote.as_deref())?;
-        let api = keys.get_api(&repo.host_url())?;
+        let api = keys.get_api(&repo.host_url()).await?;
         let repo = repo
             .name()
             .ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
