@@ -68,7 +68,7 @@ async fn main() -> eyre::Result<()> {
                 println!("currently signed in to {name}@{host}{}", url.path());
             }
         }
-        Command::Auth(subcommand) => subcommand.run(&mut keys).await?,
+        Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
     }
 
