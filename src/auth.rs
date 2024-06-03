@@ -58,7 +58,7 @@ impl AuthCommand {
                 if keys.hosts.get(&user).is_none() {
                     keys.hosts.insert(
                         host,
-                        crate::keys::LoginInfo::Token {
+                        crate::keys::LoginInfo::Application {
                             name: user,
                             token: key,
                         },

@@ -67,7 +67,7 @@ impl KeyInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum LoginInfo {
-    Token {
+    Application {
         name: String,
         token: String,
     },
@@ -82,14 +82,14 @@ pub enum LoginInfo {
 impl LoginInfo {
     pub fn username(&self) -> &str {
         match self {
-            LoginInfo::Token { name, .. } => name,
+            LoginInfo::Application { name, .. } => name,
             LoginInfo::OAuth { name, .. } => name,
         }
     }
 
     pub async fn api_for(&mut self, url: &Url) -> eyre::Result<forgejo_api::Forgejo> {
         match self {
-            LoginInfo::Token { token, .. } => {
+            LoginInfo::Application { token, .. } => {
                 let api = forgejo_api::Forgejo::new(forgejo_api::Auth::Token(token), url.clone())?;
                 Ok(api)
             }
