@@ -111,11 +111,17 @@ pub enum PrSubcommand {
         /// The pull request to merge.
         pr: IssueId,
         /// The merge style to use.
-        #[clap(long, short)]
+        #[clap(long, short = 'M')]
         method: Option<MergeMethod>,
         /// Option to delete the corresponding branch afterwards.
         #[clap(long, short)]
         delete: bool,
+        /// The title of the merge or squash commit to be created
+        #[clap(long, short)]
+        title: Option<String>,
+        /// The body of the merge or squash commit to be created
+        #[clap(long, short)]
+        message: Option<Option<String>>,
     },
     /// Open a pull request in your browser
     Browse {
@@ -256,9 +262,13 @@ impl PrCommand {
                 body,
                 repo: _,
             } => create_pr(&repo, &api, title, base, head, body).await?,
-            Merge { pr, method, delete } => {
-                merge_pr(&repo, &api, pr.number, method, delete).await?
-            }
+            Merge {
+                pr,
+                method,
+                delete,
+                title,
+                message,
+            } => merge_pr(&repo, &api, pr.number, method, delete, title, message).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_pr(&repo, &api, id.number).await?,
                 ViewCommand::Comment { idx } => {
@@ -720,23 +730,56 @@ async fn merge_pr(
     pr: u64,
     method: Option<MergeMethod>,
     delete: bool,
+    title: Option<String>,
+    message: Option<Option<String>>,
 ) -> eyre::Result<()> {
     let repo_info = api.repo_get(repo.owner(), repo.name()).await?;
+
+    let pr_info = api
+        .repo_get_pull_request(repo.owner(), repo.name(), pr)
+        .await?;
+    let pr_html_url = pr_info
+        .html_url
+        .as_ref()
+        .ok_or_eyre("pr does not have url")?;
+
     let default_merge = repo_info
         .default_merge_style
         .map(|x| x.into())
         .unwrap_or(forgejo_api::structs::MergePullRequestOptionDo::Merge);
-    let body = MergePullRequestOption {
-        r#do: method.map(|x| x.into()).unwrap_or(default_merge),
+    let merge_style = method.map(|x| x.into()).unwrap_or(default_merge);
+
+    use forgejo_api::structs::MergePullRequestOptionDo::*;
+    if title.is_some() {
+        match merge_style {
+            Rebase => eyre::bail!("rebase does not support commit title"),
+            FastForwardOnly => eyre::bail!("ff-only does not support commit title"),
+            ManuallyMerged => eyre::bail!("manually merged does not support commit title"),
+            _ => (),
+        }
+    }
+    let default_message = || format!("Reviewed-on: {pr_html_url}");
+    let message = match message {
+        Some(Some(s)) => s,
+        Some(None) => {
+            let mut body = default_message();
+            crate::editor(&mut body, Some("md")).await?;
+            body
+        }
+        None => default_message(),
+    };
+
+    let request = MergePullRequestOption {
+        r#do: merge_style,
         merge_commit_id: None,
-        merge_message_field: None,
-        merge_title_field: None,
+        merge_message_field: Some(message),
+        merge_title_field: title,
         delete_branch_after_merge: Some(delete),
         force_merge: None,
         head_commit_id: None,
         merge_when_checks_succeed: None,
     };
-    api.repo_merge_pull_request(repo.owner(), repo.name(), pr, body)
+    api.repo_merge_pull_request(repo.owner(), repo.name(), pr, request)
         .await?;
     Ok(())
 }
