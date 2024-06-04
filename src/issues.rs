@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use clap::{Args, Subcommand};
 use eyre::{eyre, OptionExt};
 use forgejo_api::structs::{
@@ -11,8 +13,6 @@ use crate::repo::{RepoInfo, RepoName};
 pub struct IssueCommand {
     #[clap(long, short = 'R')]
     remote: Option<String>,
-    #[clap(long, short)]
-    repo: Option<String>,
     #[clap(subcommand)]
     command: IssueSubcommand,
 }
@@ -23,22 +23,26 @@ pub enum IssueSubcommand {
         title: String,
         #[clap(long)]
         body: Option<String>,
+        #[clap(long, short)]
+        repo: Option<String>,
     },
     Edit {
-        issue: u64,
+        issue: IssueId,
         #[clap(subcommand)]
         command: EditCommand,
     },
     Comment {
-        issue: u64,
+        issue: IssueId,
         body: Option<String>,
     },
     Close {
-        issue: u64,
+        issue: IssueId,
         #[clap(long, short)]
         with_msg: Option<Option<String>>,
     },
     Search {
+        #[clap(long, short)]
+        repo: Option<String>,
         query: Option<String>,
         #[clap(long, short)]
         labels: Option<String>,
@@ -50,13 +54,34 @@ pub enum IssueSubcommand {
         state: Option<State>,
     },
     View {
-        id: u64,
+        id: IssueId,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
     Browse {
-        id: Option<u64>,
+        id: Option<String>,
     },
+}
+
+#[derive(Clone, Debug)]
+pub struct IssueId {
+    pub repo: Option<String>,
+    pub number: u64,
+}
+
+impl FromStr for IssueId {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (repo, number) = match s.rsplit_once("#") {
+            Some((repo, number)) => (Some(repo.to_owned()), number),
+            None => (None, s),
+        };
+        Ok(Self {
+            repo,
+            number: number.parse()?,
+        })
+    }
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -98,19 +123,22 @@ pub enum ViewCommand {
 impl IssueCommand {
     pub async fn run(self, keys: &crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         use IssueSubcommand::*;
-        let repo = RepoInfo::get_current(host_name, self.repo.as_deref(), self.remote.as_deref())?;
+        let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref())?;
         let api = keys.get_api(repo.host_url())?;
-        let repo = repo
-            .name()
-            .ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
+        let repo = repo.name().ok_or_else(|| self.no_repo_error())?;
         match self.command {
-            Create { title, body } => create_issue(&repo, &api, title, body).await?,
+            Create {
+                repo: _,
+                title,
+                body,
+            } => create_issue(&repo, &api, title, body).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
-                ViewCommand::Body => view_issue(&repo, &api, id).await?,
-                ViewCommand::Comment { idx } => view_comment(&repo, &api, id, idx).await?,
-                ViewCommand::Comments => view_comments(&repo, &api, id).await?,
+                ViewCommand::Body => view_issue(&repo, &api, id.number).await?,
+                ViewCommand::Comment { idx } => view_comment(&repo, &api, id.number, idx).await?,
+                ViewCommand::Comments => view_comments(&repo, &api, id.number).await?,
             },
             Search {
+                repo: _,
                 query,
                 labels,
                 creator,
@@ -119,18 +147,73 @@ impl IssueCommand {
             } => view_issues(&repo, &api, query, labels, creator, assignee, state).await?,
             Edit { issue, command } => match command {
                 EditCommand::Title { new_title } => {
-                    edit_title(&repo, &api, issue, new_title).await?
+                    edit_title(&repo, &api, issue.number, new_title).await?
                 }
-                EditCommand::Body { new_body } => edit_body(&repo, &api, issue, new_body).await?,
+                EditCommand::Body { new_body } => {
+                    edit_body(&repo, &api, issue.number, new_body).await?
+                }
                 EditCommand::Comment { idx, new_body } => {
-                    edit_comment(&repo, &api, issue, idx, new_body).await?
+                    edit_comment(&repo, &api, issue.number, idx, new_body).await?
                 }
             },
-            Close { issue, with_msg } => close_issue(&repo, &api, issue, with_msg).await?,
-            Browse { id } => browse_issue(&repo, &api, id).await?,
-            Comment { issue, body } => add_comment(&repo, &api, issue, body).await?,
+            Close { issue, with_msg } => close_issue(&repo, &api, issue.number, with_msg).await?,
+            Browse { id } => {
+                let number = id.as_ref().and_then(|s| {
+                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
+                    num_s.parse::<u64>().ok()
+                });
+                browse_issue(&repo, &api, number).await?
+            }
+            Comment { issue, body } => add_comment(&repo, &api, issue.number, body).await?,
         }
         Ok(())
+    }
+
+    fn repo(&self) -> Option<&str> {
+        use IssueSubcommand::*;
+        match &self.command {
+            Create { repo, .. } | Search { repo, .. } => repo.as_deref(),
+            View { id: issue, .. }
+            | Edit { issue, .. }
+            | Close { issue, .. }
+            | Comment { issue, .. } => issue.repo.as_deref(),
+            Browse { id, .. } => id.as_ref().and_then(|s| {
+                let repo = s.rsplit_once("#").map(|(a, _)| a).unwrap_or(s);
+                // Don't treat a lone issue number as a repo name
+                if repo.parse::<u64>().is_ok() {
+                    None
+                } else {
+                    Some(repo)
+                }
+            }),
+        }
+    }
+
+    fn no_repo_error(&self) -> eyre::Error {
+        use IssueSubcommand::*;
+        match &self.command {
+            Create { repo, .. } | Search { repo, .. } => {
+                eyre::eyre!("can't figure what repo to access, try specifying with `--repo`")
+            }
+            View { id: issue, .. }
+            | Edit { issue, .. }
+            | Close { issue, .. }
+            | Comment { issue, .. } => eyre::eyre!(
+                "can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`",
+                issue.number
+            ),
+            Browse { id, .. } => {
+                let number = id.as_ref().and_then(|s| {
+                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
+                    num_s.parse::<u64>().ok()
+                });
+                if let Some(number) = number {
+                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`", number)
+                } else {
+                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}`")
+                }
+            }
+        }
     }
 }
 

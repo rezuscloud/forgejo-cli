@@ -11,6 +11,7 @@ use forgejo_api::{
 };
 
 use crate::{
+    issues::IssueId,
     repo::{RepoInfo, RepoName},
     SpecialRender,
 };
@@ -20,9 +21,6 @@ pub struct PrCommand {
     /// The git remote to operate on.
     #[clap(long, short = 'R')]
     remote: Option<String>,
-    /// The name of the remote repository to operate on.
-    #[clap(long, short)]
-    repo: Option<String>,
     #[clap(subcommand)]
     command: PrSubcommand,
 }
@@ -40,6 +38,9 @@ pub enum PrSubcommand {
         assignee: Option<String>,
         #[clap(long, short)]
         state: Option<crate::issues::State>,
+        /// The repo to search in
+        #[clap(long, short)]
+        repo: Option<String>,
     },
     /// Create a new pull request
     Create {
@@ -56,11 +57,14 @@ pub enum PrSubcommand {
         /// Leaving this out will open your editor.
         #[clap(long)]
         body: Option<String>,
+        /// The repo to create this issue on
+        #[clap(long, short)]
+        repo: Option<String>,
     },
     /// View the contents of a pull request
     View {
         /// The pull request to view.
-        id: u64,
+        id: IssueId,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
@@ -79,7 +83,7 @@ pub enum PrSubcommand {
     /// Add a comment on a pull request
     Comment {
         /// The pull request to comment on.
-        pr: u64,
+        pr: IssueId,
         /// The text content of the comment.
         ///
         /// Not including this in the command will open your editor.
@@ -88,14 +92,14 @@ pub enum PrSubcommand {
     /// Edit the contents of a pull request
     Edit {
         /// The pull request to edit.
-        pr: u64,
+        pr: IssueId,
         #[clap(subcommand)]
         command: EditCommand,
     },
     /// Close a pull request, without merging.
     Close {
         /// The pull request to close.
-        pr: u64,
+        pr: IssueId,
         /// A comment to add before closing.
         ///
         /// Adding without an argument will open your editor
@@ -105,7 +109,7 @@ pub enum PrSubcommand {
     /// Merge a pull request
     Merge {
         /// The pull request to merge.
-        pr: u64,
+        pr: IssueId,
         /// The merge style to use.
         #[clap(long, short)]
         method: Option<MergeMethod>,
@@ -118,7 +122,7 @@ pub enum PrSubcommand {
         /// The pull request to open in your browser.
         ///
         /// Leave this out to open the list of PRs.
-        id: Option<u64>,
+        id: Option<String>,
     },
 }
 
@@ -241,32 +245,35 @@ pub enum ViewCommand {
 impl PrCommand {
     pub async fn run(self, keys: &crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         use PrSubcommand::*;
-        let repo = RepoInfo::get_current(host_name, self.repo.as_deref(), self.remote.as_deref())?;
+        let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref())?;
         let api = keys.get_api(repo.host_url())?;
-        let repo = repo
-            .name()
-            .ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
+        let repo = repo.name().ok_or_else(|| self.no_repo_error())?;
         match self.command {
             Create {
                 title,
                 base,
                 head,
                 body,
+                repo: _,
             } => create_pr(&repo, &api, title, base, head, body).await?,
-            Merge { pr, method, delete } => merge_pr(&repo, &api, pr, method, delete).await?,
+            Merge { pr, method, delete } => {
+                merge_pr(&repo, &api, pr.number, method, delete).await?
+            }
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
-                ViewCommand::Body => view_pr(&repo, &api, id).await?,
+                ViewCommand::Body => view_pr(&repo, &api, id.number).await?,
                 ViewCommand::Comment { idx } => {
-                    crate::issues::view_comment(&repo, &api, id, idx).await?
+                    crate::issues::view_comment(&repo, &api, id.number, idx).await?
                 }
-                ViewCommand::Comments => crate::issues::view_comments(&repo, &api, id).await?,
-                ViewCommand::Labels => view_pr_labels(&repo, &api, id).await?,
+                ViewCommand::Comments => {
+                    crate::issues::view_comments(&repo, &api, id.number).await?
+                }
+                ViewCommand::Labels => view_pr_labels(&repo, &api, id.number).await?,
                 ViewCommand::Diff { patch, editor } => {
-                    view_diff(&repo, &api, id, patch, editor).await?
+                    view_diff(&repo, &api, id.number, patch, editor).await?
                 }
-                ViewCommand::Files => view_pr_files(&repo, &api, id).await?,
+                ViewCommand::Files => view_pr_files(&repo, &api, id.number).await?,
                 ViewCommand::Commits { oneline } => {
-                    view_pr_commits(&repo, &api, id, oneline).await?
+                    view_pr_commits(&repo, &api, id.number, oneline).await?
                 }
             },
             Search {
@@ -275,27 +282,95 @@ impl PrCommand {
                 creator,
                 assignee,
                 state,
+                repo: _,
             } => view_prs(&repo, &api, query, labels, creator, assignee, state).await?,
             Edit { pr, command } => match command {
                 EditCommand::Title { new_title } => {
-                    crate::issues::edit_title(&repo, &api, pr, new_title).await?
+                    crate::issues::edit_title(&repo, &api, pr.number, new_title).await?
                 }
                 EditCommand::Body { new_body } => {
-                    crate::issues::edit_body(&repo, &api, pr, new_body).await?
+                    crate::issues::edit_body(&repo, &api, pr.number, new_body).await?
                 }
                 EditCommand::Comment { idx, new_body } => {
-                    crate::issues::edit_comment(&repo, &api, pr, idx, new_body).await?
+                    crate::issues::edit_comment(&repo, &api, pr.number, idx, new_body).await?
                 }
-                EditCommand::Labels { add, rm } => edit_pr_labels(&repo, &api, pr, add, rm).await?,
+                EditCommand::Labels { add, rm } => {
+                    edit_pr_labels(&repo, &api, pr.number, add, rm).await?
+                }
             },
-            Close { pr, with_msg } => crate::issues::close_issue(&repo, &api, pr, with_msg).await?,
-            Checkout { pr, branch_name } => {
-                checkout_pr(&repo, &api, pr, self.repo.is_some(), branch_name).await?
+            Close { pr, with_msg } => {
+                crate::issues::close_issue(&repo, &api, pr.number, with_msg).await?
             }
-            Browse { id } => browse_pr(&repo, &api, id).await?,
-            Comment { pr, body } => crate::issues::add_comment(&repo, &api, pr, body).await?,
+            Checkout { pr, branch_name } => checkout_pr(&repo, &api, pr, branch_name).await?,
+            Browse { id } => {
+                let number = id.as_ref().and_then(|s| {
+                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
+                    num_s.parse::<u64>().ok()
+                });
+                browse_pr(&repo, &api, number).await?
+            }
+            Comment { pr, body } => {
+                crate::issues::add_comment(&repo, &api, pr.number, body).await?
+            }
         }
         Ok(())
+    }
+
+    fn repo(&self) -> Option<&str> {
+        use PrSubcommand::*;
+        match &self.command {
+            Search { repo, .. } | Create { repo, .. } => repo.as_deref(),
+            Checkout { .. } => None,
+            View { id: pr, .. }
+            | Comment { pr, .. }
+            | Edit { pr, .. }
+            | Close { pr, .. }
+            | Merge { pr, .. } => pr.repo.as_deref(),
+            Browse { id } => id.as_ref().and_then(|s| {
+                let repo = s.rsplit_once("#").map(|(a, _)| a).unwrap_or(s);
+                // Don't treat a lone PR number as a repo name
+                if repo.parse::<u64>().is_ok() {
+                    None
+                } else {
+                    Some(repo)
+                }
+            }),
+        }
+    }
+
+    fn no_repo_error(&self) -> eyre::Error {
+        use PrSubcommand::*;
+        match &self.command {
+            Search { .. } | Create { .. } => {
+                eyre::eyre!("can't figure what repo to access, try specifying with `--repo`")
+            }
+            Checkout { .. } => {
+                if git2::Repository::open(".").is_ok() {
+                    eyre::eyre!("can't figure out what repo to access, try setting a remote tracking branch")
+                } else {
+                    eyre::eyre!("pr checkout only works if the current directory is a git repo")
+                }
+            }
+            View { id: pr, .. }
+            | Comment { pr, .. }
+            | Edit { pr, .. }
+            | Close { pr, .. }
+            | Merge { pr, .. } => eyre::eyre!(
+                "can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`",
+                pr.number
+            ),
+            Browse { id } => {
+                let number = id.as_ref().and_then(|s| {
+                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
+                    num_s.parse::<u64>().ok()
+                });
+                if let Some(number) = number {
+                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`", number)
+                } else {
+                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}`")
+                }
+            }
+        }
     }
 }
 
@@ -670,18 +745,8 @@ async fn checkout_pr(
     repo: &RepoName,
     api: &Forgejo,
     pr: PrNumber,
-    repo_specified: bool,
     branch_name: Option<String>,
 ) -> eyre::Result<()> {
-    // this is so you don't checkout a pull request from an entirely different
-    // repository. i.e. in this repo I could run
-    // `fj pr -r codeberg.org/forgejo/forgejo checkout [num]` and have forgejo
-    // appear in this repo.
-    eyre::ensure!(
-        !repo_specified,
-        "Cannot checkout PR, `--repo` is not allowed when checking out a pull request"
-    );
-
     let local_repo = git2::Repository::open(".").unwrap();
 
     let mut options = git2::StatusOptions::new();
