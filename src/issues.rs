@@ -59,7 +59,7 @@ pub enum IssueSubcommand {
         command: Option<ViewCommand>,
     },
     Browse {
-        id: Option<String>,
+        id: IssueId,
     },
 }
 
@@ -157,13 +157,7 @@ impl IssueCommand {
                 }
             },
             Close { issue, with_msg } => close_issue(&repo, &api, issue.number, with_msg).await?,
-            Browse { id } => {
-                let number = id.as_ref().and_then(|s| {
-                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
-                    num_s.parse::<u64>().ok()
-                });
-                browse_issue(&repo, &api, number).await?
-            }
+            Browse { id } => browse_issue(&repo, &api, id.number).await?,
             Comment { issue, body } => add_comment(&repo, &api, issue.number, body).await?,
         }
         Ok(())
@@ -176,16 +170,8 @@ impl IssueCommand {
             View { id: issue, .. }
             | Edit { issue, .. }
             | Close { issue, .. }
-            | Comment { issue, .. } => issue.repo.as_deref(),
-            Browse { id, .. } => id.as_ref().and_then(|s| {
-                let repo = s.rsplit_once("#").map(|(a, _)| a).unwrap_or(s);
-                // Don't treat a lone issue number as a repo name
-                if repo.parse::<u64>().is_ok() {
-                    None
-                } else {
-                    Some(repo)
-                }
-            }),
+            | Comment { issue, .. }
+            | Browse { id: issue, .. } => issue.repo.as_deref(),
         }
     }
 
@@ -198,21 +184,11 @@ impl IssueCommand {
             View { id: issue, .. }
             | Edit { issue, .. }
             | Close { issue, .. }
-            | Comment { issue, .. } => eyre::eyre!(
+            | Comment { issue, .. }
+            | Browse { id: issue, .. } => eyre::eyre!(
                 "can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`",
                 issue.number
             ),
-            Browse { id, .. } => {
-                let number = id.as_ref().and_then(|s| {
-                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
-                    num_s.parse::<u64>().ok()
-                });
-                if let Some(number) = number {
-                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`", number)
-                } else {
-                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}`")
-                }
-            }
         }
     }
 }
@@ -390,25 +366,13 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
     Ok(())
 }
 
-pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
-    match id {
-        Some(id) => {
-            let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
-            let html_url = issue
-                .html_url
-                .as_ref()
-                .ok_or_else(|| eyre::eyre!("issue does not have html_url"))?;
-            open::that(html_url.as_str())?;
-        }
-        None => {
-            let repo = api.repo_get(repo.owner(), repo.name()).await?;
-            let html_url = repo
-                .html_url
-                .as_ref()
-                .ok_or_else(|| eyre::eyre!("issue does not have html_url"))?;
-            open::that(format!("{}/issues", html_url))?;
-        }
-    }
+pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+    let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
+    let html_url = issue
+        .html_url
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("issue does not have html_url"))?;
+    open::that(html_url.as_str())?;
     Ok(())
 }
 

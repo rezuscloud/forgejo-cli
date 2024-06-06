@@ -126,9 +126,7 @@ pub enum PrSubcommand {
     /// Open a pull request in your browser
     Browse {
         /// The pull request to open in your browser.
-        ///
-        /// Leave this out to open the list of PRs.
-        id: Option<String>,
+        id: Option<IssueId>,
     },
 }
 
@@ -336,11 +334,8 @@ impl PrCommand {
             }
             Checkout { pr, branch_name } => checkout_pr(&repo, &api, pr, branch_name).await?,
             Browse { id } => {
-                let number = id.as_ref().and_then(|s| {
-                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
-                    num_s.parse::<u64>().ok()
-                });
-                browse_pr(&repo, &api, number).await?
+                let id = try_get_pr_number(&repo, &api, id.map(|id| id.number)).await?;
+                browse_pr(&repo, &api, id).await?
             }
             Comment { pr, body } => {
                 let pr = try_get_pr_number(&repo, &api, pr.map(|pr| pr.number)).await?;
@@ -359,16 +354,8 @@ impl PrCommand {
             | Comment { pr, .. }
             | Edit { pr, .. }
             | Close { pr, .. }
-            | Merge { pr, .. } => pr.as_ref().and_then(|x| x.repo.as_deref()),
-            Browse { id } => id.as_ref().and_then(|s| {
-                let repo = s.rsplit_once("#").map(|(a, _)| a).unwrap_or(s);
-                // Don't treat a lone PR number as a repo name
-                if repo.parse::<u64>().is_ok() {
-                    None
-                } else {
-                    Some(repo)
-                }
-            }),
+            | Merge { pr, .. }
+            | Browse { id: pr } => pr.as_ref().and_then(|x| x.repo.as_deref()),
         }
     }
 
@@ -389,7 +376,8 @@ impl PrCommand {
             | Comment { pr, .. }
             | Edit { pr, .. }
             | Close { pr, .. }
-            | Merge { pr, .. } => match pr {
+            | Merge { pr, .. }
+            | Browse { id: pr, .. } => match pr {
                 Some(pr) => eyre::eyre!(
                     "can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`",
                     pr.number
@@ -398,17 +386,6 @@ impl PrCommand {
                     "can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{{pr}}`",
                     ),
             },
-            Browse { id } => {
-                let number = id.as_ref().and_then(|s| {
-                    let num_s = s.rsplit_once("#").map(|(_, b)| b).unwrap_or(s);
-                    num_s.parse::<u64>().ok()
-                });
-                if let Some(number) = number {
-                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`", number)
-                } else {
-                    eyre::eyre!("can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}`")
-                }
-            }
         }
     }
 }
@@ -1128,27 +1105,15 @@ async fn view_pr_commits(
     Ok(())
 }
 
-pub async fn browse_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
-    match id {
-        Some(id) => {
-            let pr = api
-                .repo_get_pull_request(repo.owner(), repo.name(), id)
-                .await?;
-            let html_url = pr
-                .html_url
-                .as_ref()
-                .ok_or_else(|| eyre::eyre!("pr does not have html_url"))?;
-            open::that(html_url.as_str())?;
-        }
-        None => {
-            let repo = api.repo_get(repo.owner(), repo.name()).await?;
-            let html_url = repo
-                .html_url
-                .as_ref()
-                .ok_or_else(|| eyre::eyre!("repo does not have html_url"))?;
-            open::that(format!("{}/pulls", html_url))?;
-        }
-    }
+pub async fn browse_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+    let pr = api
+        .repo_get_pull_request(repo.owner(), repo.name(), id)
+        .await?;
+    let html_url = pr
+        .html_url
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("pr does not have html_url"))?;
+    open::that(html_url.as_str())?;
     Ok(())
 }
 
