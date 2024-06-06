@@ -5,7 +5,7 @@ use eyre::OptionExt;
 use forgejo_api::{
     structs::{
         CreatePullRequestOption, MergePullRequestOption, RepoGetPullRequestCommitsQuery,
-        RepoGetPullRequestFilesQuery,
+        RepoGetPullRequestFilesQuery, StateType,
     },
     Forgejo,
 };
@@ -249,10 +249,10 @@ pub enum ViewCommand {
 }
 
 impl PrCommand {
-    pub async fn run(self, keys: &crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
+    pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         use PrSubcommand::*;
         let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref())?;
-        let api = keys.get_api(repo.host_url())?;
+        let api = keys.get_api(repo.host_url()).await?;
         let repo = repo.name().ok_or_else(|| self.no_repo_error())?;
         match self.command {
             Create {
@@ -429,14 +429,13 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()
     };
     let state = pr
         .state
-        .as_deref()
         .ok_or_else(|| eyre::eyre!("pr does not have state"))?;
+    let is_merged = pr.merged.unwrap_or_default();
     let state = match state {
-        "open" if is_draft => format!("{light_grey}Draft{reset}"),
-        "open" => format!("{bright_green}Open{reset}"),
-        "closed" if pr.merged.unwrap_or_default() => format!("{bright_magenta}Merged{reset}"),
-        "closed" => format!("{bright_red}Closed{reset}"),
-        _ => "Unknown".to_owned(),
+        StateType::Open if is_draft => format!("{light_grey}Draft{reset}"),
+        StateType::Open => format!("{bright_green}Open{reset}"),
+        StateType::Closed if is_merged => format!("{bright_magenta}Merged{reset}"),
+        StateType::Closed => format!("{bright_red}Closed{reset}"),
     };
     let base = pr.base.as_ref().ok_or_eyre("pr does not have base")?;
     let base_repo = base

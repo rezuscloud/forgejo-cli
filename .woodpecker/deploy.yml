@@ -7,6 +7,7 @@ steps:
       - rustup target add x86_64-unknown-linux-gnu
       - cargo build --target=x86_64-unknown-linux-gnu --release
       - strip target/x86_64-unknown-linux-gnu/release/fj
+    secrets: [ client_info_codeberg ]
   compile-windows:
     image: rust:latest
     commands:
@@ -15,6 +16,7 @@ steps:
       - apt install gcc-mingw-w64-x86-64 -y
       - cargo build --target=x86_64-pc-windows-gnu --release
       - strip target/x86_64-pc-windows-gnu/release/fj.exe
+    secrets: [ client_info_codeberg ]
   zip:
     image: debian:12
     commands:

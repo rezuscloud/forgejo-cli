@@ -268,7 +268,7 @@ pub enum RepoCommand {
 }
 
 impl RepoCommand {
-    pub async fn run(self, keys: &crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
+    pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         match self {
             RepoCommand::Create {
                 repo,
@@ -287,7 +287,7 @@ impl RepoCommand {
                     }
                 }
                 let host = RepoInfo::get_current(host_name, None, None)?;
-                let api = keys.get_api(host.host_url())?;
+                let api = keys.get_api(host.host_url()).await?;
                 let repo_spec = CreateRepoOption {
                     auto_init: Some(false),
                     default_branch: Some("main".into()),
@@ -343,7 +343,7 @@ impl RepoCommand {
             }
             RepoCommand::View { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
-                let api = keys.get_api(&repo.host_url())?;
+                let api = keys.get_api(&repo.host_url()).await?;
                 let repo = repo
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
@@ -454,7 +454,7 @@ impl RepoCommand {
             }
             RepoCommand::Clone { repo, path } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
-                let api = keys.get_api(&repo.host_url())?;
+                let api = keys.get_api(&repo.host_url()).await?;
                 let name = repo.name().unwrap();
 
                 let repo_data = api.repo_get(name.owner(), name.name()).await?;
@@ -544,14 +544,14 @@ impl RepoCommand {
             }
             RepoCommand::Star { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
-                let api = keys.get_api(&repo.host_url())?;
+                let api = keys.get_api(&repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 api.user_current_put_star(name.owner(), name.name()).await?;
                 println!("Starred {}/{}!", name.owner(), name.name());
             }
             RepoCommand::Unstar { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
-                let api = keys.get_api(&repo.host_url())?;
+                let api = keys.get_api(&repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 api.user_current_delete_star(name.owner(), name.name())
                     .await?;
