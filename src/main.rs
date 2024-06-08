@@ -406,7 +406,9 @@ fn markdown(text: &str) -> String {
             }
             (NodeValue::BlockQuote, Start) => {
                 ansi_printer.blockquote_depth += 1;
+                ansi_printer.pause_style();
                 ansi_printer.prefix();
+                ansi_printer.resume_style();
             }
             (NodeValue::BlockQuote, End) => {
                 ansi_printer.blockquote_depth -= 1;
