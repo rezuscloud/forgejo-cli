@@ -253,7 +253,7 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result
     println!("By {}", username);
     if let Some(body) = &issue.body {
         println!();
-        println!("{}", body);
+        println!("{}", crate::markdown(body));
     }
     Ok(())
 }
@@ -355,7 +355,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
         .as_ref()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
     println!("{} said:", username);
-    println!("{}", body);
+    println!("{}", crate::markdown(&body));
     let assets = comment
         .assets
         .as_ref()

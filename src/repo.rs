@@ -371,6 +371,7 @@ impl RepoCommand {
                     }
                 }
                 let desc = repo.description.as_deref().unwrap_or_default();
+                // Don't use body::markdown, this is plain text.
                 if !desc.is_empty() {
                     if desc.lines().count() > 1 {
                         println!();
@@ -475,7 +476,7 @@ impl RepoCommand {
                 let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
 
                 let SpecialRender {
-                    colors, // actually using it to indicate fanciness FIXME
+                    fancy, // actually using it to indicate fanciness FIXME
                     hide_cursor,
                     show_cursor,
                     clear_line,
@@ -489,7 +490,7 @@ impl RepoCommand {
                 let mut callbacks = git2::RemoteCallbacks::new();
                 callbacks.credentials(auth.credentials(&git_config));
 
-                if colors {
+                if fancy {
                     print!("{hide_cursor}");
                     print!("   Preparing...");
                     let _ = std::io::stdout().flush();
@@ -529,7 +530,7 @@ impl RepoCommand {
                 let local_repo = git2::build::RepoBuilder::new()
                     .fetch_options(options)
                     .clone(clone_url.as_str(), &path)?;
-                if colors {
+                if fancy {
                     print!("{clear_line}{show_cursor}\r");
                 }
                 println!("Cloned {} into {}", repo_full_name, path.display());
