@@ -167,7 +167,7 @@ enum Style {
 }
 
 struct SpecialRender {
-    colors: bool,
+    fancy: bool,
 
     dash: char,
     bullet: char,
@@ -219,7 +219,7 @@ impl SpecialRender {
 
     fn fancy() -> Self {
         Self {
-            colors: true,
+            fancy: true,
 
             dash: '—',
             bullet: '•',
@@ -262,7 +262,7 @@ impl SpecialRender {
 
     fn minimal() -> Self {
         Self {
-            colors: false,
+            fancy: false,
 
             dash: '-',
             bullet: '-',
@@ -305,6 +305,26 @@ impl SpecialRender {
 }
 
 fn markdown(text: &str) -> String {
+    let SpecialRender {
+        fancy,
+
+        bullet,
+        horiz_rule,
+        bright_blue,
+        dark_grey_bg,
+        body_prefix,
+        ..
+    } = *special_render();
+
+    if !fancy {
+        let mut out = String::new();
+        for line in text.lines() {
+            use std::fmt::Write;
+            let _ = writeln!(&mut out, "{body_prefix} {line}");
+        }
+        return out;
+    }
+
     let arena = comrak::Arena::new();
     let mut options = comrak::Options::default();
     options.extension.strikethrough = true;
@@ -327,14 +347,6 @@ fn markdown(text: &str) -> String {
         }
         render_queue.push((node, side));
     }
-
-    let SpecialRender {
-        bullet,
-        horiz_rule,
-        bright_blue,
-        dark_grey_bg,
-        ..
-    } = *special_render();
 
     let mut list_numbers = Vec::new();
 

@@ -504,13 +504,13 @@ async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre
     let pr = try_get_pr(repo, api, pr).await?;
     let labels = pr.labels.as_deref().unwrap_or_default();
     let SpecialRender {
-        colors,
+        fancy,
         black,
         white,
         reset,
         ..
     } = *crate::special_render();
-    if colors {
+    if fancy {
         let mut total_width = 0;
         for label in labels {
             let name = label.name.as_deref().unwrap_or("???").trim();
