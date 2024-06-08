@@ -393,7 +393,6 @@ impl PrCommand {
 pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
     let crate::SpecialRender {
         dash,
-        body_prefix,
 
         bright_red,
         bright_green,
@@ -489,9 +488,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::R
     if let Some(body) = &pr.body {
         if !body.trim().is_empty() {
             println!();
-            for line in body.lines() {
-                println!("{dark_grey}{body_prefix}{reset} {line}");
-            }
+            println!("{}", crate::markdown(body));
         }
     }
     println!();

@@ -375,22 +375,14 @@ async fn view_release(
         &time::format_description::well_known::Rfc2822,
     )?;
     println!();
-    let SpecialRender {
-        bullet,
-        body_prefix,
-        dark_grey,
-        reset,
-        ..
-    } = crate::special_render();
+    let SpecialRender { bullet, .. } = crate::special_render();
     let body = release
         .body
         .as_ref()
         .ok_or_else(|| eyre::eyre!("release does not have body"))?;
     if !body.is_empty() {
         println!();
-        for line in body.lines() {
-            println!("{dark_grey}{body_prefix}{reset} {line}");
-        }
+        println!("{}", crate::markdown(&body));
         println!();
     }
     let assets = release

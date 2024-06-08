@@ -371,6 +371,7 @@ impl RepoCommand {
                     }
                 }
                 let desc = repo.description.as_deref().unwrap_or_default();
+                // Don't use body::markdown, this is plain text.
                 if !desc.is_empty() {
                     if desc.lines().count() > 1 {
                         println!();

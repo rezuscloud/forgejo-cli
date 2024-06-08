@@ -9,6 +9,8 @@ edition = "2021"
 auth-git2 = "0.5.3"
 base64ct = { version = "1.6.0", features = ["std"] }
 clap = { version = "4.3.11", features = ["derive"] }
+comrak = "0.24.1"
+crossterm = "0.27.0"
 directories = "5.0.1"
 eyre = "0.6.8"
 forgejo-api = "0.3.0"
