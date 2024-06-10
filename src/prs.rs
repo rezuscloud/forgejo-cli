@@ -527,7 +527,6 @@ async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre
                 let (category, name) = name
                     .split_once("/")
                     .ok_or_eyre("label is exclusive but does not have slash")?;
-                let rgb_fg = format!("\x1b[38;2;{r};{g};{b}m");
                 let rgb_bg_dark = format!("\x1b[48;2;{r2};{g2};{b2}m");
                 print!("{rgb_bg_dark}{text_color} {category} {rgb_bg} {name} {reset} ");
             } else {
@@ -985,7 +984,7 @@ async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre:
         limit: Some(u32::MAX),
         ..Default::default()
     };
-    let (headers, files) = api
+    let (_, files) = api
         .repo_get_pull_request_files(repo.owner(), repo.name(), pr, query)
         .await?;
     let max_additions = files

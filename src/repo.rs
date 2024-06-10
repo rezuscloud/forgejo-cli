@@ -476,7 +476,7 @@ impl RepoCommand {
                 let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
 
                 let SpecialRender {
-                    fancy, // actually using it to indicate fanciness FIXME
+                    fancy,
                     hide_cursor,
                     show_cursor,
                     clear_line,

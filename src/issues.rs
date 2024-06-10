@@ -178,7 +178,7 @@ impl IssueCommand {
     fn no_repo_error(&self) -> eyre::Error {
         use IssueSubcommand::*;
         match &self.command {
-            Create { repo, .. } | Search { repo, .. } => {
+            Create { .. } | Search { .. } => {
                 eyre::eyre!("can't figure what repo to access, try specifying with `--repo`")
             }
             View { id: issue, .. }
