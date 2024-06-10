@@ -174,17 +174,18 @@ struct SpecialRender {
     body_prefix: char,
     horiz_rule: char,
 
-    red: &'static str,
+    // Uncomment these as needed
+    // red: &'static str,
     bright_red: &'static str,
-    green: &'static str,
+    // green: &'static str,
     bright_green: &'static str,
-    blue: &'static str,
+    // blue: &'static str,
     bright_blue: &'static str,
-    cyan: &'static str,
-    bright_cyan: &'static str,
+    // cyan: &'static str,
+    // bright_cyan: &'static str,
     yellow: &'static str,
-    bright_yellow: &'static str,
-    magenta: &'static str,
+    // bright_yellow: &'static str,
+    // magenta: &'static str,
     bright_magenta: &'static str,
     black: &'static str,
     dark_grey: &'static str,
@@ -194,8 +195,7 @@ struct SpecialRender {
     reset: &'static str,
 
     dark_grey_bg: &'static str,
-    no_bg: &'static str,
-
+    // no_bg: &'static str,
     hide_cursor: &'static str,
     show_cursor: &'static str,
     clear_line: &'static str,
@@ -226,17 +226,17 @@ impl SpecialRender {
             body_prefix: '▌',
             horiz_rule: '─',
 
-            red: "\x1b[31m",
+            // red: "\x1b[31m",
             bright_red: "\x1b[91m",
-            green: "\x1b[32m",
+            // green: "\x1b[32m",
             bright_green: "\x1b[92m",
-            blue: "\x1b[34m",
+            // blue: "\x1b[34m",
             bright_blue: "\x1b[94m",
-            cyan: "\x1b[36m",
-            bright_cyan: "\x1b[96m",
+            // cyan: "\x1b[36m",
+            // bright_cyan: "\x1b[96m",
             yellow: "\x1b[33m",
-            bright_yellow: "\x1b[93m",
-            magenta: "\x1b[35m",
+            // bright_yellow: "\x1b[93m",
+            // magenta: "\x1b[35m",
             bright_magenta: "\x1b[95m",
             black: "\x1b[30m",
             dark_grey: "\x1b[90m",
@@ -246,8 +246,7 @@ impl SpecialRender {
             reset: "\x1b[0m",
 
             dark_grey_bg: "\x1b[100m",
-            no_bg: "\x1b[49",
-
+            // no_bg: "\x1b[49",
             hide_cursor: "\x1b[?25l",
             show_cursor: "\x1b[?25h",
             clear_line: "\x1b[2K",
@@ -269,17 +268,17 @@ impl SpecialRender {
             body_prefix: '>',
             horiz_rule: '-',
 
-            red: "",
+            // red: "",
             bright_red: "",
-            green: "",
+            // green: "",
             bright_green: "",
-            blue: "",
+            // blue: "",
             bright_blue: "",
-            cyan: "",
-            bright_cyan: "",
+            // cyan: "",
+            // bright_cyan: "",
             yellow: "",
-            bright_yellow: "",
-            magenta: "",
+            // bright_yellow: "",
+            // magenta: "",
             bright_magenta: "",
             black: "",
             dark_grey: "",
@@ -289,8 +288,7 @@ impl SpecialRender {
             reset: "",
 
             dark_grey_bg: "",
-            no_bg: "",
-
+            // no_bg: "",
             hide_cursor: "",
             show_cursor: "",
             clear_line: "",
@@ -583,9 +581,10 @@ impl AnsiPrinter {
         }
     }
 
-    fn current_fg(&self) -> Option<&'static str> {
-        self.current_style().fg
-    }
+    // Uncomment if needed
+    // fn current_fg(&self) -> Option<&'static str> {
+    //     self.current_style().fg
+    // }
 
     fn start_fg(&mut self, color: &'static str) {
         self.current_style_mut().fg = Some(color);
@@ -606,10 +605,11 @@ impl AnsiPrinter {
         self.out.push_str(color);
     }
 
-    fn stop_bg(&mut self) {
-        self.current_style_mut().bg = None;
-        self.out.push_str(self.special_render.no_bg);
-    }
+    // Uncomment if needed
+    // fn stop_bg(&mut self) {
+    //     self.current_style_mut().bg = None;
+    //     self.out.push_str(self.special_render.no_bg);
+    // }
 
     fn is_bold(&self) -> bool {
         self.current_style().bold

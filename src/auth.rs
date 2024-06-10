@@ -225,7 +225,6 @@ fn auth_server() -> (
                 .await
                 .unwrap();
         }
-        Ok(())
     });
     (handle, rx)
 }
