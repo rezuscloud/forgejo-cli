@@ -221,7 +221,7 @@ async fn create_release(
     let release_opt = forgejo_api::structs::CreateReleaseOption {
         body,
         draft: Some(draft),
-        name: Some(name),
+        name: Some(name.clone()),
         prerelease: Some(prerelease),
         tag_name,
         target_commitish: None,
@@ -258,6 +258,8 @@ async fn create_release(
         )
         .await?;
     }
+
+    println!("Created release {name}");
 
     Ok(())
 }
@@ -461,23 +463,25 @@ async fn create_asset(
     )
     .await?;
 
+    println!("Added attachment `{}` to {}", asset, release);
+
     Ok(())
 }
 
 async fn delete_asset(
     repo: &RepoName,
     api: &Forgejo,
-    release: String,
-    asset: String,
+    release_name: String,
+    asset_name: String,
 ) -> eyre::Result<()> {
-    let release = find_release(repo, api, &release).await?;
+    let release = find_release(repo, api, &release_name).await?;
     let assets = release
         .assets
         .as_ref()
         .ok_or_else(|| eyre::eyre!("release does not have assets"))?;
     let asset = assets
         .iter()
-        .find(|a| a.name.as_ref() == Some(&asset))
+        .find(|a| a.name.as_ref() == Some(&asset_name))
         .ok_or_else(|| eyre!("asset not found"))?;
     let release_id = release
         .id
@@ -487,6 +491,7 @@ async fn delete_asset(
         .ok_or_else(|| eyre::eyre!("asset does not have id"))?;
     api.repo_delete_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
         .await?;
+    println!("Removed attachment `{}` from {}", asset_name, release_name);
     Ok(())
 }
 
@@ -535,16 +540,22 @@ async fn download_asset(
                 .to_vec()
         }
     };
-    let output = output
+    let real_output = output
         .as_deref()
         .unwrap_or_else(|| std::path::Path::new(&asset));
     tokio::fs::OpenOptions::new()
         .create_new(true)
         .write(true)
-        .open(output)
+        .open(real_output)
         .await?
         .write_all(file.as_ref())
         .await?;
+
+    if output.is_some() {
+        println!("Downloaded {asset} into {}", real_output.display());
+    } else {
+        println!("Downloaded {asset}");
+    }
 
     Ok(())
 }

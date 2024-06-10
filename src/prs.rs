@@ -781,6 +781,17 @@ async fn merge_pr(
     let pr_number = pr_info.number.ok_or_eyre("pr does not have number")?;
     api.repo_merge_pull_request(repo.owner(), repo.name(), pr_number, request)
         .await?;
+
+    let pr_title = pr_info
+        .title
+        .as_deref()
+        .ok_or_eyre("pr does not have title")?;
+    let pr_base = pr_info.base.as_ref().ok_or_eyre("pr does not have base")?;
+    let base_label = pr_base
+        .label
+        .as_ref()
+        .ok_or_eyre("base does not have label")?;
+    println!("Merged PR #{pr_number} \"{pr_title}\" into `{base_label}`");
     Ok(())
 }
 

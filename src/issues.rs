@@ -574,8 +574,16 @@ pub async fn close_issue(
         unset_due_date: None,
         updated_at: None,
     };
-    api.issue_edit_issue(repo.owner(), repo.name(), issue, edit)
+    let issue_data = api
+        .issue_edit_issue(repo.owner(), repo.name(), issue, edit)
         .await?;
+
+    let issue_title = issue_data
+        .title
+        .as_deref()
+        .ok_or_eyre("issue does not have title")?;
+
+    println!("Closed issue {issue}: \"{issue_title}\"");
 
     Ok(())
 }
