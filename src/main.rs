@@ -12,6 +12,7 @@ mod issues;
 mod prs;
 mod release;
 mod repo;
+mod user;
 
 #[derive(Parser, Debug)]
 pub struct App {
@@ -37,6 +38,7 @@ pub enum Command {
     #[clap(subcommand)]
     Auth(auth::AuthCommand),
     Release(release::ReleaseCommand),
+    User(user::UserCommand),
     Version {
         /// Checks for updates
         #[clap(long)]
@@ -76,6 +78,7 @@ async fn main() -> eyre::Result<()> {
         }
         Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
+        Command::User(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Version {
             #[cfg(feature = "update-check")]
             check,
