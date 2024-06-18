@@ -46,6 +46,16 @@ pub enum UserSubcommand {
         /// The name of the user to unblock
         user: String,
     },
+    Repos {
+        /// The name of the user whose repos to list
+        user: Option<String>,
+        /// List starred repos instead of owned repos
+        #[clap(long)]
+        starred: bool,
+        /// Method by which to sort the list
+        #[clap(long)]
+        sort: Option<RepoSortOrder>,
+    },
 }
 
 impl UserCommand {
@@ -63,6 +73,11 @@ impl UserCommand {
             UserSubcommand::Followers { user } => list_followers(&api, user.as_deref()).await?,
             UserSubcommand::Block { user } => block_user(&api, &user).await?,
             UserSubcommand::Unblock { user } => unblock_user(&api, &user).await?,
+            UserSubcommand::Repos {
+                user,
+                starred,
+                sort,
+            } => list_repos(&api, user.as_deref(), starred, sort).await?,
         }
         Ok(())
     }
@@ -258,5 +273,100 @@ async fn block_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
 async fn unblock_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
     api.user_unblock_user(user).await?;
     println!("Unblocked {user}");
+    Ok(())
+}
+
+#[derive(clap::ValueEnum, Clone, Debug, Default)]
+pub enum RepoSortOrder {
+    #[default]
+    Name,
+    Modified,
+    Created,
+    Stars,
+    Forks,
+}
+
+async fn list_repos(
+    api: &Forgejo,
+    user: Option<&str>,
+    starred: bool,
+    sort: Option<RepoSortOrder>,
+) -> eyre::Result<()> {
+    let mut repos = if starred {
+        match user {
+            Some(user) => {
+                let query = forgejo_api::structs::UserListStarredQuery {
+                    limit: Some(u32::MAX),
+                    ..Default::default()
+                };
+                api.user_list_starred(user, query).await?
+            }
+            None => {
+                let query = forgejo_api::structs::UserCurrentListStarredQuery {
+                    limit: Some(u32::MAX),
+                    ..Default::default()
+                };
+                api.user_current_list_starred(query).await?
+            }
+        }
+    } else {
+        match user {
+            Some(user) => {
+                let query = forgejo_api::structs::UserListReposQuery {
+                    limit: Some(u32::MAX),
+                    ..Default::default()
+                };
+                api.user_list_repos(user, query).await?
+            }
+            None => {
+                let query = forgejo_api::structs::UserCurrentListReposQuery {
+                    limit: Some(u32::MAX),
+                    ..Default::default()
+                };
+                api.user_current_list_repos(query).await?
+            }
+        }
+    };
+
+    if repos.is_empty() {
+        if starred {
+            match user {
+                Some(user) => println!("{user} has not starred any repos"),
+                None => println!("You have not starred any repos"),
+            }
+        } else {
+            match user {
+                Some(user) => println!("{user} does not own any repos"),
+                None => println!("You do not own any repos"),
+            }
+        };
+    } else {
+        let sort_fn: fn(
+            &forgejo_api::structs::Repository,
+            &forgejo_api::structs::Repository,
+        ) -> std::cmp::Ordering = match sort.unwrap_or_default() {
+            RepoSortOrder::Name => |a, b| a.full_name.cmp(&b.full_name),
+            RepoSortOrder::Modified => |a, b| b.updated_at.cmp(&a.updated_at),
+            RepoSortOrder::Created => |a, b| b.created_at.cmp(&a.created_at),
+            RepoSortOrder::Stars => |a, b| b.stars_count.cmp(&a.stars_count),
+            RepoSortOrder::Forks => |a, b| b.forks_count.cmp(&a.forks_count),
+        };
+        repos.sort_unstable_by(sort_fn);
+
+        let SpecialRender { bullet, .. } = *crate::special_render();
+        for repo in &repos {
+            let name = repo
+                .full_name
+                .as_deref()
+                .ok_or_eyre("repo does not have name")?;
+            println!("{bullet} {name}");
+        }
+        if repos.len() == 1 {
+            println!("1 repo");
+        } else {
+            println!("{} repos", repos.len());
+        }
+    }
+
     Ok(())
 }
