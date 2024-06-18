@@ -56,6 +56,10 @@ pub enum UserSubcommand {
         #[clap(long)]
         sort: Option<RepoSortOrder>,
     },
+    Orgs {
+        /// The name of the user to view org membership of
+        user: Option<String>,
+    },
 }
 
 impl UserCommand {
@@ -78,6 +82,7 @@ impl UserCommand {
                 starred,
                 sort,
             } => list_repos(&api, user.as_deref(), starred, sort).await?,
+            UserSubcommand::Orgs { user } => list_orgs(&api, user.as_deref()).await?,
         }
         Ok(())
     }
@@ -368,5 +373,53 @@ async fn list_repos(
         }
     }
 
+    Ok(())
+}
+
+async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
+    let mut orgs = match user {
+        Some(user) => {
+            let query = forgejo_api::structs::OrgListUserOrgsQuery {
+                limit: Some(u32::MAX),
+                ..Default::default()
+            };
+            api.org_list_user_orgs(user, query).await?
+        }
+        None => {
+            let query = forgejo_api::structs::OrgListCurrentUserOrgsQuery {
+                limit: Some(u32::MAX),
+                ..Default::default()
+            };
+            api.org_list_current_user_orgs(query).await?
+        }
+    };
+
+    if orgs.is_empty() {
+        match user {
+            Some(user) => println!("{user} is not a member of any organizations"),
+            None => println!("You are not a member of any organizations"),
+        }
+    } else {
+        orgs.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+
+        let SpecialRender { bullet, dash, .. } = *crate::special_render();
+        for org in &orgs {
+            let name = org.name.as_deref().ok_or_eyre("org does not have name")?;
+            let full_name = org
+                .full_name
+                .as_deref()
+                .ok_or_eyre("org does not have name")?;
+            if !full_name.is_empty() {
+                println!("{bullet} {name} {dash} \"{full_name}\"");
+            } else {
+                println!("{bullet} {name}");
+            }
+        }
+        if orgs.len() == 1 {
+            println!("1 organization");
+        } else {
+            println!("{} organizations", orgs.len());
+        }
+    }
     Ok(())
 }
