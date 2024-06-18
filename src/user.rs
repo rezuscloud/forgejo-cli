@@ -14,6 +14,12 @@ pub struct UserCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum UserSubcommand {
+    Search {
+        /// The name to search for
+        query: String,
+        #[clap(long, short)]
+        page: Option<usize>,
+    },
     View {
         /// The name of the user to view
         user: Option<String>,
@@ -67,6 +73,7 @@ impl UserCommand {
         let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref())?;
         let api = keys.get_api(repo.host_url()).await?;
         match self.command {
+            UserSubcommand::Search { query, page } => user_search(&api, &query, page).await?,
             UserSubcommand::View { user } => view_user(&api, user.as_deref()).await?,
             UserSubcommand::Browse { user } => {
                 browse_user(&api, repo.host_url(), user.as_deref()).await?
@@ -86,6 +93,62 @@ impl UserCommand {
         }
         Ok(())
     }
+}
+
+async fn user_search(api: &Forgejo, query: &str, page: Option<usize>) -> eyre::Result<()> {
+    let page = page.unwrap_or(1);
+    if page == 0 {
+        println!("There is no page 0");
+    }
+    let query = forgejo_api::structs::UserSearchQuery {
+        q: Some(query.to_owned()),
+        ..Default::default()
+    };
+    let result = api.user_search(query).await?;
+    let users = result.data.ok_or_eyre("search did not return data")?;
+    let ok = result.ok.ok_or_eyre("search did not return ok")?;
+    if !ok {
+        println!("Search failed");
+        return Ok(());
+    }
+    if users.is_empty() {
+        println!("No users matched that query");
+    } else {
+        let SpecialRender {
+            bullet,
+            dash,
+            bold,
+            reset,
+            ..
+        } = *crate::special_render();
+        let page_start = (page - 1) * 20;
+        let pages_total = users.len().div_ceil(20);
+        if page_start >= users.len() {
+            if pages_total == 1 {
+                println!("There is only 1 page");
+            } else {
+                println!("There are only {pages_total} pages");
+            }
+        } else {
+            for user in users.iter().skip(page_start).take(20) {
+                let username = user
+                    .login
+                    .as_deref()
+                    .ok_or_eyre("user does not have name")?;
+                println!("{bullet} {bold}{username}{reset}");
+            }
+            println!(
+                "Showing {bold}{}{dash}{}{reset} of {bold}{}{reset} results ({page}/{pages_total})",
+                page_start + 1,
+                (page_start + 20).min(users.len()),
+                users.len()
+            );
+            if users.len() > 20 {
+                println!("View more with the --page flag");
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn view_user(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
