@@ -22,6 +22,22 @@ pub enum UserSubcommand {
         /// The name of the user to open in your browser
         user: Option<String>,
     },
+    Follow {
+        /// The name of the user to follow
+        user: String,
+    },
+    Unfollow {
+        /// The name of the user to follow
+        user: String,
+    },
+    Following {
+        /// The name of the user whose follows to list
+        user: Option<String>,
+    },
+    Followers {
+        /// The name of the user whose followers to list
+        user: Option<String>,
+    },
 }
 
 impl UserCommand {
@@ -33,6 +49,10 @@ impl UserCommand {
             UserSubcommand::Browse { user } => {
                 browse_user(&api, repo.host_url(), user.as_deref()).await?
             }
+            UserSubcommand::Follow { user } => follow_user(&api, &user).await?,
+            UserSubcommand::Unfollow { user } => unfollow_user(&api, &user).await?,
+            UserSubcommand::Following { user } => list_following(&api, user.as_deref()).await?,
+            UserSubcommand::Followers { user } => list_followers(&api, user.as_deref()).await?,
         }
         Ok(())
     }
@@ -119,6 +139,102 @@ async fn browse_user(api: &Forgejo, host_url: &url::Url, user: Option<&str>) -> 
         .map_err(|_| eyre::eyre!("invalid host url"))?
         .push(&username);
     open::that(url.as_str())?;
+
+    Ok(())
+}
+
+async fn follow_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
+    api.user_current_put_follow(user).await?;
+    println!("Followed {user}");
+    Ok(())
+}
+
+async fn unfollow_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
+    api.user_current_delete_follow(user).await?;
+    println!("Unfollowed {user}");
+    Ok(())
+}
+
+async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
+    let following = match user {
+        Some(user) => {
+            let query = forgejo_api::structs::UserListFollowingQuery {
+                limit: Some(u32::MAX),
+                ..Default::default()
+            };
+            api.user_list_following(user, query).await?
+        }
+        None => {
+            let query = forgejo_api::structs::UserCurrentListFollowingQuery {
+                limit: Some(u32::MAX),
+                ..Default::default()
+            };
+            api.user_current_list_following(query).await?
+        }
+    };
+
+    if following.is_empty() {
+        match user {
+            Some(name) => println!("{name} isn't following anyone"),
+            None => println!("You aren't following anyone"),
+        }
+    } else {
+        match user {
+            Some(name) => println!("{name} is following:"),
+            None => println!("You are following:"),
+        }
+        let SpecialRender { bullet, .. } = *crate::special_render();
+
+        for followed in following {
+            let username = followed
+                .login
+                .as_deref()
+                .ok_or_eyre("user does not have username")?;
+            println!("{bullet} {username}");
+        }
+    }
+
+    Ok(())
+}
+
+async fn list_followers(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
+    let followers = match user {
+        Some(user) => {
+            let query = forgejo_api::structs::UserListFollowersQuery {
+                limit: Some(u32::MAX),
+                ..Default::default()
+            };
+            api.user_list_followers(user, query).await?
+        }
+        None => {
+            let query = forgejo_api::structs::UserCurrentListFollowersQuery {
+                limit: Some(u32::MAX),
+                ..Default::default()
+            };
+            api.user_current_list_followers(query).await?
+        }
+    };
+
+    if followers.is_empty() {
+        match user {
+            Some(name) => println!("{name} has no followers"),
+            None => println!("You have no followers :("),
+        }
+    } else {
+        match user {
+            Some(name) => println!("{name} is followed by:"),
+            None => println!("You are followed by:"),
+        }
+        let SpecialRender { bullet, .. } = *crate::special_render();
+
+        for follower in followers {
+            let username = follower
+                .login
+                .as_deref()
+                .ok_or_eyre("user does not have username")?;
+            println!("{bullet} {username}");
+        }
+    }
 
     Ok(())
 }
