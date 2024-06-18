@@ -38,6 +38,14 @@ pub enum UserSubcommand {
         /// The name of the user whose followers to list
         user: Option<String>,
     },
+    Block {
+        /// The name of the user to block
+        user: String,
+    },
+    Unblock {
+        /// The name of the user to unblock
+        user: String,
+    },
 }
 
 impl UserCommand {
@@ -53,6 +61,8 @@ impl UserCommand {
             UserSubcommand::Unfollow { user } => unfollow_user(&api, &user).await?,
             UserSubcommand::Following { user } => list_following(&api, user.as_deref()).await?,
             UserSubcommand::Followers { user } => list_followers(&api, user.as_deref()).await?,
+            UserSubcommand::Block { user } => block_user(&api, &user).await?,
+            UserSubcommand::Unblock { user } => unblock_user(&api, &user).await?,
         }
         Ok(())
     }
@@ -236,5 +246,17 @@ async fn list_followers(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+async fn block_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
+    api.user_block_user(user).await?;
+    println!("Blocked {user}");
+    Ok(())
+}
+
+async fn unblock_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
+    api.user_unblock_user(user).await?;
+    println!("Unblocked {user}");
     Ok(())
 }
