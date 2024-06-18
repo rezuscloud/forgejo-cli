@@ -357,14 +357,17 @@ fn markdown(text: &str) -> String {
     ansi_printer.pause_style();
     ansi_printer.prefix();
     ansi_printer.resume_style();
-    for (item, side) in render_queue {
+    let mut iter = render_queue.into_iter().peekable();
+    while let Some((item, side)) = iter.next() {
         use comrak::nodes::NodeValue;
         use Side::*;
         match (&item.data.borrow().value, side) {
             (NodeValue::Paragraph, Start) => (),
             (NodeValue::Paragraph, End) => {
-                ansi_printer.newline();
-                ansi_printer.newline();
+                if iter.peek().is_some_and(|(_, side)| *side == Start) {
+                    ansi_printer.newline();
+                    ansi_printer.newline();
+                }
             }
             (NodeValue::Text(s), Start) => ansi_printer.text(s),
             (NodeValue::Link(_), Start) => {
@@ -439,6 +442,7 @@ fn markdown(text: &str) -> String {
             (NodeValue::Heading(_), End) => {
                 ansi_printer.reset();
                 ansi_printer.newline();
+                ansi_printer.newline();
             }
 
             (NodeValue::List(list), Start) => {
@@ -450,6 +454,7 @@ fn markdown(text: &str) -> String {
                 if list.list_type == comrak::nodes::ListType::Ordered {
                     list_numbers.pop();
                 }
+                ansi_printer.newline();
             }
             (NodeValue::Item(list), Start) => {
                 if list.list_type == comrak::nodes::ListType::Ordered {
@@ -466,6 +471,9 @@ fn markdown(text: &str) -> String {
                     ansi_printer.out.push(' ');
                     ansi_printer.cur_line_len += 2;
                 }
+            }
+            (NodeValue::Item(_), End) => {
+                ansi_printer.newline();
             }
 
             (NodeValue::LineBreak, Start) => ansi_printer.newline(),
