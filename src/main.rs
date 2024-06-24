@@ -37,6 +37,12 @@ pub enum Command {
     #[clap(subcommand)]
     Auth(auth::AuthCommand),
     Release(release::ReleaseCommand),
+    Version {
+        /// Checks for updates
+        #[clap(long)]
+        #[cfg(feature = "update-check")]
+        check: bool,
+    },
 }
 
 #[tokio::main]
@@ -70,9 +76,59 @@ async fn main() -> eyre::Result<()> {
         }
         Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
+        Command::Version {
+            #[cfg(feature = "update-check")]
+            check,
+        } => {
+            println!("{}", env!("CARGO_PKG_VERSION"));
+            #[cfg(feature = "update-check")]
+            update_msg(check).await?;
+        }
     }
 
     keys.save().await?;
+    Ok(())
+}
+
+#[cfg(feature = "update-check")]
+async fn update_msg(check: bool) -> eyre::Result<()> {
+    use std::cmp::Ordering;
+
+    if check {
+        let url = url::Url::parse("https://codeberg.org/")?;
+        let api = forgejo_api::Forgejo::new(forgejo_api::Auth::None, url)?;
+
+        let latest = api
+            .repo_get_latest_release("Cyborus", "forgejo-cli")
+            .await?;
+        let latest_tag = latest
+            .tag_name
+            .ok_or_eyre("latest release does not have name")?;
+        let latest_ver = latest_tag
+            .strip_prefix("v")
+            .unwrap_or(&latest_tag)
+            .parse::<semver::Version>()?;
+
+        let current_ver = env!("CARGO_PKG_VERSION").parse::<semver::Version>()?;
+
+        match current_ver.cmp(&latest_ver) {
+            Ordering::Less => {
+                let latest_url = latest
+                    .html_url
+                    .ok_or_eyre("latest release does not have url")?;
+                println!("New version available: {latest_ver}");
+                println!("Get it at {}", latest_url);
+            }
+            Ordering::Equal => {
+                println!("Up to date!");
+            }
+            Ordering::Greater => {
+                println!("You are ahead of the latest published version");
+            }
+        }
+    } else {
+        println!("Check for a new version with `fj version --check`");
+    }
     Ok(())
 }
 
