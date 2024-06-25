@@ -8,7 +8,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::{
     keys::KeyInfo,
-    repo::{RepoInfo, RepoName},
+    repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
 
@@ -17,7 +17,7 @@ pub struct ReleaseCommand {
     #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(long, short)]
-    repo: Option<String>,
+    repo: Option<RepoArg>,
     #[clap(subcommand)]
     command: ReleaseSubcommand,
 }
@@ -117,8 +117,7 @@ pub enum AssetCommand {
 
 impl ReleaseCommand {
     pub async fn run(self, keys: &mut KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
-        let repo =
-            RepoInfo::get_current(remote_name, self.repo.as_deref(), self.remote.as_deref())?;
+        let repo = RepoInfo::get_current(remote_name, self.repo.as_ref(), self.remote.as_deref())?;
         let api = keys.get_api(&repo.host_url()).await?;
         let repo = repo
             .name()

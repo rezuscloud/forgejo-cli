@@ -7,7 +7,7 @@ use forgejo_api::structs::{
 };
 use forgejo_api::Forgejo;
 
-use crate::repo::{RepoInfo, RepoName};
+use crate::repo::{RepoArg, RepoInfo, RepoName};
 
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
@@ -24,7 +24,7 @@ pub enum IssueSubcommand {
         #[clap(long)]
         body: Option<String>,
         #[clap(long, short)]
-        repo: Option<String>,
+        repo: Option<RepoArg>,
     },
     Edit {
         issue: IssueId,
@@ -42,7 +42,7 @@ pub enum IssueSubcommand {
     },
     Search {
         #[clap(long, short)]
-        repo: Option<String>,
+        repo: Option<RepoArg>,
         query: Option<String>,
         #[clap(long, short)]
         labels: Option<String>,
@@ -65,16 +65,16 @@ pub enum IssueSubcommand {
 
 #[derive(Clone, Debug)]
 pub struct IssueId {
-    pub repo: Option<String>,
+    pub repo: Option<RepoArg>,
     pub number: u64,
 }
 
 impl FromStr for IssueId {
-    type Err = std::num::ParseIntError;
+    type Err = IssueIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (repo, number) = match s.rsplit_once("#") {
-            Some((repo, number)) => (Some(repo.to_owned()), number),
+            Some((repo, number)) => (Some(repo.parse::<RepoArg>()?), number),
             None => (None, s),
         };
         Ok(Self {
@@ -83,6 +83,35 @@ impl FromStr for IssueId {
         })
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum IssueIdError {
+    Repo(crate::repo::RepoArgError),
+    Number(std::num::ParseIntError),
+}
+
+impl std::fmt::Display for IssueIdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IssueIdError::Repo(e) => e.fmt(f),
+            IssueIdError::Number(e) => e.fmt(f),
+        }
+    }
+}
+
+impl From<crate::repo::RepoArgError> for IssueIdError {
+    fn from(value: crate::repo::RepoArgError) -> Self {
+        Self::Repo(value)
+    }
+}
+
+impl From<std::num::ParseIntError> for IssueIdError {
+    fn from(value: std::num::ParseIntError) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl std::error::Error for IssueIdError {}
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
 pub enum State {
@@ -163,15 +192,15 @@ impl IssueCommand {
         Ok(())
     }
 
-    fn repo(&self) -> Option<&str> {
+    fn repo(&self) -> Option<&RepoArg> {
         use IssueSubcommand::*;
         match &self.command {
-            Create { repo, .. } | Search { repo, .. } => repo.as_deref(),
+            Create { repo, .. } | Search { repo, .. } => repo.as_ref(),
             View { id: issue, .. }
             | Edit { issue, .. }
             | Close { issue, .. }
             | Comment { issue, .. }
-            | Browse { id: issue, .. } => issue.repo.as_deref(),
+            | Browse { id: issue, .. } => issue.repo.as_ref(),
         }
     }
 

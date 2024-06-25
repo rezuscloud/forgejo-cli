@@ -12,7 +12,7 @@ use forgejo_api::{
 
 use crate::{
     issues::IssueId,
-    repo::{RepoInfo, RepoName},
+    repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
 
@@ -40,7 +40,7 @@ pub enum PrSubcommand {
         state: Option<crate::issues::State>,
         /// The repo to search in
         #[clap(long, short)]
-        repo: Option<String>,
+        repo: Option<RepoArg>,
     },
     /// Create a new pull request
     Create {
@@ -59,7 +59,7 @@ pub enum PrSubcommand {
         body: Option<String>,
         /// The repo to create this issue on
         #[clap(long, short)]
-        repo: Option<String>,
+        repo: Option<RepoArg>,
     },
     /// View the contents of a pull request
     View {
@@ -345,17 +345,17 @@ impl PrCommand {
         Ok(())
     }
 
-    fn repo(&self) -> Option<&str> {
+    fn repo(&self) -> Option<&RepoArg> {
         use PrSubcommand::*;
         match &self.command {
-            Search { repo, .. } | Create { repo, .. } => repo.as_deref(),
+            Search { repo, .. } | Create { repo, .. } => repo.as_ref(),
             Checkout { .. } => None,
             View { id: pr, .. }
             | Comment { pr, .. }
             | Edit { pr, .. }
             | Close { pr, .. }
             | Merge { pr, .. }
-            | Browse { id: pr } => pr.as_ref().and_then(|x| x.repo.as_deref()),
+            | Browse { id: pr } => pr.as_ref().and_then(|x| x.repo.as_ref()),
         }
     }
 
