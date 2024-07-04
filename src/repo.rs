@@ -298,6 +298,13 @@ pub enum RepoCommand {
         #[clap(long, short)]
         push: bool,
     },
+    Fork {
+        repo: RepoArg,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
     View {
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
@@ -393,6 +400,45 @@ impl RepoCommand {
                             .set_upstream(Some(&format!("{upstream}/{branch_shorthand}")))?;
                     }
                 }
+            }
+            RepoCommand::Fork { repo, name, remote } => {
+                match (repo.host.as_deref(), host_name) {
+                    (Some(a), Some(b)) => {
+                        fn strip(s: &str) -> &str {
+                            let no_scheme = s
+                                .strip_prefix("https://")
+                                .or_else(|| s.strip_prefix("http://"))
+                                .unwrap_or(s);
+                            let no_trailing_slash =
+                                no_scheme.strip_suffix("/").unwrap_or(no_scheme);
+                            no_trailing_slash
+                        }
+                        if strip(a) != strip(b) {
+                            eyre::bail!("conflicting hosts {a} and {b}. please only specify one");
+                        }
+                    }
+                    _ => (),
+                }
+                let repo_info = RepoInfo::get_current(host_name, Some(&repo), remote.as_deref())?;
+                let api = keys.get_api(&repo_info.host_url()).await?;
+                let repo = repo_info
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                let opt = forgejo_api::structs::CreateForkOption {
+                    name,
+                    organization: None,
+                };
+                let new_fork = api.create_fork(repo.owner(), repo.name(), opt).await?;
+                let fork_full_name = new_fork
+                    .full_name
+                    .as_deref()
+                    .ok_or_eyre("fork does not have name")?;
+                println!(
+                    "Forked {}/{} into {}",
+                    repo.owner(),
+                    repo.name(),
+                    fork_full_name
+                );
             }
             RepoCommand::View { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
