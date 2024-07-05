@@ -173,6 +173,8 @@ impl RepoInfo {
             }
         };
 
+        let url = url.or_else(fallback_host);
+
         let info = match (url, name) {
             (Some(url), name) => RepoInfo { url, name },
             (None, Some(_)) => eyre::bail!("cannot find repo, no host specified"),
@@ -188,6 +190,18 @@ impl RepoInfo {
 
     pub fn host_url(&self) -> &Url {
         &self.url
+    }
+}
+
+fn fallback_host() -> Option<Url> {
+    if let Some(envvar) = std::env::var_os("FJ_FALLBACK_HOST") {
+        let out = envvar.to_str().and_then(|x| x.parse::<Url>().ok());
+        if out.is_none() {
+            println!("warn: `FJ_FALLBACK_HOST` is not set to a valid url");
+        }
+        out
+    } else {
+        None
     }
 }
 
