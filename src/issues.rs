@@ -236,7 +236,26 @@ async fn create_issue(
 }
 
 pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+    let crate::SpecialRender {
+        dash,
+
+        bright_red,
+        bright_green,
+        yellow,
+        dark_grey,
+        white,
+        reset,
+        ..
+    } = crate::special_render();
+
     let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
+
+    // if it's a pull request, display it as one instead
+    if issue.pull_request.is_some() {
+        crate::prs::view_pr(repo, api, Some(id)).await?;
+        return Ok(());
+    }
+
     let title = issue
         .title
         .as_ref()
@@ -249,11 +268,32 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result
         .login
         .as_ref()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
-    println!("#{}: {}", id, title);
-    println!("By {}", username);
+    let state = issue
+        .state
+        .ok_or_else(|| eyre::eyre!("pr does not have state"))?;
+    let comments = issue.comments.unwrap_or_default();
+
+    println!("{yellow}{title} {dark_grey}#{id}{reset}");
+    print!("By {white}{username}{reset} {dash} ");
+
+    use forgejo_api::structs::StateType;
+    match state {
+        StateType::Open => println!("{bright_green}Open{reset}"),
+        StateType::Closed => println!("{bright_red}Closed{reset}"),
+    };
+
     if let Some(body) = &issue.body {
-        println!();
-        println!("{}", crate::markdown(body));
+        if !body.is_empty() {
+            println!();
+            println!("{}", crate::markdown(body));
+        }
+    }
+    println!();
+
+    if comments == 1 {
+        println!("1 comment");
+    } else {
+        println!("{comments} comments");
     }
     Ok(())
 }
