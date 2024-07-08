@@ -66,6 +66,77 @@ pub enum UserSubcommand {
         /// The name of the user to view org membership of
         user: Option<String>,
     },
+    #[clap(subcommand)]
+    Edit(EditCommand),
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum EditCommand {
+    /// Set your bio
+    Bio {
+        /// The new description. Leave this out to open your editor.
+        content: Option<String>,
+    },
+    /// Set your full name
+    Name {
+        /// The new name.
+        #[clap(group = "arg")]
+        name: Option<String>,
+        /// Remove your name from your profile
+        #[clap(long, short, group = "arg")]
+        unset: bool,
+    },
+    /// Set your pronouns
+    Pronouns {
+        /// The new pronouns.
+        #[clap(group = "arg")]
+        pronouns: Option<String>,
+        /// Remove your pronouns from your profile
+        #[clap(long, short, group = "arg")]
+        unset: bool,
+    },
+    /// Set your activity visibility
+    Location {
+        /// The new location.
+        #[clap(group = "arg")]
+        location: Option<String>,
+        /// Remove your location from your profile
+        #[clap(long, short, group = "arg")]
+        unset: bool,
+    },
+    /// Set your activity visibility
+    Activity {
+        /// The visibility of your activity.
+        #[clap(long, short)]
+        visibility: VisbilitySetting,
+    },
+    /// Manage the email addresses associated with your account
+    Email {
+        /// Set the visibility of your email address.
+        #[clap(long, short)]
+        visibility: Option<VisbilitySetting>,
+        /// Add a new email address
+        #[clap(long, short)]
+        add: Vec<String>,
+        /// Remove an email address
+        #[clap(long, short)]
+        rm: Vec<String>,
+    },
+    /// Set your linked website
+    Website {
+        /// Your website URL.
+        #[clap(group = "arg")]
+        url: Option<String>,
+        /// Remove your website from your profile
+        #[clap(long, short, group = "arg")]
+        unset: bool,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
+pub enum VisbilitySetting {
+    Hidden,
+    Public,
 }
 
 impl UserCommand {
@@ -90,6 +161,23 @@ impl UserCommand {
                 sort,
             } => list_repos(&api, user.as_deref(), starred, sort).await?,
             UserSubcommand::Orgs { user } => list_orgs(&api, user.as_deref()).await?,
+            UserSubcommand::Edit(cmd) => match cmd {
+                EditCommand::Bio { content } => edit_bio(&api, content).await?,
+                EditCommand::Name { name, unset } => edit_name(&api, name, unset).await?,
+                EditCommand::Pronouns { pronouns, unset } => {
+                    edit_pronouns(&api, pronouns, unset).await?
+                }
+                EditCommand::Location { location, unset } => {
+                    edit_location(&api, location, unset).await?
+                }
+                EditCommand::Activity { visibility } => edit_activity(&api, visibility).await?,
+                EditCommand::Email {
+                    visibility,
+                    add,
+                    rm,
+                } => edit_email(&api, visibility, add, rm).await?,
+                EditCommand::Website { url, unset } => edit_website(&api, url, unset).await?,
+            },
         }
         Ok(())
     }
@@ -483,6 +571,172 @@ async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
         } else {
             println!("{} organizations", orgs.len());
         }
+    }
+    Ok(())
+}
+
+fn default_settings_opt() -> forgejo_api::structs::UserSettingsOptions {
+    forgejo_api::structs::UserSettingsOptions {
+        description: None,
+        diff_view_style: None,
+        enable_repo_unit_hints: None,
+        full_name: None,
+        hide_activity: None,
+        hide_email: None,
+        language: None,
+        location: None,
+        pronouns: None,
+        theme: None,
+        website: None,
+    }
+}
+
+async fn edit_bio(api: &Forgejo, new_bio: Option<String>) -> eyre::Result<()> {
+    let new_bio = match new_bio {
+        Some(s) => s,
+        None => {
+            let mut bio = api
+                .user_get_current()
+                .await?
+                .description
+                .unwrap_or_default();
+            crate::editor(&mut bio, Some("md")).await?;
+            bio
+        }
+    };
+    let opt = forgejo_api::structs::UserSettingsOptions {
+        description: Some(new_bio),
+        ..default_settings_opt()
+    };
+    api.update_user_settings(opt).await?;
+    Ok(())
+}
+
+async fn edit_name(api: &Forgejo, new_name: Option<String>, unset: bool) -> eyre::Result<()> {
+    match (new_name, unset) {
+        (Some(_), true) => unreachable!(),
+        (Some(name), false) if !name.is_empty() => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                full_name: Some(name),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        (None, true) => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                full_name: Some(String::new()),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        _ => println!("Use --unset to remove your name from your profile"),
+    }
+    Ok(())
+}
+
+async fn edit_pronouns(
+    api: &Forgejo,
+    new_pronouns: Option<String>,
+    unset: bool,
+) -> eyre::Result<()> {
+    match (new_pronouns, unset) {
+        (Some(_), true) => unreachable!(),
+        (Some(pronouns), false) if !pronouns.is_empty() => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                pronouns: Some(pronouns),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        (None, true) => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                pronouns: Some(String::new()),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        _ => println!("Use --unset to remove your pronouns from your profile"),
+    }
+    Ok(())
+}
+
+async fn edit_location(
+    api: &Forgejo,
+    new_location: Option<String>,
+    unset: bool,
+) -> eyre::Result<()> {
+    match (new_location, unset) {
+        (Some(_), true) => unreachable!(),
+        (Some(location), false) if !location.is_empty() => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                location: Some(location),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        (None, true) => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                location: Some(String::new()),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        _ => println!("Use --unset to remove your location from your profile"),
+    }
+    Ok(())
+}
+
+async fn edit_activity(api: &Forgejo, visibility: VisbilitySetting) -> eyre::Result<()> {
+    let opt = forgejo_api::structs::UserSettingsOptions {
+        hide_activity: Some(visibility == VisbilitySetting::Hidden),
+        ..default_settings_opt()
+    };
+    api.update_user_settings(opt).await?;
+    Ok(())
+}
+
+async fn edit_email(
+    api: &Forgejo,
+    visibility: Option<VisbilitySetting>,
+    add: Vec<String>,
+    rm: Vec<String>,
+) -> eyre::Result<()> {
+    if let Some(vis) = visibility {
+        let opt = forgejo_api::structs::UserSettingsOptions {
+            hide_activity: Some(vis == VisbilitySetting::Hidden),
+            ..default_settings_opt()
+        };
+        api.update_user_settings(opt).await?;
+    }
+    if !add.is_empty() {
+        let opt = forgejo_api::structs::CreateEmailOption { emails: Some(add) };
+        api.user_add_email(opt).await?;
+    }
+    if !rm.is_empty() {
+        let opt = forgejo_api::structs::DeleteEmailOption { emails: Some(rm) };
+        api.user_delete_email(opt).await?;
+    }
+    Ok(())
+}
+
+async fn edit_website(api: &Forgejo, new_url: Option<String>, unset: bool) -> eyre::Result<()> {
+    match (new_url, unset) {
+        (Some(_), true) => unreachable!(),
+        (Some(url), false) if !url.is_empty() => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                website: Some(url),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        (None, true) => {
+            let opt = forgejo_api::structs::UserSettingsOptions {
+                website: Some(String::new()),
+                ..default_settings_opt()
+            };
+            api.update_user_settings(opt).await?;
+        }
+        _ => println!("Use --unset to remove your name from your profile"),
     }
     Ok(())
 }
