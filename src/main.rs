@@ -12,6 +12,7 @@ mod issues;
 mod prs;
 mod release;
 mod repo;
+mod user;
 
 #[derive(Parser, Debug)]
 pub struct App {
@@ -37,6 +38,7 @@ pub enum Command {
     #[clap(subcommand)]
     Auth(auth::AuthCommand),
     Release(release::ReleaseCommand),
+    User(user::UserCommand),
     Version {
         /// Checks for updates
         #[clap(long)]
@@ -76,6 +78,7 @@ async fn main() -> eyre::Result<()> {
         }
         Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
+        Command::User(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Version {
             #[cfg(feature = "update-check")]
             check,
@@ -238,7 +241,7 @@ struct SpecialRender {
     // blue: &'static str,
     bright_blue: &'static str,
     // cyan: &'static str,
-    // bright_cyan: &'static str,
+    bright_cyan: &'static str,
     yellow: &'static str,
     // bright_yellow: &'static str,
     // magenta: &'static str,
@@ -289,7 +292,7 @@ impl SpecialRender {
             // blue: "\x1b[34m",
             bright_blue: "\x1b[94m",
             // cyan: "\x1b[36m",
-            // bright_cyan: "\x1b[96m",
+            bright_cyan: "\x1b[96m",
             yellow: "\x1b[33m",
             // bright_yellow: "\x1b[93m",
             // magenta: "\x1b[35m",
@@ -331,7 +334,7 @@ impl SpecialRender {
             // blue: "",
             bright_blue: "",
             // cyan: "",
-            // bright_cyan: "",
+            bright_cyan: "",
             yellow: "",
             // bright_yellow: "",
             // magenta: "",
