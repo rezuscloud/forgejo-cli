@@ -1,4 +1,4 @@
-use std::{io::Write, path::PathBuf};
+use std::{io::Write, path::PathBuf, str::FromStr};
 
 use clap::Subcommand;
 use eyre::{eyre, OptionExt};
@@ -15,7 +15,7 @@ pub struct RepoInfo {
 impl RepoInfo {
     pub fn get_current(
         host: Option<&str>,
-        repo: Option<&str>,
+        repo: Option<&RepoArg>,
         remote: Option<&str>,
     ) -> eyre::Result<Self> {
         // l = domain/owner/name
@@ -48,29 +48,17 @@ impl RepoInfo {
         let mut repo_name: Option<RepoName> = None;
 
         if let Some(repo) = repo {
-            let (head, name) = repo
-                .rsplit_once("/")
-                .ok_or_eyre("repo name must contain owner and name")?;
-            let name = name.strip_suffix(".git").unwrap_or(name);
-            match head.rsplit_once("/") {
-                Some((url, owner)) => {
-                    if let Ok(url) = Url::parse(url) {
-                        repo_url = Some(url);
-                    } else if let Ok(url) = Url::parse(&format!("https://{url}/")) {
-                        repo_url = Some(url);
-                    }
-                    repo_name = Some(RepoName {
-                        owner: owner.to_owned(),
-                        name: name.to_owned(),
-                    });
-                }
-                None => {
-                    repo_name = Some(RepoName {
-                        owner: head.to_owned(),
-                        name: name.to_owned(),
-                    });
+            if let Some(host) = &repo.host {
+                if let Ok(url) = Url::parse(host) {
+                    repo_url = Some(url);
+                } else if let Ok(url) = Url::parse(&format!("https://{host}/")) {
+                    repo_url = Some(url);
                 }
             }
+            repo_name = Some(RepoName {
+                owner: repo.owner.clone(),
+                name: repo.name.clone(),
+            });
         }
 
         let repo_url = repo_url;
@@ -241,10 +229,61 @@ impl RepoName {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RepoArg {
+    host: Option<String>,
+    owner: String,
+    name: String,
+}
+
+impl std::fmt::Display for RepoArg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.host {
+            Some(host) => write!(f, "{host}/{}/{}", self.owner, self.name),
+            None => write!(f, "{}/{}", self.owner, self.name),
+        }
+    }
+}
+
+impl FromStr for RepoArg {
+    type Err = RepoArgError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (head, name) = s.rsplit_once("/").ok_or(RepoArgError::NoOwner)?;
+        let name = name.strip_suffix(".git").unwrap_or(name);
+        let (host, owner) = match head.rsplit_once("/") {
+            Some((host, owner)) => (Some(host), owner),
+            None => (None, head),
+        };
+        Ok(Self {
+            host: host.map(|s| s.to_owned()),
+            owner: owner.to_owned(),
+            name: name.to_owned(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepoArgError {
+    NoOwner,
+}
+
+impl std::error::Error for RepoArgError {}
+
+impl std::fmt::Display for RepoArgError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RepoArgError::NoOwner => {
+                write!(f, "repo name should be in the format [HOST/]OWNER/NAME")
+            }
+        }
+    }
+}
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
     Create {
-        repo: String,
+        repo: RepoArg,
 
         // flags
         #[clap(long, short)]
@@ -259,23 +298,30 @@ pub enum RepoCommand {
         #[clap(long, short)]
         push: bool,
     },
-    View {
+    Fork {
+        repo: RepoArg,
+        #[clap(long)]
         name: Option<String>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    View {
+        name: Option<RepoArg>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
     Clone {
-        repo: String,
+        repo: RepoArg,
         path: Option<PathBuf>,
     },
     Star {
-        repo: String,
+        repo: RepoArg,
     },
     Unstar {
-        repo: String,
+        repo: RepoArg,
     },
     Browse {
-        name: Option<String>,
+        name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
@@ -309,7 +355,7 @@ impl RepoCommand {
                     gitignores: None,
                     issue_labels: None,
                     license: None,
-                    name: repo.clone(),
+                    name: format!("{}/{}", repo.owner, repo.name),
                     object_format_name: None,
                     private: Some(private),
                     readme: Some(String::new()),
@@ -355,8 +401,47 @@ impl RepoCommand {
                     }
                 }
             }
+            RepoCommand::Fork { repo, name, remote } => {
+                match (repo.host.as_deref(), host_name) {
+                    (Some(a), Some(b)) => {
+                        fn strip(s: &str) -> &str {
+                            let no_scheme = s
+                                .strip_prefix("https://")
+                                .or_else(|| s.strip_prefix("http://"))
+                                .unwrap_or(s);
+                            let no_trailing_slash =
+                                no_scheme.strip_suffix("/").unwrap_or(no_scheme);
+                            no_trailing_slash
+                        }
+                        if strip(a) != strip(b) {
+                            eyre::bail!("conflicting hosts {a} and {b}. please only specify one");
+                        }
+                    }
+                    _ => (),
+                }
+                let repo_info = RepoInfo::get_current(host_name, Some(&repo), remote.as_deref())?;
+                let api = keys.get_api(&repo_info.host_url()).await?;
+                let repo = repo_info
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                let opt = forgejo_api::structs::CreateForkOption {
+                    name,
+                    organization: None,
+                };
+                let new_fork = api.create_fork(repo.owner(), repo.name(), opt).await?;
+                let fork_full_name = new_fork
+                    .full_name
+                    .as_deref()
+                    .ok_or_eyre("fork does not have name")?;
+                println!(
+                    "Forked {}/{} into {}",
+                    repo.owner(),
+                    repo.name(),
+                    fork_full_name
+                );
+            }
             RepoCommand::View { name, remote } => {
-                let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
+                let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
                 let api = keys.get_api(&repo.host_url()).await?;
                 let repo = repo
                     .name()
@@ -573,7 +658,7 @@ impl RepoCommand {
                 println!("Removed star from {}/{}", name.owner(), name.name());
             }
             RepoCommand::Browse { name, remote } => {
-                let repo = RepoInfo::get_current(host_name, name.as_deref(), remote.as_deref())?;
+                let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
                 let mut url = repo.host_url().clone();
                 let repo = repo
                     .name()
