@@ -68,6 +68,11 @@ pub enum PrSubcommand {
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
+    /// View the mergability and CI status of a pull request
+    Status {
+        /// The pull request to view.
+        id: Option<IssueId>,
+    },
     /// Checkout a pull request in a new branch
     Checkout {
         /// The pull request to check out.
@@ -300,6 +305,7 @@ impl PrCommand {
                     }
                 }
             }
+            Status { id } => view_pr_status(&repo, &api, id.map(|id| id.number)).await?,
             Search {
                 query,
                 labels,
@@ -351,6 +357,7 @@ impl PrCommand {
             Search { repo, .. } | Create { repo, .. } => repo.as_ref(),
             Checkout { .. } => None,
             View { id: pr, .. }
+            | Status { id: pr, .. }
             | Comment { pr, .. }
             | Edit { pr, .. }
             | Close { pr, .. }
@@ -373,6 +380,7 @@ impl PrCommand {
                 }
             }
             View { id: pr, .. }
+            | Status { id: pr, .. }
             | Comment { pr, .. }
             | Edit { pr, .. }
             | Close { pr, .. }
@@ -576,6 +584,121 @@ fn darken(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
         ((g as f32) * 0.85) as u8,
         ((b as f32) * 0.85) as u8,
     )
+}
+
+async fn view_pr_status(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
+    let pr = try_get_pr(repo, api, id).await?;
+
+    let SpecialRender {
+        bright_magenta,
+        bright_red,
+        bright_green,
+        yellow,
+        light_grey,
+        dash,
+        bullet,
+        reset,
+        ..
+    } = *crate::special_render();
+
+    if pr.merged.ok_or_eyre("pr merge status unknown")? {
+        let merged_by = pr.merged_by.ok_or_eyre("pr not merged by anyone")?;
+        let merged_by = merged_by
+            .login
+            .as_deref()
+            .ok_or_eyre("pr merger does not have login")?;
+        let merged_at = pr.merged_at.ok_or_eyre("pr does not have merge date")?;
+        let date_format = time::macros::format_description!(
+            "on [month repr:long] [day], [year], at [hour repr:12]:[minute] [period]"
+        );
+        let tz_format = time::macros::format_description!(
+            "[offset_hour padding:zero sign:mandatory]:[offset_minute]"
+        );
+        let (merged_at, show_tz) = if let Ok(local_offset) = time::UtcOffset::current_local_offset()
+        {
+            let merged_at = merged_at.to_offset(local_offset);
+            (merged_at, false)
+        } else {
+            (merged_at, true)
+        };
+        print!(
+            "{bright_magenta}Merged{reset} by {merged_by} {}",
+            merged_at.format(date_format)?
+        );
+        if show_tz {
+            print!("{}", merged_at.format(tz_format)?);
+        }
+        println!();
+    } else {
+        let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+        let query = forgejo_api::structs::RepoGetPullRequestCommitsQuery {
+            page: None,
+            limit: Some(u32::MAX),
+            verification: Some(false),
+            files: Some(false),
+        };
+        let (_commit_headers, commits) = api
+            .repo_get_pull_request_commits(repo.owner(), repo.name(), pr_number, query)
+            .await?;
+        let latest_commit = commits
+            .iter()
+            .max_by_key(|x| x.created)
+            .ok_or_eyre("no commits in pr")?;
+        let sha = latest_commit
+            .sha
+            .as_deref()
+            .ok_or_eyre("commit does not have sha")?;
+        let query = forgejo_api::structs::RepoGetCombinedStatusByRefQuery {
+            page: None,
+            limit: Some(u32::MAX),
+        };
+        let combined_status = api
+            .repo_get_combined_status_by_ref(repo.owner(), repo.name(), sha, query)
+            .await?;
+
+        let state = pr.state.ok_or_eyre("pr does not have state")?;
+        let is_draft = pr.title.as_deref().is_some_and(|s| s.starts_with("WIP:"));
+        match state {
+            StateType::Open => {
+                if is_draft {
+                    println!("{light_grey}Draft{reset} {dash} Can't merge draft PR")
+                } else {
+                    print!("{bright_green}Open{reset} {dash} ");
+                    let mergable = pr.mergeable.ok_or_eyre("pr does not have mergable")?;
+                    if mergable {
+                        println!("Can be merged");
+                    } else {
+                        println!("{bright_red}Merge conflicts{reset}");
+                    }
+                }
+            }
+            StateType::Closed => println!("{bright_red}Closed{reset} {dash} Reopen to merge"),
+        }
+
+        let commit_statuses = combined_status
+            .statuses
+            .ok_or_eyre("combined status does not have status list")?;
+        for status in commit_statuses {
+            let state = status
+                .status
+                .as_deref()
+                .ok_or_eyre("status does not have status")?;
+            let context = status
+                .context
+                .as_deref()
+                .ok_or_eyre("status does not have context")?;
+            print!("{bullet} ");
+            match state {
+                "success" => print!("{bright_green}Success{reset}"),
+                "pending" => print!("{yellow}Pending{reset}"),
+                "failure" => print!("{bright_red}Failure{reset}"),
+                _ => eyre::bail!("invalid status"),
+            };
+            println!(" {dash} {context}");
+        }
+    }
+
+    Ok(())
 }
 
 async fn edit_pr_labels(
