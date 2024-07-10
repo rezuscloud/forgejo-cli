@@ -213,13 +213,16 @@ fn url_strip_repo_name(mut url: Url) -> eyre::Result<(Url, RepoName)> {
     Ok((url, RepoName { owner, name }))
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RepoName {
     owner: String,
     name: String,
 }
 
 impl RepoName {
+    pub fn new(owner: String, name: String) -> Self {
+        Self { owner, name }
+    }
     pub fn owner(&self) -> &str {
         &self.owner
     }

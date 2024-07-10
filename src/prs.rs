@@ -288,11 +288,11 @@ impl PrCommand {
                 match command.unwrap_or(ViewCommand::Body) {
                     ViewCommand::Body => view_pr(&repo, &api, id).await?,
                     ViewCommand::Comment { idx } => {
-                        let id = try_get_pr_number(&repo, &api, id).await?;
+                        let (repo, id) = try_get_pr_number(&repo, &api, id).await?;
                         crate::issues::view_comment(&repo, &api, id, idx).await?
                     }
                     ViewCommand::Comments => {
-                        let id = try_get_pr_number(&repo, &api, id).await?;
+                        let (repo, id) = try_get_pr_number(&repo, &api, id).await?;
                         crate::issues::view_comments(&repo, &api, id).await?
                     }
                     ViewCommand::Labels => view_pr_labels(&repo, &api, id).await?,
@@ -318,16 +318,16 @@ impl PrCommand {
                 let pr = pr.map(|pr| pr.number);
                 match command {
                     EditCommand::Title { new_title } => {
-                        let pr = try_get_pr_number(&repo, &api, pr).await?;
-                        crate::issues::edit_title(&repo, &api, pr, new_title).await?
+                        let (repo, id) = try_get_pr_number(&repo, &api, pr).await?;
+                        crate::issues::edit_title(&repo, &api, id, new_title).await?
                     }
                     EditCommand::Body { new_body } => {
-                        let pr = try_get_pr_number(&repo, &api, pr).await?;
-                        crate::issues::edit_body(&repo, &api, pr, new_body).await?
+                        let (repo, id) = try_get_pr_number(&repo, &api, pr).await?;
+                        crate::issues::edit_body(&repo, &api, id, new_body).await?
                     }
                     EditCommand::Comment { idx, new_body } => {
-                        let pr = try_get_pr_number(&repo, &api, pr).await?;
-                        crate::issues::edit_comment(&repo, &api, pr, idx, new_body).await?
+                        let (repo, id) = try_get_pr_number(&repo, &api, pr).await?;
+                        crate::issues::edit_comment(&repo, &api, id, idx, new_body).await?
                     }
                     EditCommand::Labels { add, rm } => {
                         edit_pr_labels(&repo, &api, pr, add, rm).await?
@@ -335,16 +335,16 @@ impl PrCommand {
                 }
             }
             Close { pr, with_msg } => {
-                let pr = try_get_pr_number(&repo, &api, pr.map(|pr| pr.number)).await?;
+                let (repo, pr) = try_get_pr_number(&repo, &api, pr.map(|pr| pr.number)).await?;
                 crate::issues::close_issue(&repo, &api, pr, with_msg).await?
             }
             Checkout { pr, branch_name } => checkout_pr(&repo, &api, pr, branch_name).await?,
             Browse { id } => {
-                let id = try_get_pr_number(&repo, &api, id.map(|id| id.number)).await?;
+                let (repo, id) = try_get_pr_number(&repo, &api, id.map(|pr| pr.number)).await?;
                 browse_pr(&repo, &api, id).await?
             }
             Comment { pr, body } => {
-                let pr = try_get_pr_number(&repo, &api, pr.map(|pr| pr.number)).await?;
+                let (repo, pr) = try_get_pr_number(&repo, &api, pr.map(|pr| pr.number)).await?;
                 crate::issues::add_comment(&repo, &api, pr, body).await?
             }
         }
@@ -414,6 +414,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::R
     } = crate::special_render();
     let pr = try_get_pr(repo, api, id).await?;
     let id = pr.number.ok_or_eyre("pr does not have number")?;
+    let repo = repo_name_from_pr(&pr)?;
 
     let mut additions = 0;
     let mut deletions = 0;
@@ -588,6 +589,7 @@ fn darken(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
 
 async fn view_pr_status(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, id).await?;
+    let repo = repo_name_from_pr(&pr)?;
 
     let SpecialRender {
         bright_magenta,
@@ -708,7 +710,9 @@ async fn edit_pr_labels(
     add: Vec<String>,
     rm: Vec<String>,
 ) -> eyre::Result<()> {
-    let pr_number = try_get_pr_number(repo, api, pr).await?;
+    let pr = try_get_pr(repo, api, pr).await?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let repo = repo_name_from_pr(&pr)?;
 
     let query = forgejo_api::structs::IssueListLabelsQuery {
         limit: Some(u32::MAX),
@@ -859,6 +863,7 @@ async fn merge_pr(
     let repo_info = api.repo_get(repo.owner(), repo.name()).await?;
 
     let pr_info = try_get_pr(repo, api, pr).await?;
+    let repo = repo_name_from_pr(&pr_info)?;
     let pr_html_url = pr_info
         .html_url
         .as_ref()
@@ -945,17 +950,7 @@ async fn checkout_pr(
         PrNumber::This(_) => api.repo_get(repo.owner(), repo.name()).await?,
     };
 
-    let repo_owner = remote_repo
-        .owner
-        .as_ref()
-        .ok_or_eyre("repo does not have owner")?
-        .login
-        .as_deref()
-        .ok_or_eyre("owner does not have login")?;
-    let repo_name = remote_repo
-        .name
-        .as_ref()
-        .ok_or_eyre("repo does not have name")?;
+    let (repo_owner, repo_name) = repo_name_from_repo(&remote_repo)?;
 
     let pull_data = api
         .repo_get_pull_request(repo_owner, repo_name, pr.number())
@@ -1082,13 +1077,15 @@ async fn view_diff(
     patch: bool,
     editor: bool,
 ) -> eyre::Result<()> {
-    let pr = try_get_pr_number(repo, api, pr).await?;
+    let pr = try_get_pr(repo, api, pr).await?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let repo = repo_name_from_pr(&pr)?;
     let diff_type = if patch { "patch" } else { "diff" };
     let diff = api
         .repo_download_pull_diff_or_patch(
             repo.owner(),
             repo.name(),
-            pr,
+            pr_number,
             diff_type,
             forgejo_api::structs::RepoDownloadPullDiffOrPatchQuery::default(),
         )
@@ -1106,7 +1103,9 @@ async fn view_diff(
 }
 
 async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre::Result<()> {
-    let pr = try_get_pr_number(repo, api, pr).await?;
+    let pr = try_get_pr(repo, api, pr).await?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let repo = repo_name_from_pr(&pr)?;
     let crate::SpecialRender {
         bright_red,
         bright_green,
@@ -1119,7 +1118,7 @@ async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre:
         ..Default::default()
     };
     let (_, files) = api
-        .repo_get_pull_request_files(repo.owner(), repo.name(), pr, query)
+        .repo_get_pull_request_files(repo.owner(), repo.name(), pr_number, query)
         .await?;
     let max_additions = files
         .iter()
@@ -1150,14 +1149,16 @@ async fn view_pr_commits(
     pr: Option<u64>,
     oneline: bool,
 ) -> eyre::Result<()> {
-    let pr = try_get_pr_number(repo, api, pr).await?;
+    let pr = try_get_pr(repo, api, pr).await?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let repo = repo_name_from_pr(&pr)?;
     let query = RepoGetPullRequestCommitsQuery {
         limit: Some(u32::MAX),
         files: Some(false),
         ..Default::default()
     };
     let (_headers, commits) = api
-        .repo_get_pull_request_commits(repo.owner(), repo.name(), pr, query)
+        .repo_get_pull_request_commits(repo.owner(), repo.name(), pr_number, query)
         .await?;
 
     let max_additions = commits
@@ -1251,14 +1252,17 @@ async fn try_get_pr_number(
     repo: &RepoName,
     api: &Forgejo,
     number: Option<u64>,
-) -> eyre::Result<u64> {
+) -> eyre::Result<(RepoName, u64)> {
     let pr = match number {
-        Some(number) => number,
-        None => guess_pr(repo, api)
-            .await
-            .wrap_err("could not guess pull request number, please specify")?
-            .number
-            .ok_or_eyre("pr does not have number")?,
+        Some(number) => (repo.clone(), number),
+        None => {
+            let pr = guess_pr(repo, api)
+                .await
+                .wrap_err("could not guess pull request number, please specify")?;
+            let number = pr.number.ok_or_eyre("pr does not have number")?;
+            let repo = repo_name_from_pr(&pr)?;
+            (repo, number)
+        }
     };
     Ok(pr)
 }
@@ -1419,6 +1423,17 @@ fn repo_name_from_repo(repo: &forgejo_api::structs::Repository) -> eyre::Result<
         .ok_or_eyre("repo owner does not have name")?;
     let name = repo.name.as_deref().ok_or_eyre("repo does not have name")?;
     Ok((owner, name))
+}
+
+fn repo_name_from_pr(pr: &forgejo_api::structs::PullRequest) -> eyre::Result<RepoName> {
+    let base_branch = pr.base.as_ref().ok_or_eyre("pr does not have base")?;
+    let repo = base_branch
+        .repo
+        .as_ref()
+        .ok_or_eyre("branch does not have repo")?;
+    let (owner, name) = repo_name_from_repo(repo)?;
+    let repo_name = RepoName::new(owner.to_owned(), name.to_owned());
+    Ok(repo_name)
 }
 
 //async fn guess_pr(
