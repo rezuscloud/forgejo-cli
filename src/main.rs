@@ -136,8 +136,9 @@ async fn update_msg(check: bool) -> eyre::Result<()> {
 }
 
 async fn readline(msg: &str) -> eyre::Result<String> {
+    use std::io::Write;
     print!("{msg}");
-    tokio::io::stdout().flush().await?;
+    std::io::stdout().flush()?;
     tokio::task::spawn_blocking(|| {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
