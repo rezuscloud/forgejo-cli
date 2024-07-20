@@ -45,9 +45,11 @@ pub enum PrSubcommand {
     /// Create a new pull request
     Create {
         /// The branch to merge onto.
-        base: String,
+        #[clap(long)]
+        base: Option<String>,
         /// The branch to pull changes from.
-        head: String,
+        #[clap(long)]
+        head: Option<String>,
         /// What to name the new pull request.
         ///
         /// Prefix with "WIP: " to mark this PR as a draft.
@@ -788,33 +790,115 @@ async fn create_pr(
     repo: &RepoName,
     api: &Forgejo,
     title: String,
-    base: String,
-    head: String,
+    base: Option<String>,
+    head: Option<String>,
     body: Option<String>,
 ) -> eyre::Result<()> {
-    let (repo_owner, repo_name, base, head) = match base.strip_prefix("^") {
-        Some(parent_base) => {
-            let mut repo_data = api.repo_get(repo.owner(), repo.name()).await?;
-            let parent = *repo_data
-                .parent
-                .take()
-                .ok_or_eyre("cannot create pull request upstream, there is no upstream")?;
-            let parent_owner = parent
-                .owner
-                .ok_or_eyre("parent has no owner")?
-                .login
-                .ok_or_eyre("parent owner has no login")?;
-            let parent_name = parent.name.ok_or_eyre("parent has no name")?;
+    let mut repo_data = api.repo_get(repo.owner(), repo.name()).await?;
 
-            (
-                parent_owner,
-                parent_name,
-                parent_base.to_owned(),
-                format!("{}:{}", repo.owner(), head),
-            )
+    let head = match head {
+        Some(head) => head,
+        None => {
+            let local_repo = git2::Repository::open(".")?;
+            let head = local_repo.head()?;
+            eyre::ensure!(
+                head.is_branch(),
+                "HEAD is not on branch, can't guess head branch"
+            );
+
+            let branch_ref = head
+                .name()
+                .ok_or_eyre("current branch does not have utf8 name")?;
+            let upstream_remote = local_repo.branch_upstream_remote(branch_ref)?;
+            let remote_name = upstream_remote
+                .as_str()
+                .ok_or_eyre("remote does not have utf8 name")?;
+
+            let remote = local_repo.find_remote(remote_name)?;
+            let remote_url_s = remote.url().ok_or_eyre("remote does not have utf8 url")?;
+            let remote_url = url::Url::parse(remote_url_s)?;
+
+            let clone_url = repo_data
+                .clone_url
+                .as_ref()
+                .ok_or_eyre("repo does not have git url")?;
+            let html_url = repo_data
+                .html_url
+                .as_ref()
+                .ok_or_eyre("repo does not have html url")?;
+            let ssh_url = repo_data
+                .ssh_url
+                .as_ref()
+                .ok_or_eyre("repo does not have ssh url")?;
+            eyre::ensure!(
+                &remote_url == clone_url || &remote_url == html_url || &remote_url == ssh_url,
+                "branch does not track that repo"
+            );
+
+            let upstream_branch = local_repo.branch_upstream_name(branch_ref)?;
+            let upstream_branch = upstream_branch
+                .as_str()
+                .ok_or_eyre("remote branch does not have utf8 name")?;
+            upstream_branch
+                .rsplit_once("/")
+                .map(|(_, b)| b)
+                .unwrap_or(upstream_branch)
+                .to_owned()
         }
-        None => (repo.owner().to_owned(), repo.name().to_owned(), base, head),
     };
+
+    let (base, base_is_parent) = match base {
+        Some(base) => match base.strip_prefix("^") {
+            Some(stripped) if stripped.is_empty() => (None, true),
+            Some(stripped) => (Some(stripped.to_owned()), true),
+            None => (Some(base), false),
+        },
+        None => (None, false),
+    };
+
+    let (repo_owner, repo_name, base_repo, head) = if base_is_parent {
+        let parent_repo = *repo_data
+            .parent
+            .take()
+            .ok_or_eyre("cannot create pull request upstream, there is no upstream")?;
+        let parent_owner = parent_repo
+            .owner
+            .as_ref()
+            .ok_or_eyre("parent has no owner")?
+            .login
+            .as_deref()
+            .ok_or_eyre("parent owner has no login")?
+            .to_owned();
+        let parent_name = parent_repo
+            .name
+            .as_deref()
+            .ok_or_eyre("parent has no name")?
+            .to_owned();
+
+        (
+            parent_owner,
+            parent_name,
+            parent_repo,
+            format!("{}:{}", repo.owner(), head),
+        )
+    } else {
+        (
+            repo.owner().to_owned(),
+            repo.name().to_owned(),
+            repo_data,
+            head,
+        )
+    };
+
+    let base = match base {
+        Some(base) => base,
+        None => base_repo
+            .default_branch
+            .as_deref()
+            .ok_or_eyre("repo does not have default branch")?
+            .to_owned(),
+    };
+
     let body = match body {
         Some(body) => body,
         None => {
