@@ -289,7 +289,7 @@ impl std::fmt::Display for RepoArgError {
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
     Create {
-        repo: RepoArg,
+        repo: String,
 
         // flags
         #[clap(long, short)]
@@ -361,7 +361,7 @@ impl RepoCommand {
                     gitignores: None,
                     issue_labels: None,
                     license: None,
-                    name: format!("{}/{}", repo.owner, repo.name),
+                    name: repo,
                     object_format_name: None,
                     private: Some(private),
                     readme: Some(String::new()),
