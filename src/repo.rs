@@ -326,6 +326,9 @@ pub enum RepoCommand {
     Unstar {
         repo: RepoArg,
     },
+    Delete {
+        repo: RepoArg,
+    },
     Browse {
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
@@ -662,6 +665,24 @@ impl RepoCommand {
                 api.user_current_delete_star(name.owner(), name.name())
                     .await?;
                 println!("Removed star from {}/{}", name.owner(), name.name());
+            }
+            RepoCommand::Delete { repo } => {
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let api = keys.get_api(&repo.host_url()).await?;
+                let name = repo.name().unwrap();
+                print!(
+                    "Are you sure you want to delete {}/{}? (y/N) ",
+                    name.owner(),
+                    name.name()
+                );
+                let user_response = crate::readline("").await?;
+                let yes = matches!(user_response.trim(), "y" | "Y" | "yes" | "Yes");
+                if yes {
+                    api.repo_delete(name.owner(), name.name()).await?;
+                    println!("Deleted {}/{}", name.owner(), name.name());
+                } else {
+                    println!("Did not delete");
+                }
             }
             RepoCommand::Browse { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
