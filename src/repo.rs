@@ -305,6 +305,7 @@ pub enum RepoCommand {
         push: bool,
     },
     Fork {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
         #[clap(long)]
         name: Option<String>,
@@ -312,24 +313,30 @@ pub enum RepoCommand {
         remote: Option<String>,
     },
     View {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
     Clone {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
         path: Option<PathBuf>,
     },
     Star {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
     Unstar {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
     Delete {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
     Browse {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,

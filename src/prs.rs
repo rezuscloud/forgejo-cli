@@ -60,12 +60,13 @@ pub enum PrSubcommand {
         #[clap(long)]
         body: Option<String>,
         /// The repo to create this issue on
-        #[clap(long, short)]
+        #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
     },
     /// View the contents of a pull request
     View {
         /// The pull request to view.
+        #[clap(id = "[REPO#]ID")]
         id: Option<IssueId>,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
@@ -73,6 +74,7 @@ pub enum PrSubcommand {
     /// View the mergability and CI status of a pull request
     Status {
         /// The pull request to view.
+        #[clap(id = "[REPO#]ID")]
         id: Option<IssueId>,
     },
     /// Checkout a pull request in a new branch
@@ -80,6 +82,7 @@ pub enum PrSubcommand {
         /// The pull request to check out.
         ///
         /// Prefix with ^ to get a pull request from the parent repo.
+        #[clap(id = "ID")]
         pr: PrNumber,
         /// The name to give the newly created branch.
         ///
@@ -90,6 +93,7 @@ pub enum PrSubcommand {
     /// Add a comment on a pull request
     Comment {
         /// The pull request to comment on.
+        #[clap(id = "[REPO#]ID")]
         pr: Option<IssueId>,
         /// The text content of the comment.
         ///
@@ -99,6 +103,7 @@ pub enum PrSubcommand {
     /// Edit the contents of a pull request
     Edit {
         /// The pull request to edit.
+        #[clap(id = "[REPO#]ID")]
         pr: Option<IssueId>,
         #[clap(subcommand)]
         command: EditCommand,
@@ -106,6 +111,7 @@ pub enum PrSubcommand {
     /// Close a pull request, without merging.
     Close {
         /// The pull request to close.
+        #[clap(id = "[REPO#]ID")]
         pr: Option<IssueId>,
         /// A comment to add before closing.
         ///
@@ -116,6 +122,7 @@ pub enum PrSubcommand {
     /// Merge a pull request
     Merge {
         /// The pull request to merge.
+        #[clap(id = "[REPO#]ID")]
         pr: Option<IssueId>,
         /// The merge style to use.
         #[clap(long, short = 'M')]
@@ -133,6 +140,7 @@ pub enum PrSubcommand {
     /// Open a pull request in your browser
     Browse {
         /// The pull request to open in your browser.
+        #[clap(id = "[REPO#]ID")]
         id: Option<IssueId>,
     },
 }

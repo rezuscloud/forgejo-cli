@@ -23,25 +23,28 @@ pub enum IssueSubcommand {
         title: String,
         #[clap(long)]
         body: Option<String>,
-        #[clap(long, short)]
+        #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
     },
     Edit {
+        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         #[clap(subcommand)]
         command: EditCommand,
     },
     Comment {
+        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         body: Option<String>,
     },
     Close {
+        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         #[clap(long, short)]
         with_msg: Option<Option<String>>,
     },
     Search {
-        #[clap(long, short)]
+        #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
         query: Option<String>,
         #[clap(long, short)]
@@ -54,11 +57,13 @@ pub enum IssueSubcommand {
         state: Option<State>,
     },
     View {
+        #[clap(id = "[REPO#]ID")]
         id: IssueId,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
     Browse {
+        #[clap(id = "[REPO#]ID")]
         id: IssueId,
     },
 }

@@ -16,7 +16,7 @@ use crate::{
 pub struct ReleaseCommand {
     #[clap(long, short = 'R')]
     remote: Option<String>,
-    #[clap(long, short)]
+    #[clap(long, short, id = "[HOST/]OWNER/REPO")]
     repo: Option<RepoArg>,
     #[clap(subcommand)]
     command: ReleaseSubcommand,
