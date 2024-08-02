@@ -218,6 +218,7 @@ async fn create_release(
     };
 
     let release_opt = forgejo_api::structs::CreateReleaseOption {
+        hide_archive_links: None,
         body,
         draft: Some(draft),
         name: Some(name.clone()),
@@ -247,7 +248,7 @@ async fn create_release(
         };
         let id = release
             .id
-            .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+            .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
         api.repo_create_release_attachment(
             repo.owner(),
             repo.name(),
@@ -287,6 +288,7 @@ async fn edit_release(
         None => None,
     };
     let release_edit = forgejo_api::structs::EditReleaseOption {
+        hide_archive_links: None,
         name: rename,
         tag_name: tag,
         body,
@@ -296,7 +298,7 @@ async fn edit_release(
     };
     let id = release
         .id
-        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+        .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
     api.repo_edit_release(repo.owner(), repo.name(), id, release_edit)
         .await?;
     Ok(())
@@ -449,7 +451,7 @@ async fn create_asset(
     let id = find_release(repo, api, &release)
         .await?
         .id
-        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+        .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
     let query = RepoCreateReleaseAttachmentQuery {
         name: Some(asset.to_owned()),
     };
@@ -484,10 +486,10 @@ async fn delete_asset(
         .ok_or_else(|| eyre!("asset not found"))?;
     let release_id = release
         .id
-        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+        .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
     let asset_id = asset
         .id
-        .ok_or_else(|| eyre::eyre!("asset does not have id"))?;
+        .ok_or_else(|| eyre::eyre!("asset does not have id"))? as u64;
     api.repo_delete_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
         .await?;
     println!("Removed attachment `{}` from {}", asset_name, release_name);
@@ -530,10 +532,12 @@ async fn download_asset(
                 .ok_or_else(|| eyre!("asset not found"))?;
             let release_id = release
                 .id
-                .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+                .ok_or_else(|| eyre::eyre!("release does not have id"))?
+                as u64;
             let asset_id = asset
                 .id
-                .ok_or_else(|| eyre::eyre!("asset does not have id"))?;
+                .ok_or_else(|| eyre::eyre!("asset does not have id"))?
+                as u64;
             api.download_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
                 .await?
                 .to_vec()
@@ -593,7 +597,7 @@ async fn delete_release(
         let id = find_release(repo, api, &name)
             .await?
             .id
-            .ok_or_else(|| eyre::eyre!("release does not have id"))?;
+            .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
         api.repo_delete_release(repo.owner(), repo.name(), id)
             .await?;
     }

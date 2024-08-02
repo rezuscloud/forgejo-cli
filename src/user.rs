@@ -613,7 +613,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
             .ok_or_eyre("actor does not have name")?;
         let op_type = activity
             .op_type
-            .as_deref()
+            .as_ref()
             .ok_or_eyre("activity does not have op type")?;
 
         // do not add ? to these. they are here to make each branch smaller
@@ -643,8 +643,9 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
         }
 
         print!("");
+        use forgejo_api::structs::ActivityOpType;
         match op_type {
-            "create_repo" => {
+            ActivityOpType::CreateRepo => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -664,7 +665,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     }
                 }
             }
-            "rename_repo" => {
+            ActivityOpType::RenameRepo => {
                 let repo = repo?;
                 let content = content?;
                 let full_name = repo
@@ -673,7 +674,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     .ok_or_eyre("repo does not have full name")?;
                 println!("{bold}{actor_name}{reset} renamed repository from {bold}{yellow}\"{content}\"{reset} to {bold}{yellow}{full_name}{reset}");
             }
-            "star_repo" => {
+            ActivityOpType::StarRepo => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -683,7 +684,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     "{bold}{actor_name}{reset} starred repository {bold}{yellow}{full_name}{reset}"
                 );
             }
-            "watch_repo" => {
+            ActivityOpType::WatchRepo => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -693,7 +694,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     "{bold}{actor_name}{reset} watched repository {bold}{yellow}{full_name}{reset}"
                 );
             }
-            "commit_repo" => {
+            ActivityOpType::CommitRepo => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -708,15 +709,15 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     println!("{bold}{actor_name}{reset} pushed to {bold}{bright_cyan}{branch}{reset} on {bold}{yellow}{full_name}{reset}");
                 }
             }
-            "create_issue" => {
+            ActivityOpType::CreateIssue => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} opened issue {bold}{yellow}{name}#{id}{reset}");
             }
-            "create_pull_request" => {
+            ActivityOpType::CreatePullRequest => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} created pull request {bold}{yellow}{name}#{id}{reset}");
             }
-            "transfer_repo" => {
+            ActivityOpType::TransferRepo => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -725,7 +726,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                 let content = content?;
                 println!("{bold}{actor_name}{reset} transfered repository {bold}{yellow}{content}{reset} to {bold}{yellow}{full_name}{reset}");
             }
-            "push_tag" => {
+            ActivityOpType::PushTag => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -738,35 +739,35 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     .unwrap_or(ref_name);
                 println!("{bold}{actor_name}{reset} pushed tag {bold}{bright_cyan}{tag}{reset} to {bold}{yellow}{full_name}{reset}");
             }
-            "comment_issue" => {
+            ActivityOpType::CommentIssue => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!(
                     "{bold}{actor_name}{reset} commented on issue {bold}{yellow}{name}#{id}{reset}"
                 );
             }
-            "merge_pull_request" | "auto_merge_pull_request" => {
+            ActivityOpType::MergePullRequest | ActivityOpType::AutoMergePullRequest => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} merged pull request {bold}{yellow}{name}#{id}{reset}");
             }
-            "close_issue" => {
+            ActivityOpType::CloseIssue => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} closed issue {bold}{yellow}{name}#{id}{reset}");
             }
-            "reopen_issue" => {
+            ActivityOpType::ReopenIssue => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!(
                     "{bold}{actor_name}{reset} reopened issue {bold}{yellow}{name}#{id}{reset}"
                 );
             }
-            "close_pull_request" => {
+            ActivityOpType::ClosePullRequest => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} closed pull request {bold}{yellow}{name}#{id}{reset}");
             }
-            "reopen_pull_request" => {
+            ActivityOpType::ReopenPullRequest => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} reopened pull request {bold}{yellow}{name}#{id}{reset}");
             }
-            "delete_tag" => {
+            ActivityOpType::DeleteTag => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -779,7 +780,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     .unwrap_or(ref_name);
                 println!("{bold}{actor_name}{reset} deleted tag {bold}{bright_cyan}{tag}{reset} from {bold}{yellow}{full_name}{reset}");
             }
-            "delete_branch" => {
+            ActivityOpType::DeleteBranch => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -792,22 +793,22 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                     .unwrap_or(ref_name);
                 println!("{bold}{actor_name}{reset} deleted branch {bold}{bright_cyan}{branch}{reset} from {bold}{yellow}{full_name}{reset}");
             }
-            "mirror_sync_push" => {}
-            "mirror_sync_create" => {}
-            "mirror_sync_delete" => {}
-            "approve_pull_request" => {
+            ActivityOpType::MirrorSyncPush => {}
+            ActivityOpType::MirrorSyncCreate => {}
+            ActivityOpType::MirrorSyncDelete => {}
+            ActivityOpType::ApprovePullRequest => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} approved {bold}{yellow}{name}#{id}{reset}");
             }
-            "reject_pull_request" => {
+            ActivityOpType::RejectPullRequest => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} suggested changes for {bold}{yellow}{name}#{id}{reset}");
             }
-            "comment_pull" => {
+            ActivityOpType::CommentPull => {
                 let (name, id) = issue_name(repo?, content?)?;
                 println!("{bold}{actor_name}{reset} commented on pull request {bold}{yellow}{name}#{id}{reset}");
             }
-            "publish_release" => {
+            ActivityOpType::PublishRelease => {
                 let repo = repo?;
                 let full_name = repo
                     .full_name
@@ -816,9 +817,8 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                 let content = content?;
                 println!("{bold}{actor_name}{reset} created release {bold}{bright_cyan}\"{content}\"{reset} to {bold}{yellow}{full_name}{reset}");
             }
-            "pull_review_dismissed" => {}
-            "pull_request_ready_for_review" => {}
-            _ => eyre::bail!("invalid op type"),
+            ActivityOpType::PullReviewDismissed => {}
+            ActivityOpType::PullRequestReadyForReview => {}
         }
     }
     Ok(())

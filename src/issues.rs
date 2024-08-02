@@ -593,7 +593,7 @@ pub async fn edit_comment(
     };
     let id = comment
         .id
-        .ok_or_else(|| eyre::eyre!("comment does not have id"))?;
+        .ok_or_else(|| eyre::eyre!("comment does not have id"))? as u64;
     api.issue_edit_comment(
         repo.owner(),
         repo.name(),
