@@ -603,9 +603,9 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "forgejo-api"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4ca8dec306811ad8b1c9095df65ad0f8960a751dd0ef2625254334fc5fa8f43"
+checksum = "a10f9cefc57c1aafba0f566294e56f2ef7bebbbe333265b9e58b5cad84fa2c50"
 dependencies = [
  "base64ct",
  "bytes",

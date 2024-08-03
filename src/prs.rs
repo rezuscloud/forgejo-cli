@@ -415,7 +415,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::R
         ..
     } = crate::special_render();
     let pr = try_get_pr(repo, api, id).await?;
-    let id = pr.number.ok_or_eyre("pr does not have number")?;
+    let id = pr.number.ok_or_eyre("pr does not have number")? as u64;
     let repo = repo_name_from_pr(&pr)?;
 
     let mut additions = 0;
@@ -634,7 +634,7 @@ async fn view_pr_status(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre
         }
         println!();
     } else {
-        let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+        let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
         let query = forgejo_api::structs::RepoGetPullRequestCommitsQuery {
             page: None,
             limit: Some(u32::MAX),
@@ -713,7 +713,7 @@ async fn edit_pr_labels(
     rm: Vec<String>,
 ) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
     let repo = repo_name_from_pr(&pr)?;
 
     let query = forgejo_api::structs::IssueListLabelsQuery {
@@ -741,7 +741,9 @@ async fn edit_pr_labels(
             .iter()
             .find(|label| label.name.as_ref() == Some(&label_name));
         if let Some(label) = maybe_label {
-            add_ids.push(label.id.ok_or_eyre("label does not have id")?);
+            add_ids.push(serde_json::Value::Number(
+                label.id.ok_or_eyre("label does not have id")?.into(),
+            ));
         } else {
             unknown_labels.push(label_name);
         }
@@ -767,8 +769,14 @@ async fn edit_pr_labels(
         .await?;
     let opts = forgejo_api::structs::DeleteLabelsOption { updated_at: None };
     for id in rm_ids {
-        api.issue_remove_label(repo.owner(), repo.name(), pr_number, id, opts.clone())
-            .await?;
+        api.issue_remove_label(
+            repo.owner(),
+            repo.name(),
+            pr_number,
+            id as u64,
+            opts.clone(),
+        )
+        .await?;
     }
 
     if !unknown_labels.is_empty() {
@@ -989,7 +997,7 @@ async fn merge_pr(
         head_commit_id: None,
         merge_when_checks_succeed: None,
     };
-    let pr_number = pr_info.number.ok_or_eyre("pr does not have number")?;
+    let pr_number = pr_info.number.ok_or_eyre("pr does not have number")? as u64;
     api.repo_merge_pull_request(repo.owner(), repo.name(), pr_number, request)
         .await?;
 
@@ -1162,7 +1170,7 @@ async fn view_diff(
     editor: bool,
 ) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
     let repo = repo_name_from_pr(&pr)?;
     let diff_type = if patch { "patch" } else { "diff" };
     let diff = api
@@ -1188,7 +1196,7 @@ async fn view_diff(
 
 async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
     let repo = repo_name_from_pr(&pr)?;
     let crate::SpecialRender {
         bright_red,
@@ -1234,7 +1242,7 @@ async fn view_pr_commits(
     oneline: bool,
 ) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
     let repo = repo_name_from_pr(&pr)?;
     let query = RepoGetPullRequestCommitsQuery {
         limit: Some(u32::MAX),
@@ -1343,7 +1351,7 @@ async fn try_get_pr_number(
             let pr = guess_pr(repo, api)
                 .await
                 .wrap_err("could not guess pull request number, please specify")?;
-            let number = pr.number.ok_or_eyre("pr does not have number")?;
+            let number = pr.number.ok_or_eyre("pr does not have number")? as u64;
             let repo = repo_name_from_pr(&pr)?;
             (repo, number)
         }
