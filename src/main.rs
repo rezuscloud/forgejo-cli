@@ -13,6 +13,7 @@ mod prs;
 mod release;
 mod repo;
 mod user;
+mod wiki;
 
 #[derive(Parser, Debug)]
 pub struct App {
@@ -30,6 +31,7 @@ pub enum Command {
     Repo(repo::RepoCommand),
     Issue(issues::IssueCommand),
     Pr(prs::PrCommand),
+    Wiki(wiki::WikiCommand),
     #[command(name = "whoami")]
     WhoAmI {
         #[clap(long, short)]
@@ -61,6 +63,7 @@ async fn main() -> eyre::Result<()> {
         Command::Repo(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Issue(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Pr(subcommand) => subcommand.run(&mut keys, host_name).await?,
+        Command::Wiki(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::WhoAmI { remote } => {
             let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref())
                 .wrap_err("could not find host, try specifying with --host")?
