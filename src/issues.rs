@@ -11,6 +11,7 @@ use crate::repo::{RepoArg, RepoInfo, RepoName};
 
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
+    /// The local git remote that points to the repo to operate on.
     #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(subcommand)]

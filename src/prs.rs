@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct PrCommand {
-    /// The git remote to operate on.
+    /// The local git remote that points to the repo to operate on.
     #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(subcommand)]

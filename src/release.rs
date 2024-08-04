@@ -14,8 +14,10 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct ReleaseCommand {
+    /// The local git remote that points to the repo to operate on.
     #[clap(long, short = 'R')]
     remote: Option<String>,
+    /// The name of the repository to operate on.
     #[clap(long, short, id = "[HOST/]OWNER/REPO")]
     repo: Option<RepoArg>,
     #[clap(subcommand)]
