@@ -11,6 +11,7 @@ use crate::repo::{RepoArg, RepoInfo, RepoName};
 
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
+    /// The local git remote that points to the repo to operate on.
     #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(subcommand)]
@@ -19,29 +20,38 @@ pub struct IssueCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum IssueSubcommand {
+    /// Create a new issue on a repo
     Create {
         title: String,
         #[clap(long)]
         body: Option<String>,
-        #[clap(long, short)]
+        #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
     },
+    /// Edit an issue
     Edit {
+        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         #[clap(subcommand)]
         command: EditCommand,
     },
+    /// Add a comment on an issue
     Comment {
+        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         body: Option<String>,
     },
+    /// Close an issue
     Close {
+        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
+        /// A comment to leave on the issue before closing it
         #[clap(long, short)]
         with_msg: Option<Option<String>>,
     },
+    /// Search for an issue in a repo
     Search {
-        #[clap(long, short)]
+        #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
         query: Option<String>,
         #[clap(long, short)]
@@ -53,12 +63,16 @@ pub enum IssueSubcommand {
         #[clap(long, short)]
         state: Option<State>,
     },
+    /// View an issue's info
     View {
+        #[clap(id = "[REPO#]ID")]
         id: IssueId,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
+    /// Open an issue in your browser
     Browse {
+        #[clap(id = "[REPO#]ID")]
         id: IssueId,
     },
 }
@@ -130,12 +144,11 @@ impl From<State> for forgejo_api::structs::IssueListIssuesQueryState {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum EditCommand {
-    Title {
-        new_title: Option<String>,
-    },
-    Body {
-        new_body: Option<String>,
-    },
+    /// Edit an issue's title
+    Title { new_title: Option<String> },
+    /// Edit an issue's text content
+    Body { new_body: Option<String> },
+    /// Edit a comment on an issue
     Comment {
         idx: usize,
         new_body: Option<String>,
@@ -144,8 +157,11 @@ pub enum EditCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ViewCommand {
+    /// View an issue's title and body. The default
     Body,
+    /// View a specific
     Comment { idx: usize },
+    /// List every comment
     Comments,
 }
 

@@ -288,6 +288,7 @@ impl std::fmt::Display for RepoArgError {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
+    /// Creates a new repository
     Create {
         repo: String,
 
@@ -304,32 +305,48 @@ pub enum RepoCommand {
         #[clap(long, short)]
         push: bool,
     },
+    /// Fork a repository onto your account
     Fork {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
         #[clap(long)]
         name: Option<String>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    /// View a repo's info
     View {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    /// Clone a repo's code locally
     Clone {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
         path: Option<PathBuf>,
     },
+    /// Add a star to a repo
     Star {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
+    /// Take away a star from a repo
     Unstar {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
+    /// Delete a repository
+    ///
+    /// This cannot be undone!
     Delete {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
+    /// Open a repository's page in your browser
     Browse {
+        #[clap(id = "[HOST/]OWNER/REPO")]
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
