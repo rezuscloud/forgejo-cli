@@ -14,46 +14,66 @@ pub struct UserCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum UserSubcommand {
+    /// Search for a user by username
     Search {
         /// The name to search for
         query: String,
         #[clap(long, short)]
         page: Option<usize>,
     },
+    /// View a user's profile page
     View {
         /// The name of the user to view
+        ///
+        /// Omit to view your own page
         user: Option<String>,
     },
+    /// Open a user's profile page in your browser
     Browse {
         /// The name of the user to open in your browser
+        ///
+        /// Omit to view your own page
         user: Option<String>,
     },
+    /// Follow a user
     Follow {
         /// The name of the user to follow
         user: String,
     },
+    /// Unfollow a user
     Unfollow {
         /// The name of the user to follow
         user: String,
     },
+    /// List everyone a user's follows
     Following {
         /// The name of the user whose follows to list
+        ///
+        /// Omit to view your own follows
         user: Option<String>,
     },
+    /// List a user's followers
     Followers {
         /// The name of the user whose followers to list
+        ///
+        /// Omit to view your own followers
         user: Option<String>,
     },
+    /// Block a user
     Block {
         /// The name of the user to block
         user: String,
     },
+    /// Unblock a user
     Unblock {
         /// The name of the user to unblock
         user: String,
     },
+    /// List a user's repositories
     Repos {
         /// The name of the user whose repos to list
+        ///
+        /// Omit to view your own repos.
         user: Option<String>,
         /// List starred repos instead of owned repos
         #[clap(long)]
@@ -62,14 +82,21 @@ pub enum UserSubcommand {
         #[clap(long)]
         sort: Option<RepoSortOrder>,
     },
+    /// List the organizations a user is a member of
     Orgs {
         /// The name of the user to view org membership of
+        ///
+        /// Omit to view your own orgs.
         user: Option<String>,
     },
+    /// List a user's recent activity
     Activity {
         /// The name of the user to view the activity of
+        ///
+        /// Omit to view your own activity.
         user: Option<String>,
     },
+    /// Edit your user settings
     #[clap(subcommand)]
     Edit(EditCommand),
 }

@@ -3,10 +3,15 @@ use eyre::OptionExt;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum AuthCommand {
+    /// Log in to an instance.
+    ///
+    /// Opens an auth page in your browser
     Login,
-    Logout {
-        host: String,
-    },
+    /// Deletes login info for an instance
+    Logout { host: String },
+    /// Add an application token for an instance
+    ///
+    /// Use this if `fj auth login` doesn't work
     AddKey {
         /// The domain name of the forgejo instance.
         host: String,
@@ -15,6 +20,7 @@ pub enum AuthCommand {
         /// The key to add. If not present, the key will be read in from stdin.
         key: Option<String>,
     },
+    /// List all instances you're currently logged into
     List,
 }
 

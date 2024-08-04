@@ -24,6 +24,7 @@ pub struct ReleaseCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ReleaseSubcommand {
+    /// Create a new release
     Create {
         name: String,
         #[clap(long, short = 'T')]
@@ -56,6 +57,7 @@ pub enum ReleaseSubcommand {
         #[clap(long, short)]
         prerelease: bool,
     },
+    /// Edit a release's info
     Edit {
         name: String,
         #[clap(long, short = 'n')]
@@ -73,40 +75,45 @@ pub enum ReleaseSubcommand {
         #[clap(long, short)]
         prerelease: Option<bool>,
     },
+    /// Delete a release
     Delete {
         name: String,
         #[clap(long, short = 't')]
         by_tag: bool,
     },
+    /// List all the releases on a repo
     List {
         #[clap(long, short = 'p')]
         include_prerelease: bool,
         #[clap(long, short = 'd')]
         include_draft: bool,
     },
+    /// View a release's info
     View {
         name: String,
         #[clap(long, short = 't')]
         by_tag: bool,
     },
-    Browse {
-        name: Option<String>,
-    },
+    /// Open a release in your browser
+    Browse { name: Option<String> },
+    /// Commands on a release's attached files
     #[clap(subcommand)]
     Asset(AssetCommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum AssetCommand {
+    /// Create a new attachment on a release
     Create {
         release: String,
         path: std::path::PathBuf,
         name: Option<String>,
     },
-    Delete {
-        release: String,
-        asset: String,
-    },
+    /// Remove an attachment from a release
+    Delete { release: String, asset: String },
+    /// Download an attached file
+    ///
+    /// Use `source.zip` or `source.tar.gz` to download the repo archive
     Download {
         release: String,
         asset: String,
