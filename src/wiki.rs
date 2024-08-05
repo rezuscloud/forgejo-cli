@@ -1,5 +1,6 @@
+use base64ct::Encoding;
 use clap::{Args, Subcommand};
-use eyre::OptionExt;
+use eyre::{Context, OptionExt};
 use forgejo_api::Forgejo;
 
 use crate::{
@@ -18,7 +19,14 @@ pub struct WikiCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum WikiSubcommand {
-    Contents { repo: Option<RepoArg> },
+    Contents {
+        repo: Option<RepoArg>,
+    },
+    View {
+        #[clap(long, short)]
+        repo: Option<RepoArg>,
+        page: String,
+    },
 }
 
 impl WikiCommand {
@@ -31,6 +39,7 @@ impl WikiCommand {
 
         match self.command {
             Contents { repo: _ } => wiki_contents(&repo, &api).await?,
+            View { repo: _, page } => view_wiki_page(&repo, &api, &*page).await?,
         }
         Ok(())
     }
@@ -38,14 +47,14 @@ impl WikiCommand {
     fn repo(&self) -> Option<&RepoArg> {
         use WikiSubcommand::*;
         match &self.command {
-            Contents { repo } => repo.as_ref(),
+            Contents { repo } | View { repo, .. } => repo.as_ref(),
         }
     }
 
     fn no_repo_error(&self) -> eyre::Error {
         use WikiSubcommand::*;
         match &self.command {
-            Contents { repo: _ } => eyre::eyre!("couldn't guess repo"),
+            Contents { repo: _ } | View { .. } => eyre::eyre!("couldn't guess repo"),
         }
     }
 }
@@ -68,5 +77,30 @@ async fn wiki_contents(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
         println!("{bullet} {title}");
     }
 
+    Ok(())
+}
+
+async fn view_wiki_page(repo: &RepoName, api: &Forgejo, page: &str) -> eyre::Result<()> {
+    let SpecialRender { bold, reset, .. } = *crate::special_render();
+
+    let page = api
+        .repo_get_wiki_page(repo.owner(), repo.name(), page)
+        .await?;
+
+    let title = page
+        .title
+        .as_deref()
+        .ok_or_eyre("page does not have title")?;
+    println!("{bold}{title}{reset}");
+    println!();
+
+    let contents_b64 = page
+        .content_base64
+        .as_deref()
+        .ok_or_eyre("page does not have content")?;
+    let contents = String::from_utf8(base64ct::Base64::decode_vec(contents_b64)?)
+        .wrap_err("page content is not utf-8")?;
+
+    println!("{}", crate::markdown(&contents));
     Ok(())
 }
