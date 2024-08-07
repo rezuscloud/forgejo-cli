@@ -600,65 +600,7 @@ impl RepoCommand {
 
                 let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
 
-                let SpecialRender {
-                    fancy,
-                    hide_cursor,
-                    show_cursor,
-                    clear_line,
-                    ..
-                } = *crate::special_render();
-
-                let auth = auth_git2::GitAuthenticator::new();
-                let git_config = git2::Config::open_default()?;
-
-                let mut options = git2::FetchOptions::new();
-                let mut callbacks = git2::RemoteCallbacks::new();
-                callbacks.credentials(auth.credentials(&git_config));
-
-                if fancy {
-                    print!("{hide_cursor}");
-                    print!("   Preparing...");
-                    let _ = std::io::stdout().flush();
-
-                    callbacks.transfer_progress(|progress| {
-                        print!("{clear_line}\r");
-                        if progress.received_objects() == progress.total_objects() {
-                            if progress.indexed_deltas() == progress.total_deltas() {
-                                print!("Finishing up...");
-                            } else {
-                                let percent = 100.0 * (progress.indexed_deltas() as f64)
-                                    / (progress.total_deltas() as f64);
-                                print!("   Resolving... {percent:.01}%");
-                            }
-                        } else {
-                            let bytes = progress.received_bytes();
-                            let percent = 100.0 * (progress.received_objects() as f64)
-                                / (progress.total_objects() as f64);
-                            print!(" Downloading... {percent:.01}%");
-                            match bytes {
-                                0..=1023 => print!(" ({}b)", bytes),
-                                1024..=1048575 => print!(" ({:.01}kb)", (bytes as f64) / 1024.0),
-                                1048576..=1073741823 => {
-                                    print!(" ({:.01}mb)", (bytes as f64) / 1048576.0)
-                                }
-                                1073741824.. => {
-                                    print!(" ({:.01}gb)", (bytes as f64) / 1073741824.0)
-                                }
-                            }
-                        }
-                        let _ = std::io::stdout().flush();
-                        true
-                    });
-                    options.remote_callbacks(callbacks);
-                }
-
-                let local_repo = git2::build::RepoBuilder::new()
-                    .fetch_options(options)
-                    .clone(clone_url.as_str(), &path)?;
-                if fancy {
-                    print!("{clear_line}{show_cursor}\r");
-                }
-                println!("Cloned {} into {}", repo_full_name, path.display());
+                let local_repo = clone_repo(&repo_full_name, &clone_url, &path)?;
 
                 if let Some(parent) = repo_data.parent.as_deref() {
                     let parent_clone_url = parent
@@ -716,4 +658,71 @@ impl RepoCommand {
         };
         Ok(())
     }
+}
+
+pub fn clone_repo(
+    repo_name: &str,
+    url: &url::Url,
+    path: &std::path::Path,
+) -> eyre::Result<git2::Repository> {
+    let SpecialRender {
+        fancy,
+        hide_cursor,
+        show_cursor,
+        clear_line,
+        ..
+    } = *crate::special_render();
+
+    let auth = auth_git2::GitAuthenticator::new();
+    let git_config = git2::Config::open_default()?;
+
+    let mut options = git2::FetchOptions::new();
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(auth.credentials(&git_config));
+
+    if fancy {
+        print!("{hide_cursor}");
+        print!("   Preparing...");
+        let _ = std::io::stdout().flush();
+
+        callbacks.transfer_progress(|progress| {
+            print!("{clear_line}\r");
+            if progress.received_objects() == progress.total_objects() {
+                if progress.indexed_deltas() == progress.total_deltas() {
+                    print!("Finishing up...");
+                } else {
+                    let percent = 100.0 * (progress.indexed_deltas() as f64)
+                        / (progress.total_deltas() as f64);
+                    print!("   Resolving... {percent:.01}%");
+                }
+            } else {
+                let bytes = progress.received_bytes();
+                let percent = 100.0 * (progress.received_objects() as f64)
+                    / (progress.total_objects() as f64);
+                print!(" Downloading... {percent:.01}%");
+                match bytes {
+                    0..=1023 => print!(" ({}b)", bytes),
+                    1024..=1048575 => print!(" ({:.01}kb)", (bytes as f64) / 1024.0),
+                    1048576..=1073741823 => {
+                        print!(" ({:.01}mb)", (bytes as f64) / 1048576.0)
+                    }
+                    1073741824.. => {
+                        print!(" ({:.01}gb)", (bytes as f64) / 1073741824.0)
+                    }
+                }
+            }
+            let _ = std::io::stdout().flush();
+            true
+        });
+        options.remote_callbacks(callbacks);
+    }
+
+    let local_repo = git2::build::RepoBuilder::new()
+        .fetch_options(options)
+        .clone(url.as_str(), &path)?;
+    if fancy {
+        print!("{clear_line}{show_cursor}\r");
+    }
+    println!("Cloned {} into {}", repo_name, path.display());
+    Ok(local_repo)
 }
