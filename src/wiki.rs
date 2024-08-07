@@ -27,6 +27,11 @@ pub enum WikiSubcommand {
         repo: Option<RepoArg>,
         page: String,
     },
+    Browse {
+        #[clap(long, short)]
+        repo: Option<RepoArg>,
+        page: String,
+    },
 }
 
 impl WikiCommand {
@@ -40,6 +45,7 @@ impl WikiCommand {
         match self.command {
             Contents { repo: _ } => wiki_contents(&repo, &api).await?,
             View { repo: _, page } => view_wiki_page(&repo, &api, &*page).await?,
+            Browse { repo: _, page } => browse_wiki_page(&repo, &api, &*page).await?,
         }
         Ok(())
     }
@@ -47,14 +53,16 @@ impl WikiCommand {
     fn repo(&self) -> Option<&RepoArg> {
         use WikiSubcommand::*;
         match &self.command {
-            Contents { repo } | View { repo, .. } => repo.as_ref(),
+            Contents { repo } | View { repo, .. } | Browse { repo, .. } => repo.as_ref(),
         }
     }
 
     fn no_repo_error(&self) -> eyre::Error {
         use WikiSubcommand::*;
         match &self.command {
-            Contents { repo: _ } | View { .. } => eyre::eyre!("couldn't guess repo"),
+            Contents { repo: _ } | View { .. } | Browse { .. } => {
+                eyre::eyre!("couldn't guess repo")
+            }
         }
     }
 }
@@ -102,5 +110,17 @@ async fn view_wiki_page(repo: &RepoName, api: &Forgejo, page: &str) -> eyre::Res
         .wrap_err("page content is not utf-8")?;
 
     println!("{}", crate::markdown(&contents));
+    Ok(())
+}
+
+async fn browse_wiki_page(repo: &RepoName, api: &Forgejo, page: &str) -> eyre::Result<()> {
+    let page = api
+        .repo_get_wiki_page(repo.owner(), repo.name(), page)
+        .await?;
+    let html_url = page
+        .html_url
+        .as_ref()
+        .ok_or_eyre("page does not have html url")?;
+    open::that(html_url.as_str())?;
     Ok(())
 }
