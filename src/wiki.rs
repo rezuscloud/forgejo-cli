@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use base64ct::Encoding;
 use clap::{Args, Subcommand};
 use eyre::{Context, OptionExt};
@@ -27,6 +29,11 @@ pub enum WikiSubcommand {
         repo: Option<RepoArg>,
         page: String,
     },
+    Clone {
+        repo: Option<RepoArg>,
+        #[clap(long, short)]
+        path: Option<PathBuf>,
+    },
     Browse {
         #[clap(long, short)]
         repo: Option<RepoArg>,
@@ -45,6 +52,7 @@ impl WikiCommand {
         match self.command {
             Contents { repo: _ } => wiki_contents(&repo, &api).await?,
             View { repo: _, page } => view_wiki_page(&repo, &api, &*page).await?,
+            Clone { repo: _, path } => clone_wiki(&repo, &api, path).await?,
             Browse { repo: _, page } => browse_wiki_page(&repo, &api, &*page).await?,
         }
         Ok(())
@@ -53,14 +61,16 @@ impl WikiCommand {
     fn repo(&self) -> Option<&RepoArg> {
         use WikiSubcommand::*;
         match &self.command {
-            Contents { repo } | View { repo, .. } | Browse { repo, .. } => repo.as_ref(),
+            Contents { repo } | View { repo, .. } | Clone { repo, .. } | Browse { repo, .. } => {
+                repo.as_ref()
+            }
         }
     }
 
     fn no_repo_error(&self) -> eyre::Error {
         use WikiSubcommand::*;
         match &self.command {
-            Contents { repo: _ } | View { .. } | Browse { .. } => {
+            Contents { repo: _ } | View { .. } | Clone { .. } | Browse { .. } => {
                 eyre::eyre!("couldn't guess repo")
             }
         }
@@ -122,5 +132,34 @@ async fn browse_wiki_page(repo: &RepoName, api: &Forgejo, page: &str) -> eyre::R
         .as_ref()
         .ok_or_eyre("page does not have html url")?;
     open::that(html_url.as_str())?;
+    Ok(())
+}
+
+async fn clone_wiki(repo: &RepoName, api: &Forgejo, path: Option<PathBuf>) -> eyre::Result<()> {
+    let repo_data = api.repo_get(repo.owner(), repo.name()).await?;
+    let clone_url = repo_data
+        .clone_url
+        .as_ref()
+        .ok_or_eyre("repo does not have clone url")?;
+    let git_stripped = clone_url
+        .as_str()
+        .strip_suffix(".git")
+        .unwrap_or(clone_url.as_str());
+    let clone_url = url::Url::parse(&format!("{}.wiki.git", git_stripped))?;
+
+    let repo_name = repo_data
+        .name
+        .as_deref()
+        .ok_or_eyre("repo does not have name")?;
+    let repo_full_name = repo_data
+        .full_name
+        .as_deref()
+        .ok_or_eyre("repo does not have full name")?;
+    let name = format!("{}'s wiki", repo_full_name);
+
+    let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}-wiki")));
+
+    crate::repo::clone_repo(&name, &clone_url, &path)?;
+
     Ok(())
 }
