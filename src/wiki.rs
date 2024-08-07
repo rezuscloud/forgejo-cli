@@ -47,7 +47,9 @@ impl WikiCommand {
 
         let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref())?;
         let api = keys.get_api(repo.host_url()).await?;
-        let repo = repo.name().ok_or_else(|| self.no_repo_error())?;
+        let repo = repo
+            .name()
+            .ok_or_else(|| eyre::eyre!("couldn't guess repo"))?;
 
         match self.command {
             Contents { repo: _ } => wiki_contents(&repo, &api).await?,
@@ -63,15 +65,6 @@ impl WikiCommand {
         match &self.command {
             Contents { repo } | View { repo, .. } | Clone { repo, .. } | Browse { repo, .. } => {
                 repo.as_ref()
-            }
-        }
-    }
-
-    fn no_repo_error(&self) -> eyre::Error {
-        use WikiSubcommand::*;
-        match &self.command {
-            Contents { repo: _ } | View { .. } | Clone { .. } | Browse { .. } => {
-                eyre::eyre!("couldn't guess repo")
             }
         }
     }
