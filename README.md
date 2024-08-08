@@ -2,6 +2,8 @@
 
 CLI tool for interacting with Forgejo
 
+[Matrix Chat](https://matrix.to/#/#forgejo-cli:cartoon-aa.xyz)
+
 ## Installation
 
 ### Pre-built
