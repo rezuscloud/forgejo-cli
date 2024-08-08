@@ -542,35 +542,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fc0510504f03c51ada170672ac806f1f105a88aa97a5281117e1ddc3368e51a"
 
 [[package]]
-name = "fj"
-version = "0.1.0"
-dependencies = [
- "auth-git2",
- "base64ct",
- "clap",
- "comrak",
- "crossterm",
- "directories",
- "eyre",
- "forgejo-api",
- "futures",
- "git2",
- "hyper 1.4.1",
- "hyper-util",
- "open",
- "rand",
- "semver",
- "serde",
- "serde_json",
- "sha256",
- "soft_assert",
- "time",
- "tokio",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "flate2"
 version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -618,6 +589,35 @@ dependencies = [
  "tokio",
  "url",
  "zeroize",
+]
+
+[[package]]
+name = "forgejo-cli"
+version = "0.1.0"
+dependencies = [
+ "auth-git2",
+ "base64ct",
+ "clap",
+ "comrak",
+ "crossterm",
+ "directories",
+ "eyre",
+ "forgejo-api",
+ "futures",
+ "git2",
+ "hyper 1.4.1",
+ "hyper-util",
+ "open",
+ "rand",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha256",
+ "soft_assert",
+ "time",
+ "tokio",
+ "url",
+ "uuid",
 ]
 
 [[package]]

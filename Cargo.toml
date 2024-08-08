@@ -1,5 +1,5 @@
 [package]
-name = "fj"
+name = "forgejo-cli"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
@@ -9,6 +9,10 @@ keywords = ["cli", "forgejo"]
 categories = ["command-line-utilities", "development-tools"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "fj"
+path = "src/main.rs"
 
 [features]
 update-check = ["dep:semver"]
