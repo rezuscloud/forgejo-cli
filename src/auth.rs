@@ -45,7 +45,7 @@ impl AuthCommand {
                     println!("{host_domain}{host_path} doesn't support easy login");
                     println!();
                     println!("Please visit {applications_url}");
-                    println!("to create a token, and use it to log in with `fj auth add-token`");
+                    println!("to create a token, and use it to log in with `fj auth add-key`");
                 }
             }
             AuthCommand::Logout { host } => {
