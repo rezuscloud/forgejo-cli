@@ -2,7 +2,7 @@ use std::{io::Write, path::PathBuf, str::FromStr};
 
 use clap::Subcommand;
 use eyre::{eyre, OptionExt};
-use forgejo_api::structs::CreateRepoOption;
+use forgejo_api::{structs::CreateRepoOption, Forgejo};
 use url::Url;
 
 use crate::SpecialRender;
@@ -364,107 +364,34 @@ impl RepoCommand {
                 remote,
                 push,
             } => {
-                if remote.is_some() || push {
-                    let repo = git2::Repository::open(".")?;
-
-                    let upstream = remote.as_deref().unwrap_or("origin");
-                    if repo.find_remote(upstream).is_ok() {
-                        eyre::bail!("A remote named \"{upstream}\" already exists");
-                    }
-                }
                 let host = RepoInfo::get_current(host_name, None, None)?;
                 let api = keys.get_api(host.host_url()).await?;
-                let repo_spec = CreateRepoOption {
-                    auto_init: Some(false),
-                    default_branch: Some("main".into()),
-                    description,
-                    gitignores: None,
-                    issue_labels: None,
-                    license: None,
-                    name: repo,
-                    object_format_name: None,
-                    private: Some(private),
-                    readme: Some(String::new()),
-                    template: Some(false),
-                    trust_model: Some(forgejo_api::structs::CreateRepoOptionTrustModel::Default),
-                };
-                let new_repo = api.create_current_user_repo(repo_spec).await?;
-                let html_url = new_repo
-                    .html_url
-                    .as_ref()
-                    .ok_or_else(|| eyre::eyre!("new_repo does not have html_url"))?;
-                println!("created new repo at {}", html_url);
-
-                if remote.is_some() || push {
-                    let repo = git2::Repository::open(".")?;
-
-                    let upstream = remote.as_deref().unwrap_or("origin");
-                    let clone_url = new_repo
-                        .clone_url
-                        .as_ref()
-                        .ok_or_else(|| eyre::eyre!("new_repo does not have clone_url"))?;
-                    let mut remote = repo.remote(upstream, clone_url.as_str())?;
-
-                    if push {
-                        let head = repo.head()?;
-                        if !head.is_branch() {
-                            eyre::bail!("HEAD is not on a branch; cannot push to remote");
-                        }
-                        let branch_shorthand = head
-                            .shorthand()
-                            .ok_or_else(|| eyre!("branch name invalid utf-8"))?
-                            .to_owned();
-                        let branch_name = std::str::from_utf8(head.name_bytes())?.to_owned();
-
-                        let auth = auth_git2::GitAuthenticator::new();
-                        auth.push(&repo, &mut remote, &[&branch_name])?;
-
-                        remote.fetch(&[&branch_shorthand], None, None)?;
-
-                        let mut current_branch = git2::Branch::wrap(head);
-                        current_branch
-                            .set_upstream(Some(&format!("{upstream}/{branch_shorthand}")))?;
-                    }
-                }
+                create_repo(&api, repo, description, private, remote, push).await?;
             }
             RepoCommand::Fork { repo, name, remote } => {
+                fn strip(s: &str) -> &str {
+                    let no_scheme = s
+                        .strip_prefix("https://")
+                        .or_else(|| s.strip_prefix("http://"))
+                        .unwrap_or(s);
+                    let no_trailing_slash = no_scheme.strip_suffix("/").unwrap_or(no_scheme);
+                    no_trailing_slash
+                }
                 match (repo.host.as_deref(), host_name) {
                     (Some(a), Some(b)) => {
-                        fn strip(s: &str) -> &str {
-                            let no_scheme = s
-                                .strip_prefix("https://")
-                                .or_else(|| s.strip_prefix("http://"))
-                                .unwrap_or(s);
-                            let no_trailing_slash =
-                                no_scheme.strip_suffix("/").unwrap_or(no_scheme);
-                            no_trailing_slash
-                        }
                         if strip(a) != strip(b) {
                             eyre::bail!("conflicting hosts {a} and {b}. please only specify one");
                         }
                     }
                     _ => (),
                 }
+
                 let repo_info = RepoInfo::get_current(host_name, Some(&repo), remote.as_deref())?;
                 let api = keys.get_api(&repo_info.host_url()).await?;
                 let repo = repo_info
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
-                let opt = forgejo_api::structs::CreateForkOption {
-                    name,
-                    organization: None,
-                };
-                let new_fork = api.create_fork(repo.owner(), repo.name(), opt).await?;
-                let fork_full_name = new_fork
-                    .full_name
-                    .as_deref()
-                    .ok_or_eyre("fork does not have name")?;
-                println!(
-                    "Forked {}/{} into {}",
-                    repo.owner(),
-                    repo.name(),
-                    fork_full_name
-                );
+                fork_repo(&api, repo, name).await?
             }
             RepoCommand::View { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
@@ -472,143 +399,13 @@ impl RepoCommand {
                 let repo = repo
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
-                let repo = api.repo_get(repo.owner(), repo.name()).await?;
-
-                let SpecialRender {
-                    dash,
-                    body_prefix,
-                    dark_grey,
-                    reset,
-                    ..
-                } = crate::special_render();
-
-                println!("{}", repo.full_name.ok_or_eyre("no full name")?);
-
-                if let Some(parent) = &repo.parent {
-                    println!(
-                        "Fork of {}",
-                        parent.full_name.as_ref().ok_or_eyre("no full name")?
-                    );
-                }
-                if repo.mirror == Some(true) {
-                    if let Some(original) = &repo.original_url {
-                        println!("Mirror of {original}")
-                    }
-                }
-                let desc = repo.description.as_deref().unwrap_or_default();
-                // Don't use body::markdown, this is plain text.
-                if !desc.is_empty() {
-                    if desc.lines().count() > 1 {
-                        println!();
-                    }
-                    for line in desc.lines() {
-                        println!("{dark_grey}{body_prefix}{reset} {line}");
-                    }
-                }
-                println!();
-
-                let lang = repo.language.as_deref().unwrap_or_default();
-                if !lang.is_empty() {
-                    println!("Primary language is {lang}");
-                }
-
-                let stars = repo.stars_count.unwrap_or_default();
-                if stars == 1 {
-                    print!("{stars} star {dash} ");
-                } else {
-                    print!("{stars} stars {dash} ");
-                }
-
-                let watchers = repo.watchers_count.unwrap_or_default();
-                print!("{watchers} watching {dash} ");
-
-                let forks = repo.forks_count.unwrap_or_default();
-                if forks == 1 {
-                    print!("{forks} fork");
-                } else {
-                    print!("{forks} forks");
-                }
-                println!();
-
-                let mut first = true;
-                if repo.has_issues.unwrap_or_default() && repo.external_tracker.is_none() {
-                    let issues = repo.open_issues_count.unwrap_or_default();
-                    if issues == 1 {
-                        print!("{issues} issue");
-                    } else {
-                        print!("{issues} issues");
-                    }
-                    first = false;
-                }
-                if repo.has_pull_requests.unwrap_or_default() {
-                    if !first {
-                        print!(" {dash} ");
-                    }
-                    let pulls = repo.open_pr_counter.unwrap_or_default();
-                    if pulls == 1 {
-                        print!("{pulls} PR");
-                    } else {
-                        print!("{pulls} PRs");
-                    }
-                    first = false;
-                }
-                if repo.has_releases.unwrap_or_default() {
-                    if !first {
-                        print!(" {dash} ");
-                    }
-                    let releases = repo.release_counter.unwrap_or_default();
-                    if releases == 1 {
-                        print!("{releases} release");
-                    } else {
-                        print!("{releases} releases");
-                    }
-                    first = false;
-                }
-                if !first {
-                    println!();
-                }
-                if let Some(external_tracker) = &repo.external_tracker {
-                    if let Some(tracker_url) = &external_tracker.external_tracker_url {
-                        println!("Issue tracker is at {tracker_url}");
-                    }
-                }
-
-                if let Some(html_url) = &repo.html_url {
-                    println!();
-                    println!("View online at {html_url}");
-                }
+                view_repo(&api, &repo).await?
             }
             RepoCommand::Clone { repo, path } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
                 let api = keys.get_api(&repo.host_url()).await?;
                 let name = repo.name().unwrap();
-
-                let repo_data = api.repo_get(name.owner(), name.name()).await?;
-                let clone_url = repo_data
-                    .clone_url
-                    .as_ref()
-                    .ok_or_eyre("repo does not have clone url")?;
-
-                let repo_name = repo_data
-                    .name
-                    .as_deref()
-                    .ok_or_eyre("repo does not have name")?;
-                let repo_full_name = repo_data
-                    .full_name
-                    .as_deref()
-                    .ok_or_eyre("repo does not have full name")?;
-
-                let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
-
-                let local_repo = clone_repo(&repo_full_name, &clone_url, &path)?;
-
-                if let Some(parent) = repo_data.parent.as_deref() {
-                    let parent_clone_url = parent
-                        .clone_url
-                        .as_ref()
-                        .ok_or_eyre("parent repo does not have clone url")?;
-                    local_repo.remote("upstream", parent_clone_url.as_str())?;
-                }
+                cmd_clone_repo(&api, &name, path).await?;
             }
             RepoCommand::Star { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
@@ -629,19 +426,7 @@ impl RepoCommand {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
                 let api = keys.get_api(&repo.host_url()).await?;
                 let name = repo.name().unwrap();
-                print!(
-                    "Are you sure you want to delete {}/{}? (y/N) ",
-                    name.owner(),
-                    name.name()
-                );
-                let user_response = crate::readline("").await?;
-                let yes = matches!(user_response.trim(), "y" | "Y" | "yes" | "Yes");
-                if yes {
-                    api.repo_delete(name.owner(), name.name()).await?;
-                    println!("Deleted {}/{}", name.owner(), name.name());
-                } else {
-                    println!("Did not delete");
-                }
+                delete_repo(&api, &name).await?;
             }
             RepoCommand::Browse { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
@@ -658,6 +443,242 @@ impl RepoCommand {
         };
         Ok(())
     }
+}
+
+pub async fn create_repo(
+    api: &Forgejo,
+    repo: String,
+    description: Option<String>,
+    private: bool,
+    remote: Option<String>,
+    push: bool,
+) -> eyre::Result<()> {
+    if remote.is_some() || push {
+        let repo = git2::Repository::open(".")?;
+
+        let upstream = remote.as_deref().unwrap_or("origin");
+        if repo.find_remote(upstream).is_ok() {
+            eyre::bail!("A remote named \"{upstream}\" already exists");
+        }
+    }
+    let repo_spec = CreateRepoOption {
+        auto_init: Some(false),
+        default_branch: Some("main".into()),
+        description,
+        gitignores: None,
+        issue_labels: None,
+        license: None,
+        name: repo,
+        object_format_name: None,
+        private: Some(private),
+        readme: Some(String::new()),
+        template: Some(false),
+        trust_model: Some(forgejo_api::structs::CreateRepoOptionTrustModel::Default),
+    };
+    let new_repo = api.create_current_user_repo(repo_spec).await?;
+    let html_url = new_repo
+        .html_url
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("new_repo does not have html_url"))?;
+    println!("created new repo at {}", html_url);
+
+    if remote.is_some() || push {
+        let repo = git2::Repository::open(".")?;
+
+        let upstream = remote.as_deref().unwrap_or("origin");
+        let clone_url = new_repo
+            .clone_url
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("new_repo does not have clone_url"))?;
+        let mut remote = repo.remote(upstream, clone_url.as_str())?;
+
+        if push {
+            let head = repo.head()?;
+            if !head.is_branch() {
+                eyre::bail!("HEAD is not on a branch; cannot push to remote");
+            }
+            let branch_shorthand = head
+                .shorthand()
+                .ok_or_else(|| eyre!("branch name invalid utf-8"))?
+                .to_owned();
+            let branch_name = std::str::from_utf8(head.name_bytes())?.to_owned();
+
+            let auth = auth_git2::GitAuthenticator::new();
+            auth.push(&repo, &mut remote, &[&branch_name])?;
+
+            remote.fetch(&[&branch_shorthand], None, None)?;
+
+            let mut current_branch = git2::Branch::wrap(head);
+            current_branch.set_upstream(Some(&format!("{upstream}/{branch_shorthand}")))?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn fork_repo(api: &Forgejo, repo: &RepoName, name: Option<String>) -> eyre::Result<()> {
+    let opt = forgejo_api::structs::CreateForkOption {
+        name,
+        organization: None,
+    };
+    let new_fork = api.create_fork(repo.owner(), repo.name(), opt).await?;
+    let fork_full_name = new_fork
+        .full_name
+        .as_deref()
+        .ok_or_eyre("fork does not have name")?;
+    println!(
+        "Forked {}/{} into {}",
+        repo.owner(),
+        repo.name(),
+        fork_full_name
+    );
+
+    Ok(())
+}
+
+async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
+    let repo = api.repo_get(repo.owner(), repo.name()).await?;
+
+    let SpecialRender {
+        dash,
+        body_prefix,
+        dark_grey,
+        reset,
+        ..
+    } = crate::special_render();
+
+    println!("{}", repo.full_name.ok_or_eyre("no full name")?);
+
+    if let Some(parent) = &repo.parent {
+        println!(
+            "Fork of {}",
+            parent.full_name.as_ref().ok_or_eyre("no full name")?
+        );
+    }
+    if repo.mirror == Some(true) {
+        if let Some(original) = &repo.original_url {
+            println!("Mirror of {original}")
+        }
+    }
+    let desc = repo.description.as_deref().unwrap_or_default();
+    // Don't use body::markdown, this is plain text.
+    if !desc.is_empty() {
+        if desc.lines().count() > 1 {
+            println!();
+        }
+        for line in desc.lines() {
+            println!("{dark_grey}{body_prefix}{reset} {line}");
+        }
+    }
+    println!();
+
+    let lang = repo.language.as_deref().unwrap_or_default();
+    if !lang.is_empty() {
+        println!("Primary language is {lang}");
+    }
+
+    let stars = repo.stars_count.unwrap_or_default();
+    if stars == 1 {
+        print!("{stars} star {dash} ");
+    } else {
+        print!("{stars} stars {dash} ");
+    }
+
+    let watchers = repo.watchers_count.unwrap_or_default();
+    print!("{watchers} watching {dash} ");
+
+    let forks = repo.forks_count.unwrap_or_default();
+    if forks == 1 {
+        print!("{forks} fork");
+    } else {
+        print!("{forks} forks");
+    }
+    println!();
+
+    let mut first = true;
+    if repo.has_issues.unwrap_or_default() && repo.external_tracker.is_none() {
+        let issues = repo.open_issues_count.unwrap_or_default();
+        if issues == 1 {
+            print!("{issues} issue");
+        } else {
+            print!("{issues} issues");
+        }
+        first = false;
+    }
+    if repo.has_pull_requests.unwrap_or_default() {
+        if !first {
+            print!(" {dash} ");
+        }
+        let pulls = repo.open_pr_counter.unwrap_or_default();
+        if pulls == 1 {
+            print!("{pulls} PR");
+        } else {
+            print!("{pulls} PRs");
+        }
+        first = false;
+    }
+    if repo.has_releases.unwrap_or_default() {
+        if !first {
+            print!(" {dash} ");
+        }
+        let releases = repo.release_counter.unwrap_or_default();
+        if releases == 1 {
+            print!("{releases} release");
+        } else {
+            print!("{releases} releases");
+        }
+        first = false;
+    }
+    if !first {
+        println!();
+    }
+    if let Some(external_tracker) = &repo.external_tracker {
+        if let Some(tracker_url) = &external_tracker.external_tracker_url {
+            println!("Issue tracker is at {tracker_url}");
+        }
+    }
+
+    if let Some(html_url) = &repo.html_url {
+        println!();
+        println!("View online at {html_url}");
+    }
+
+    Ok(())
+}
+
+async fn cmd_clone_repo(
+    api: &Forgejo,
+    name: &RepoName,
+    path: Option<std::path::PathBuf>,
+) -> eyre::Result<()> {
+    let repo_data = api.repo_get(name.owner(), name.name()).await?;
+    let clone_url = repo_data
+        .clone_url
+        .as_ref()
+        .ok_or_eyre("repo does not have clone url")?;
+
+    let repo_name = repo_data
+        .name
+        .as_deref()
+        .ok_or_eyre("repo does not have name")?;
+    let repo_full_name = repo_data
+        .full_name
+        .as_deref()
+        .ok_or_eyre("repo does not have full name")?;
+
+    let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
+
+    let local_repo = clone_repo(&repo_full_name, &clone_url, &path)?;
+
+    if let Some(parent) = repo_data.parent.as_deref() {
+        let parent_clone_url = parent
+            .clone_url
+            .as_ref()
+            .ok_or_eyre("parent repo does not have clone url")?;
+        local_repo.remote("upstream", parent_clone_url.as_str())?;
+    }
+
+    Ok(())
 }
 
 pub fn clone_repo(
@@ -725,4 +746,21 @@ pub fn clone_repo(
     }
     println!("Cloned {} into {}", repo_name, path.display());
     Ok(local_repo)
+}
+
+async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
+    print!(
+        "Are you sure you want to delete {}/{}? (y/N) ",
+        name.owner(),
+        name.name()
+    );
+    let user_response = crate::readline("").await?;
+    let yes = matches!(user_response.trim(), "y" | "Y" | "yes" | "Yes");
+    if yes {
+        api.repo_delete(name.owner(), name.name()).await?;
+        println!("Deleted {}/{}", name.owner(), name.name());
+    } else {
+        println!("Did not delete");
+    }
+    Ok(())
 }
