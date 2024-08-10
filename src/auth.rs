@@ -35,12 +35,9 @@ impl AuthCommand {
                     oauth_login(keys, host_url, client_id).await?;
                 } else {
                     let host_domain = host_url.host_str().ok_or_eyre("invalid host")?;
-                    let host_path = host_url.path();
-                    let mut applications_url = host_url.clone();
-                    applications_url
-                        .path_segments_mut()
-                        .map_err(|_| eyre::eyre!("invalid url"))?
-                        .extend(["user", "settings", "applications"]);
+                    let host_path = host_url.path().strip_suffix("/").unwrap_or(host_url.path());
+                    let applications_url =
+                        format!("https://{host_domain}{host_path}/user/settings/applications");
 
                     println!("{host_domain}{host_path} doesn't support easy login");
                     println!();
