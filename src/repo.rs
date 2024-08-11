@@ -95,7 +95,7 @@ impl RepoInfo {
                             remote_name.as_str().ok_or_eyre("remote name invalid")?;
 
                         if let Some(host_url) = &host_url {
-                            let remote = local_repo.find_remote(&remote_name_s)?;
+                            let remote = local_repo.find_remote(remote_name_s)?;
                             let url_s = std::str::from_utf8(remote.url_bytes())?;
                             let url = Url::parse(url_s)?;
 
@@ -154,14 +154,12 @@ impl RepoInfo {
             (repo_url, repo_name)
         } else if repo_name.is_some() {
             (host_url.or(remote_url), repo_name)
+        } else if remote.is_some() {
+            (remote_url, remote_repo_name)
+        } else if host_url.is_none() || remote_url == host_url {
+            (remote_url, remote_repo_name)
         } else {
-            if remote.is_some() {
-                (remote_url, remote_repo_name)
-            } else if host_url.is_none() || remote_url == host_url {
-                (remote_url, remote_repo_name)
-            } else {
-                (host_url, None)
-            }
+            (host_url, None)
         };
 
         let url = url.or_else(fallback_host);
@@ -377,17 +375,14 @@ impl RepoCommand {
                     let no_trailing_slash = no_scheme.strip_suffix("/").unwrap_or(no_scheme);
                     no_trailing_slash
                 }
-                match (repo.host.as_deref(), host_name) {
-                    (Some(a), Some(b)) => {
-                        if strip(a) != strip(b) {
-                            eyre::bail!("conflicting hosts {a} and {b}. please only specify one");
-                        }
+                if let (Some(a), Some(b)) = (repo.host.as_deref(), host_name) {
+                    if strip(a) != strip(b) {
+                        eyre::bail!("conflicting hosts {a} and {b}. please only specify one");
                     }
-                    _ => (),
                 }
 
                 let repo_info = RepoInfo::get_current(host_name, Some(&repo), remote.as_deref())?;
-                let api = keys.get_api(&repo_info.host_url()).await?;
+                let api = keys.get_api(repo_info.host_url()).await?;
                 let repo = repo_info
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
@@ -395,28 +390,28 @@ impl RepoCommand {
             }
             RepoCommand::View { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
-                let api = keys.get_api(&repo.host_url()).await?;
+                let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
-                view_repo(&api, &repo).await?
+                view_repo(&api, repo).await?
             }
             RepoCommand::Clone { repo, path } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
-                let api = keys.get_api(&repo.host_url()).await?;
+                let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
-                cmd_clone_repo(&api, &name, path).await?;
+                cmd_clone_repo(&api, name, path).await?;
             }
             RepoCommand::Star { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
-                let api = keys.get_api(&repo.host_url()).await?;
+                let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 api.user_current_put_star(name.owner(), name.name()).await?;
                 println!("Starred {}/{}!", name.owner(), name.name());
             }
             RepoCommand::Unstar { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
-                let api = keys.get_api(&repo.host_url()).await?;
+                let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 api.user_current_delete_star(name.owner(), name.name())
                     .await?;
@@ -424,9 +419,9 @@ impl RepoCommand {
             }
             RepoCommand::Delete { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
-                let api = keys.get_api(&repo.host_url()).await?;
+                let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
-                delete_repo(&api, &name).await?;
+                delete_repo(&api, name).await?;
             }
             RepoCommand::Browse { name, remote } => {
                 let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
@@ -668,7 +663,7 @@ async fn cmd_clone_repo(
 
     let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
 
-    let local_repo = clone_repo(&repo_full_name, &clone_url, &path)?;
+    let local_repo = clone_repo(repo_full_name, clone_url, &path)?;
 
     if let Some(parent) = repo_data.parent.as_deref() {
         let parent_clone_url = parent
@@ -740,7 +735,7 @@ pub fn clone_repo(
 
     let local_repo = git2::build::RepoBuilder::new()
         .fetch_options(options)
-        .clone(url.as_str(), &path)?;
+        .clone(url.as_str(), path)?;
     if fancy {
         print!("{clear_line}{show_cursor}\r");
     }

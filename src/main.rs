@@ -159,9 +159,9 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     file.write_all(contents.as_bytes()).await?;
     drop(file);
 
-    // Closure acting as a try/catch block so that the temp file is deleted even
+    // Async block acting as a try/catch block so that the temp file is deleted even
     // on errors
-    let res = (|| async {
+    let res = async {
         eprint!("waiting on editor\r");
         let flags = get_editor_flags(&editor);
         let status = tokio::process::Command::new(editor)
@@ -177,7 +177,7 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
         eprint!("                 \r");
 
         Ok(())
-    })()
+    }
     .await;
 
     tokio::fs::remove_file(path).await?;

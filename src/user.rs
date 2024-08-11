@@ -685,12 +685,12 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                         .as_deref()
                         .ok_or_eyre("parent repo does not have full name")?;
                     println!("{bold}{actor_name}{reset} forked repository {bold}{yellow}{parent_full_name}{reset} to {bold}{yellow}{full_name}{reset}");
+                } else if repo.mirror.is_some_and(|b| b) {
+                    println!(
+                        "{bold}{actor_name}{reset} created mirror {bold}{yellow}{full_name}{reset}"
+                    );
                 } else {
-                    if repo.mirror.is_some_and(|b| b) {
-                        println!("{bold}{actor_name}{reset} created mirror {bold}{yellow}{full_name}{reset}");
-                    } else {
-                        println!("{bold}{actor_name}{reset} created repository {bold}{yellow}{full_name}{reset}");
-                    }
+                    println!("{bold}{actor_name}{reset} created repository {bold}{yellow}{full_name}{reset}");
                 }
             }
             ActivityOpType::RenameRepo => {

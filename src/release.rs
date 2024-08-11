@@ -127,7 +127,7 @@ pub enum AssetCommand {
 impl ReleaseCommand {
     pub async fn run(self, keys: &mut KeyInfo, remote_name: Option<&str>) -> eyre::Result<()> {
         let repo = RepoInfo::get_current(remote_name, self.repo.as_ref(), self.remote.as_deref())?;
-        let api = keys.get_api(&repo.host_url()).await?;
+        let api = keys.get_api(repo.host_url()).await?;
         let repo = repo
             .name()
             .ok_or_eyre("couldn't get repo name, try specifying with --repo")?;
@@ -143,7 +143,7 @@ impl ReleaseCommand {
                 prerelease,
             } => {
                 create_release(
-                    &repo, &api, name, create_tag, tag, attach, body, branch, draft, prerelease,
+                    repo, &api, name, create_tag, tag, attach, body, branch, draft, prerelease,
                 )
                 .await?
             }
@@ -154,32 +154,32 @@ impl ReleaseCommand {
                 body,
                 draft,
                 prerelease,
-            } => edit_release(&repo, &api, name, rename, tag, body, draft, prerelease).await?,
+            } => edit_release(repo, &api, name, rename, tag, body, draft, prerelease).await?,
             ReleaseSubcommand::Delete { name, by_tag } => {
-                delete_release(&repo, &api, name, by_tag).await?
+                delete_release(repo, &api, name, by_tag).await?
             }
             ReleaseSubcommand::List {
                 include_prerelease,
                 include_draft,
-            } => list_releases(&repo, &api, include_prerelease, include_draft).await?,
+            } => list_releases(repo, &api, include_prerelease, include_draft).await?,
             ReleaseSubcommand::View { name, by_tag } => {
-                view_release(&repo, &api, name, by_tag).await?
+                view_release(repo, &api, name, by_tag).await?
             }
-            ReleaseSubcommand::Browse { name } => browse_release(&repo, &api, name).await?,
+            ReleaseSubcommand::Browse { name } => browse_release(repo, &api, name).await?,
             ReleaseSubcommand::Asset(subcommand) => match subcommand {
                 AssetCommand::Create {
                     release,
                     path,
                     name,
-                } => create_asset(&repo, &api, release, path, name).await?,
+                } => create_asset(repo, &api, release, path, name).await?,
                 AssetCommand::Delete { release, asset } => {
-                    delete_asset(&repo, &api, release, asset).await?
+                    delete_asset(repo, &api, release, asset).await?
                 }
                 AssetCommand::Download {
                     release,
                     asset,
                     output,
-                } => download_asset(&repo, &api, release, asset, output).await?,
+                } => download_asset(repo, &api, release, asset, output).await?,
             },
         }
         Ok(())
@@ -394,7 +394,7 @@ async fn view_release(
         .ok_or_else(|| eyre::eyre!("release does not have body"))?;
     if !body.is_empty() {
         println!();
-        println!("{}", crate::markdown(&body));
+        println!("{}", crate::markdown(body));
         println!();
     }
     let assets = release
