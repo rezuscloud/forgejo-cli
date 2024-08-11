@@ -58,7 +58,7 @@ impl AuthCommand {
                     Some(key) => key,
                     None => crate::readline("new key: ").await?.trim().to_string(),
                 };
-                if keys.hosts.get(&user).is_none() {
+                if !keys.hosts.contains_key(&user) {
                     keys.hosts.insert(
                         host,
                         crate::keys::LoginInfo::Application {

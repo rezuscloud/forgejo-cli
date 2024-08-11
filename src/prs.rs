@@ -274,7 +274,7 @@ impl PrCommand {
                 head,
                 body,
                 repo: _,
-            } => create_pr(&repo, &api, title, base, head, body).await?,
+            } => create_pr(repo, &api, title, base, head, body).await?,
             Merge {
                 pr,
                 method,
@@ -283,7 +283,7 @@ impl PrCommand {
                 message,
             } => {
                 merge_pr(
-                    &repo,
+                    repo,
                     &api,
                     pr.map(|id| id.number),
                     method,
@@ -296,26 +296,26 @@ impl PrCommand {
             View { id, command } => {
                 let id = id.map(|id| id.number);
                 match command.unwrap_or(ViewCommand::Body) {
-                    ViewCommand::Body => view_pr(&repo, &api, id).await?,
+                    ViewCommand::Body => view_pr(repo, &api, id).await?,
                     ViewCommand::Comment { idx } => {
-                        let (repo, id) = try_get_pr_number(&repo, &api, id).await?;
+                        let (repo, id) = try_get_pr_number(repo, &api, id).await?;
                         crate::issues::view_comment(&repo, &api, id, idx).await?
                     }
                     ViewCommand::Comments => {
-                        let (repo, id) = try_get_pr_number(&repo, &api, id).await?;
+                        let (repo, id) = try_get_pr_number(repo, &api, id).await?;
                         crate::issues::view_comments(&repo, &api, id).await?
                     }
-                    ViewCommand::Labels => view_pr_labels(&repo, &api, id).await?,
+                    ViewCommand::Labels => view_pr_labels(repo, &api, id).await?,
                     ViewCommand::Diff { patch, editor } => {
-                        view_diff(&repo, &api, id, patch, editor).await?
+                        view_diff(repo, &api, id, patch, editor).await?
                     }
-                    ViewCommand::Files => view_pr_files(&repo, &api, id).await?,
+                    ViewCommand::Files => view_pr_files(repo, &api, id).await?,
                     ViewCommand::Commits { oneline } => {
-                        view_pr_commits(&repo, &api, id, oneline).await?
+                        view_pr_commits(repo, &api, id, oneline).await?
                     }
                 }
             }
-            Status { id } => view_pr_status(&repo, &api, id.map(|id| id.number)).await?,
+            Status { id } => view_pr_status(repo, &api, id.map(|id| id.number)).await?,
             Search {
                 query,
                 labels,
@@ -323,38 +323,38 @@ impl PrCommand {
                 assignee,
                 state,
                 repo: _,
-            } => view_prs(&repo, &api, query, labels, creator, assignee, state).await?,
+            } => view_prs(repo, &api, query, labels, creator, assignee, state).await?,
             Edit { pr, command } => {
                 let pr = pr.map(|pr| pr.number);
                 match command {
                     EditCommand::Title { new_title } => {
-                        let (repo, id) = try_get_pr_number(&repo, &api, pr).await?;
+                        let (repo, id) = try_get_pr_number(repo, &api, pr).await?;
                         crate::issues::edit_title(&repo, &api, id, new_title).await?
                     }
                     EditCommand::Body { new_body } => {
-                        let (repo, id) = try_get_pr_number(&repo, &api, pr).await?;
+                        let (repo, id) = try_get_pr_number(repo, &api, pr).await?;
                         crate::issues::edit_body(&repo, &api, id, new_body).await?
                     }
                     EditCommand::Comment { idx, new_body } => {
-                        let (repo, id) = try_get_pr_number(&repo, &api, pr).await?;
+                        let (repo, id) = try_get_pr_number(repo, &api, pr).await?;
                         crate::issues::edit_comment(&repo, &api, id, idx, new_body).await?
                     }
                     EditCommand::Labels { add, rm } => {
-                        edit_pr_labels(&repo, &api, pr, add, rm).await?
+                        edit_pr_labels(repo, &api, pr, add, rm).await?
                     }
                 }
             }
             Close { pr, with_msg } => {
-                let (repo, pr) = try_get_pr_number(&repo, &api, pr.map(|pr| pr.number)).await?;
+                let (repo, pr) = try_get_pr_number(repo, &api, pr.map(|pr| pr.number)).await?;
                 crate::issues::close_issue(&repo, &api, pr, with_msg).await?
             }
-            Checkout { pr, branch_name } => checkout_pr(&repo, &api, pr, branch_name).await?,
+            Checkout { pr, branch_name } => checkout_pr(repo, &api, pr, branch_name).await?,
             Browse { id } => {
-                let (repo, id) = try_get_pr_number(&repo, &api, id.map(|pr| pr.number)).await?;
+                let (repo, id) = try_get_pr_number(repo, &api, id.map(|pr| pr.number)).await?;
                 browse_pr(&repo, &api, id).await?
             }
             Comment { pr, body } => {
-                let (repo, pr) = try_get_pr_number(&repo, &api, pr.map(|pr| pr.number)).await?;
+                let (repo, pr) = try_get_pr_number(repo, &api, pr.map(|pr| pr.number)).await?;
                 crate::issues::add_comment(&repo, &api, pr, body).await?
             }
         }
@@ -747,7 +747,7 @@ async fn edit_pr_labels(
     for label_name in &add {
         let maybe_label = labels
             .iter()
-            .find(|label| label.name.as_ref() == Some(&label_name));
+            .find(|label| label.name.as_ref() == Some(label_name));
         if let Some(label) = maybe_label {
             add_ids.push(serde_json::Value::Number(
                 label.id.ok_or_eyre("label does not have id")?.into(),
@@ -761,7 +761,7 @@ async fn edit_pr_labels(
     for label_name in &rm {
         let maybe_label = labels
             .iter()
-            .find(|label| label.name.as_ref() == Some(&label_name));
+            .find(|label| label.name.as_ref() == Some(label_name));
         if let Some(label) = maybe_label {
             rm_ids.push(label.id.ok_or_eyre("label does not have id")?);
         } else {
@@ -865,7 +865,7 @@ async fn create_pr(
 
     let (base, base_is_parent) = match base {
         Some(base) => match base.strip_prefix("^") {
-            Some(stripped) if stripped.is_empty() => (None, true),
+            Some("") => (None, true),
             Some(stripped) => (Some(stripped.to_owned()), true),
             None => (Some(base), false),
         },
@@ -1291,7 +1291,7 @@ async fn view_pr_commits(
             .ok_or_eyre("commit does not have commit?")?;
 
         let message = repo_commit.message.as_deref().unwrap_or("[no msg]");
-        let name = message.lines().next().unwrap_or(&message);
+        let name = message.lines().next().unwrap_or(message);
 
         let sha = commit
             .sha

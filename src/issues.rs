@@ -176,11 +176,11 @@ impl IssueCommand {
                 repo: _,
                 title,
                 body,
-            } => create_issue(&repo, &api, title, body).await?,
+            } => create_issue(repo, &api, title, body).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
-                ViewCommand::Body => view_issue(&repo, &api, id.number).await?,
-                ViewCommand::Comment { idx } => view_comment(&repo, &api, id.number, idx).await?,
-                ViewCommand::Comments => view_comments(&repo, &api, id.number).await?,
+                ViewCommand::Body => view_issue(repo, &api, id.number).await?,
+                ViewCommand::Comment { idx } => view_comment(repo, &api, id.number, idx).await?,
+                ViewCommand::Comments => view_comments(repo, &api, id.number).await?,
             },
             Search {
                 repo: _,
@@ -189,21 +189,21 @@ impl IssueCommand {
                 creator,
                 assignee,
                 state,
-            } => view_issues(&repo, &api, query, labels, creator, assignee, state).await?,
+            } => view_issues(repo, &api, query, labels, creator, assignee, state).await?,
             Edit { issue, command } => match command {
                 EditCommand::Title { new_title } => {
-                    edit_title(&repo, &api, issue.number, new_title).await?
+                    edit_title(repo, &api, issue.number, new_title).await?
                 }
                 EditCommand::Body { new_body } => {
-                    edit_body(&repo, &api, issue.number, new_body).await?
+                    edit_body(repo, &api, issue.number, new_body).await?
                 }
                 EditCommand::Comment { idx, new_body } => {
-                    edit_comment(&repo, &api, issue.number, idx, new_body).await?
+                    edit_comment(repo, &api, issue.number, idx, new_body).await?
                 }
             },
-            Close { issue, with_msg } => close_issue(&repo, &api, issue.number, with_msg).await?,
-            Browse { id } => browse_issue(&repo, &api, id.number).await?,
-            Comment { issue, body } => add_comment(&repo, &api, issue.number, body).await?,
+            Close { issue, with_msg } => close_issue(repo, &api, issue.number, with_msg).await?,
+            Browse { id } => browse_issue(repo, &api, id.number).await?,
+            Comment { issue, body } => add_comment(repo, &api, issue.number, body).await?,
         }
         Ok(())
     }
@@ -408,7 +408,7 @@ pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -
     let comment = comments
         .get(idx)
         .ok_or_else(|| eyre!("comment {idx} doesn't exist"))?;
-    print_comment(&comment)?;
+    print_comment(comment)?;
     Ok(())
 }
 
@@ -440,7 +440,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
         .as_ref()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
     println!("{} said:", username);
-    println!("{}", crate::markdown(&body));
+    println!("{}", crate::markdown(body));
     let assets = comment
         .assets
         .as_ref()

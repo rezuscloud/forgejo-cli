@@ -52,10 +52,10 @@ impl WikiCommand {
             .ok_or_else(|| eyre::eyre!("couldn't guess repo"))?;
 
         match self.command {
-            Contents { repo: _ } => wiki_contents(&repo, &api).await?,
-            View { repo: _, page } => view_wiki_page(&repo, &api, &*page).await?,
-            Clone { repo: _, path } => clone_wiki(&repo, &api, path).await?,
-            Browse { repo: _, page } => browse_wiki_page(&repo, &api, &*page).await?,
+            Contents { repo: _ } => wiki_contents(repo, &api).await?,
+            View { repo: _, page } => view_wiki_page(repo, &api, &page).await?,
+            Clone { repo: _, path } => clone_wiki(repo, &api, path).await?,
+            Browse { repo: _, page } => browse_wiki_page(repo, &api, &page).await?,
         }
         Ok(())
     }
