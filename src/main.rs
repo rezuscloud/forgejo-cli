@@ -211,6 +211,18 @@ async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std:
     Ok((file, path))
 }
 
+fn ssh_url_parse(s: &str) -> Result<url::Url, url::ParseError> {
+    url::Url::parse(s).or_else(|_| {
+        let mut new_s = String::new();
+        new_s.push_str("ssh://");
+
+        let auth_end = s.find("@").unwrap_or(0);
+        new_s.push_str(&s[..auth_end]);
+        new_s.push_str(&s[..auth_end].replacen(":", "/", 1));
+        url::Url::parse(&new_s)
+    })
+}
+
 use std::sync::OnceLock;
 static SPECIAL_RENDER: OnceLock<SpecialRender> = OnceLock::new();
 
