@@ -49,11 +49,10 @@ impl RepoInfo {
 
         if let Some(repo) = repo {
             if let Some(host) = &repo.host {
-                if let Ok(url) = Url::parse(host) {
-                    repo_url = Some(url);
-                } else if let Ok(url) = Url::parse(&format!("https://{host}/")) {
-                    repo_url = Some(url);
-                }
+                repo_url = Url::parse(host)
+                    .ok()
+                    .filter(|x| !x.cannot_be_a_base())
+                    .or_else(|| Url::parse(&format!("https://{host}/")).ok())
             }
             repo_name = Some(RepoName {
                 owner: repo.owner.clone(),
@@ -67,6 +66,7 @@ impl RepoInfo {
         let host_url = host.and_then(|host| {
             Url::parse(host)
                 .ok()
+                .filter(|x| !x.cannot_be_a_base())
                 .or_else(|| Url::parse(&format!("https://{host}/")).ok())
         });
 
