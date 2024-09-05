@@ -26,7 +26,7 @@ impl AuthCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         match self {
             AuthCommand::Login => {
-                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None)?;
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
                 let host_url = repo_info.host_url();
                 let client_info = get_client_info_for(host_url);
                 if let Some((client_id, _)) = client_info {
@@ -52,7 +52,7 @@ impl AuthCommand {
                 }
             }
             AuthCommand::AddKey { user, key } => {
-                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None)?;
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
                 let host_url = repo_info.host_url();
                 let key = match key {
                     Some(key) => key,
@@ -60,13 +60,12 @@ impl AuthCommand {
                 };
                 let host = crate::host_with_port(&host_url);
                 if !keys.hosts.contains_key(host) {
-                    keys.hosts.insert(
-                        host.to_owned(),
-                        crate::keys::LoginInfo::Application {
-                            name: user,
-                            token: key,
-                        },
-                    );
+                    let mut login = crate::keys::LoginInfo::Application {
+                        name: user,
+                        token: key,
+                    };
+                    add_ssh_alias(&mut login, host_url, keys).await;
+                    keys.hosts.insert(host.to_owned(), login);
                 } else {
                     println!("key for {host} already exists");
                 }
@@ -168,12 +167,13 @@ async fn oauth_login(
     // expires. Better to refresh slightly too soon than slightly too late.
     let expires_in = std::time::Duration::from_secs(response.expires_in.saturating_sub(60) as u64);
     let expires_at = time::OffsetDateTime::now_utc() + expires_in;
-    let login_info = crate::keys::LoginInfo::OAuth {
+    let mut login_info = crate::keys::LoginInfo::OAuth {
         name,
         token: response.access_token,
         refresh_token: response.refresh_token,
         expires_at,
     };
+    add_ssh_alias(&mut login_info, host, keys).await;
     let domain = crate::host_with_port(&host);
     keys.hosts.insert(domain.to_owned(), login_info);
 
@@ -231,4 +231,39 @@ fn auth_server() -> (
         }
     });
     (handle, rx)
+}
+
+async fn add_ssh_alias(
+    login: &mut crate::keys::LoginInfo,
+    host_url: &url::Url,
+    keys: &mut crate::keys::KeyInfo,
+) {
+    let api = match login.api_for(host_url).await {
+        Ok(x) => x,
+        Err(_) => return,
+    };
+    if let Some(ssh_url) = get_instance_ssh_url(api).await {
+        let http_host = crate::host_with_port(&host_url);
+        let ssh_host = crate::host_with_port(&ssh_url);
+        if http_host != ssh_host {
+            keys.aliases
+                .insert(ssh_host.to_string(), http_host.to_string());
+        }
+    }
+}
+
+async fn get_instance_ssh_url(api: forgejo_api::Forgejo) -> Option<url::Url> {
+    let query = forgejo_api::structs::RepoSearchQuery {
+        limit: Some(1),
+        ..Default::default()
+    };
+    let results = api.repo_search(query).await.ok()?;
+    if let Some(mut repos) = results.data {
+        if let Some(repo) = repos.pop() {
+            if let Some(ssh_url) = repo.ssh_url {
+                return Some(ssh_url);
+            }
+        }
+    }
+    None
 }

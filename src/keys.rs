@@ -6,6 +6,8 @@ use url::Url;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct KeyInfo {
     pub hosts: BTreeMap<String, LoginInfo>,
+    #[serde(default)]
+    pub aliases: BTreeMap<String, String>,
 }
 
 impl KeyInfo {
@@ -53,6 +55,21 @@ impl KeyInfo {
 
     pub async fn get_api(&mut self, url: &Url) -> eyre::Result<forgejo_api::Forgejo> {
         self.get_login(url)?.api_for(url).await.map_err(Into::into)
+    }
+
+    pub fn deref_alias(&self, url: url::Url) -> url::Url {
+        match self.aliases.get(crate::host_with_port(&url)) {
+            Some(replacement) => {
+                let s = format!(
+                    "{}{}{}",
+                    &url[..url::Position::BeforeHost],
+                    replacement,
+                    &url[url::Position::AfterPort..]
+                );
+                url::Url::parse(&s).unwrap()
+            }
+            None => url,
+        }
     }
 }
 
