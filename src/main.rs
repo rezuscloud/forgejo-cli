@@ -223,6 +223,10 @@ fn ssh_url_parse(s: &str) -> Result<url::Url, url::ParseError> {
     })
 }
 
+fn host_with_port(url: &url::Url) -> &str {
+    &url[url::Position::BeforeHost..url::Position::AfterPort]
+}
+
 use std::sync::OnceLock;
 static SPECIAL_RENDER: OnceLock<SpecialRender> = OnceLock::new();
 
