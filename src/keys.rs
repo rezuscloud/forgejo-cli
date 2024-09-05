@@ -43,19 +43,11 @@ impl KeyInfo {
     }
 
     pub fn get_login(&mut self, url: &Url) -> eyre::Result<&mut LoginInfo> {
-        let host_str = url
-            .host_str()
-            .ok_or_else(|| eyre!("remote url does not have host"))?;
-        let domain = if let Some(port) = url.port() {
-            format!("{}:{}", host_str, port)
-        } else {
-            host_str.to_owned()
-        };
-
+        let host = crate::host_with_port(url);
         let login_info = self
             .hosts
-            .get_mut(&domain)
-            .ok_or_else(|| eyre!("not signed in to {domain}"))?;
+            .get_mut(host)
+            .ok_or_else(|| eyre!("not signed in to {host}"))?;
         Ok(login_info)
     }
 

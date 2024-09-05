@@ -13,8 +13,6 @@ pub enum AuthCommand {
     ///
     /// Use this if `fj auth login` doesn't work
     AddKey {
-        /// The domain name of the forgejo instance.
-        host: String,
         /// The user that the key is associated with
         user: String,
         /// The key to add. If not present, the key will be read in from stdin.
@@ -53,21 +51,24 @@ impl AuthCommand {
                     eprintln!("already not signed in to {host}");
                 }
             }
-            AuthCommand::AddKey { host, user, key } => {
+            AuthCommand::AddKey { user, key } => {
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None)?;
+                let host_url = repo_info.host_url();
                 let key = match key {
                     Some(key) => key,
                     None => crate::readline("new key: ").await?.trim().to_string(),
                 };
-                if !keys.hosts.contains_key(&user) {
+                let host = crate::host_with_port(&host_url);
+                if !keys.hosts.contains_key(host) {
                     keys.hosts.insert(
-                        host,
+                        host.to_owned(),
                         crate::keys::LoginInfo::Application {
                             name: user,
                             token: key,
                         },
                     );
                 } else {
-                    println!("key for {} already exists", host);
+                    println!("key for {host} already exists");
                 }
             }
             AuthCommand::List => {
@@ -84,7 +85,7 @@ impl AuthCommand {
 }
 
 pub fn get_client_info_for(url: &url::Url) -> Option<(&'static str, &'static str)> {
-    let client_info = match (url.host_str()?, url.path()) {
+    let client_info = match (crate::host_with_port(url), url.path()) {
         ("codeberg.org", "/") => option_env!("CLIENT_INFO_CODEBERG"),
         _ => None,
     };
@@ -173,8 +174,8 @@ async fn oauth_login(
         refresh_token: response.refresh_token,
         expires_at,
     };
-    keys.hosts
-        .insert(host.host_str().unwrap().to_string(), login_info);
+    let domain = crate::host_with_port(&host);
+    keys.hosts.insert(domain.to_owned(), login_info);
 
     Ok(())
 }

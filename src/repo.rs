@@ -99,7 +99,7 @@ impl RepoInfo {
                             let url_s = std::str::from_utf8(remote.url_bytes())?;
                             let url = crate::ssh_url_parse(url_s)?;
 
-                            if url.host_str() == host_url.host_str() {
+                            if crate::host_with_port(&url) == crate::host_with_port(host_url) {
                                 name = Some(remote_name_s.to_owned());
                             }
                         } else {
@@ -124,7 +124,7 @@ impl RepoInfo {
 
                             if let Some(url) = remote.url() {
                                 let (url, _) = url_strip_repo_name(crate::ssh_url_parse(url)?)?;
-                                if url.host_str() == host_url.host_str()
+                                if crate::host_with_port(&url) == crate::host_with_port(host_url)
                                     && url.path() == host_url.path()
                                 {
                                     name = Some(remote_name.to_owned());
