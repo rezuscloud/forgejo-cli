@@ -166,7 +166,15 @@ impl RepoInfo {
             (host_url, None)
         };
 
-        let url = url.or_else(fallback_host);
+        let url = url.or_else(fallback_host).map(|url| {
+            let mut url = match url.scheme() {
+                "http" | "https" => url,
+                _ => url::Url::parse(&format!("https{}", &url[url::Position::AfterScheme..]))
+                    .expect("should always be valid"),
+            };
+            url.set_username("").expect("shouldn't fail");
+            url
+        });
 
         let info = match (url, name) {
             (Some(url), name) => RepoInfo { url, name },
