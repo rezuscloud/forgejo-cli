@@ -65,7 +65,7 @@ async fn main() -> eyre::Result<()> {
         Command::Pr(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Wiki(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::WhoAmI { remote } => {
-            let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref())
+            let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref(), &keys)
                 .wrap_err("could not find host, try specifying with --host")?
                 .host_url()
                 .clone();

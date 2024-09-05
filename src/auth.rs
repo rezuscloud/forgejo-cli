@@ -26,7 +26,7 @@ impl AuthCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         match self {
             AuthCommand::Login => {
-                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None)?;
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
                 let host_url = repo_info.host_url();
                 let client_info = get_client_info_for(host_url);
                 if let Some((client_id, _)) = client_info {
@@ -52,7 +52,7 @@ impl AuthCommand {
                 }
             }
             AuthCommand::AddKey { user, key } => {
-                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None)?;
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
                 let host_url = repo_info.host_url();
                 let key = match key {
                     Some(key) => key,

@@ -17,6 +17,7 @@ impl RepoInfo {
         host: Option<&str>,
         repo: Option<&RepoArg>,
         remote: Option<&str>,
+        keys: &crate::keys::KeyInfo,
     ) -> eyre::Result<Self> {
         // l = domain/owner/name
         // s = owner/name
@@ -53,6 +54,7 @@ impl RepoInfo {
                     .ok()
                     .filter(|x| !x.cannot_be_a_base())
                     .or_else(|| Url::parse(&format!("https://{host}/")).ok())
+                    .map(|url| keys.deref_alias(url))
             }
             repo_name = Some(RepoName {
                 owner: repo.owner.clone(),
@@ -68,6 +70,7 @@ impl RepoInfo {
                 .ok()
                 .filter(|x| !x.cannot_be_a_base())
                 .or_else(|| Url::parse(&format!("https://{host}/")).ok())
+                .map(|url| keys.deref_alias(url))
         });
 
         let (remote_url, remote_repo_name) = {
@@ -97,7 +100,7 @@ impl RepoInfo {
                         if let Some(host_url) = &host_url {
                             let remote = local_repo.find_remote(remote_name_s)?;
                             let url_s = std::str::from_utf8(remote.url_bytes())?;
-                            let url = crate::ssh_url_parse(url_s)?;
+                            let url = keys.deref_alias(crate::ssh_url_parse(url_s)?);
 
                             if crate::host_with_port(&url) == crate::host_with_port(host_url) {
                                 name = Some(remote_name_s.to_owned());
@@ -123,8 +126,9 @@ impl RepoInfo {
                             let remote = local_repo.find_remote(remote_name)?;
 
                             if let Some(url) = remote.url() {
-                                let (url, _) = url_strip_repo_name(crate::ssh_url_parse(url)?)?;
-                                if crate::host_with_port(&url) == crate::host_with_port(host_url)
+                                let url = keys.deref_alias(crate::ssh_url_parse(url)?);
+                                let (url, _) = url_strip_repo_name(url)?;
+                                if crate::host_with_port(&url) == crate::host_with_port(&url)
                                     && url.path() == host_url.path()
                                 {
                                     name = Some(remote_name.to_owned());
@@ -138,7 +142,7 @@ impl RepoInfo {
                 if let Some(name) = name {
                     if let Ok(remote) = local_repo.find_remote(&name) {
                         let url_s = std::str::from_utf8(remote.url_bytes())?;
-                        let url = crate::ssh_url_parse(url_s)?;
+                        let url = keys.deref_alias(crate::ssh_url_parse(url_s)?);
                         let (url, name) = url_strip_repo_name(url)?;
 
                         out = (Some(url), Some(name))
@@ -362,7 +366,7 @@ impl RepoCommand {
                 remote,
                 push,
             } => {
-                let host = RepoInfo::get_current(host_name, None, None)?;
+                let host = RepoInfo::get_current(host_name, None, None, &keys)?;
                 let api = keys.get_api(host.host_url()).await?;
                 create_repo(&api, repo, description, private, remote, push).await?;
             }
@@ -381,7 +385,8 @@ impl RepoCommand {
                     }
                 }
 
-                let repo_info = RepoInfo::get_current(host_name, Some(&repo), remote.as_deref())?;
+                let repo_info =
+                    RepoInfo::get_current(host_name, Some(&repo), remote.as_deref(), &keys)?;
                 let api = keys.get_api(repo_info.host_url()).await?;
                 let repo = repo_info
                     .name()
@@ -389,7 +394,8 @@ impl RepoCommand {
                 fork_repo(&api, repo, name).await?
             }
             RepoCommand::View { name, remote } => {
-                let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
+                let repo =
+                    RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref(), &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
@@ -397,20 +403,20 @@ impl RepoCommand {
                 view_repo(&api, repo).await?
             }
             RepoCommand::Clone { repo, path } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 cmd_clone_repo(&api, name, path).await?;
             }
             RepoCommand::Star { repo } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 api.user_current_put_star(name.owner(), name.name()).await?;
                 println!("Starred {}/{}!", name.owner(), name.name());
             }
             RepoCommand::Unstar { repo } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 api.user_current_delete_star(name.owner(), name.name())
@@ -418,13 +424,14 @@ impl RepoCommand {
                 println!("Removed star from {}/{}", name.owner(), name.name());
             }
             RepoCommand::Delete { repo } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None)?;
+                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 delete_repo(&api, name).await?;
             }
             RepoCommand::Browse { name, remote } => {
-                let repo = RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref())?;
+                let repo =
+                    RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref(), &keys)?;
                 let mut url = repo.host_url().clone();
                 let repo = repo
                     .name()

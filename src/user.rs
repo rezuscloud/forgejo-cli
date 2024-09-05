@@ -173,7 +173,7 @@ pub enum VisbilitySetting {
 
 impl UserCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
-        let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref())?;
+        let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref(), &keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         match self.command {
             UserSubcommand::Search { query, page } => user_search(&api, &query, page).await?,
