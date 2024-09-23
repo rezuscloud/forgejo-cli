@@ -69,7 +69,7 @@ async fn main() -> eyre::Result<()> {
                 .wrap_err("could not find host, try specifying with --host")?
                 .host_url()
                 .clone();
-            let name = keys.get_login(&url)?.username();
+            let name = keys.get_login(&url).ok_or_eyre("not logged in")?.username();
             let host = url
                 .host_str()
                 .ok_or_eyre("instance url does not have host")?;
