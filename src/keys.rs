@@ -1,4 +1,5 @@
 use eyre::eyre;
+use forgejo_api::{Auth, Forgejo};
 use std::{collections::BTreeMap, io::ErrorKind};
 use tokio::io::AsyncWriteExt;
 use url::Url;
@@ -44,17 +45,17 @@ impl KeyInfo {
         Ok(())
     }
 
-    pub fn get_login(&mut self, url: &Url) -> eyre::Result<&mut LoginInfo> {
+    pub fn get_login(&mut self, url: &Url) -> Option<&mut LoginInfo> {
         let host = crate::host_with_port(url);
-        let login_info = self
-            .hosts
-            .get_mut(host)
-            .ok_or_else(|| eyre!("not signed in to {host}"))?;
-        Ok(login_info)
+        let login_info = self.hosts.get_mut(host)?;
+        Some(login_info)
     }
 
-    pub async fn get_api(&mut self, url: &Url) -> eyre::Result<forgejo_api::Forgejo> {
-        self.get_login(url)?.api_for(url).await.map_err(Into::into)
+    pub async fn get_api(&mut self, url: &Url) -> eyre::Result<Forgejo> {
+        match self.get_login(url) {
+            Some(login) => login.api_for(url).await,
+            None => Forgejo::new(Auth::None, url.clone()).map_err(Into::into),
+        }
     }
 
     pub fn deref_alias(&self, url: url::Url) -> url::Url {
@@ -96,10 +97,10 @@ impl LoginInfo {
         }
     }
 
-    pub async fn api_for(&mut self, url: &Url) -> eyre::Result<forgejo_api::Forgejo> {
+    pub async fn api_for(&mut self, url: &Url) -> eyre::Result<Forgejo> {
         match self {
             LoginInfo::Application { token, .. } => {
-                let api = forgejo_api::Forgejo::new(forgejo_api::Auth::Token(token), url.clone())?;
+                let api = Forgejo::new(Auth::Token(token), url.clone())?;
                 Ok(api)
             }
             LoginInfo::OAuth {
@@ -109,7 +110,7 @@ impl LoginInfo {
                 ..
             } => {
                 if time::OffsetDateTime::now_utc() >= *expires_at {
-                    let api = forgejo_api::Forgejo::new(forgejo_api::Auth::None, url.clone())?;
+                    let api = Forgejo::new(Auth::None, url.clone())?;
                     let (client_id, client_secret) = crate::auth::get_client_info_for(url)
                         .ok_or_else(|| {
                             eyre::eyre!("Can't refresh token; no client info for {url}. How did this happen?")
@@ -130,7 +131,7 @@ impl LoginInfo {
                     );
                     *expires_at = time::OffsetDateTime::now_utc() + expires_in;
                 }
-                let api = forgejo_api::Forgejo::new(forgejo_api::Auth::Token(token), url.clone())?;
+                let api = Forgejo::new(Auth::Token(token), url.clone())?;
                 Ok(api)
             }
         }
