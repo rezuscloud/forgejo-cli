@@ -53,7 +53,8 @@ pub enum PrSubcommand {
         /// What to name the new pull request.
         ///
         /// Prefix with "WIP: " to mark this PR as a draft.
-        title: String,
+        #[clap(group = "web-or-cmd")]
+        title: Option<String>,
         /// The text body of the pull request.
         ///
         /// Leaving this out will open your editor.
@@ -62,6 +63,9 @@ pub enum PrSubcommand {
         /// The repo to create this issue on
         #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
+        /// Open the PR creation menu in your web browser
+        #[clap(short, long, group = "web-or-cmd")]
+        web: bool,
     },
     /// View the contents of a pull request
     View {
@@ -274,7 +278,8 @@ impl PrCommand {
                 head,
                 body,
                 repo: _,
-            } => create_pr(repo, &api, title, base, head, body).await?,
+                web,
+            } => create_pr(repo, &api, title, base, head, body, web).await?,
             Merge {
                 pr,
                 method,
@@ -805,10 +810,11 @@ async fn edit_pr_labels(
 async fn create_pr(
     repo: &RepoName,
     api: &Forgejo,
-    title: String,
+    title: Option<String>,
     base: Option<String>,
     head: Option<String>,
     body: Option<String>,
+    web: bool,
 ) -> eyre::Result<()> {
     let mut repo_data = api.repo_get(repo.owner(), repo.name()).await?;
 
@@ -915,39 +921,53 @@ async fn create_pr(
             .to_owned(),
     };
 
-    let body = match body {
-        Some(body) => body,
-        None => {
-            let mut body = String::new();
-            crate::editor(&mut body, Some("md")).await?;
-            body
-        }
-    };
-    let pr = api
-        .repo_create_pull_request(
-            &repo_owner,
-            &repo_name,
-            CreatePullRequestOption {
-                assignee: None,
-                assignees: None,
-                base: Some(base.to_owned()),
-                body: Some(body),
-                due_date: None,
-                head: Some(head),
-                labels: None,
-                milestone: None,
-                title: Some(title),
-            },
-        )
-        .await?;
-    let number = pr
-        .number
-        .ok_or_else(|| eyre::eyre!("pr does not have number"))?;
-    let title = pr
-        .title
-        .as_ref()
-        .ok_or_else(|| eyre::eyre!("pr does not have title"))?;
-    println!("created pull request #{}: {}", number, title);
+    if web {
+        let mut pr_create_url = base_repo
+            .html_url
+            .clone()
+            .ok_or_eyre("repo does not have html url")?;
+        pr_create_url
+            .path_segments_mut()
+            .expect("invalid url")
+            .extend(["compare", &format!("{base}...{head}")]);
+        open::that(pr_create_url.as_str())?;
+    } else {
+        let title = title.ok_or_eyre("title is required")?;
+        let body = match body {
+            Some(body) => body,
+            None => {
+                let mut body = String::new();
+                crate::editor(&mut body, Some("md")).await?;
+                body
+            }
+        };
+        let pr = api
+            .repo_create_pull_request(
+                &repo_owner,
+                &repo_name,
+                CreatePullRequestOption {
+                    assignee: None,
+                    assignees: None,
+                    base: Some(base.to_owned()),
+                    body: Some(body),
+                    due_date: None,
+                    head: Some(head),
+                    labels: None,
+                    milestone: None,
+                    title: Some(title),
+                },
+            )
+            .await?;
+        let number = pr
+            .number
+            .ok_or_else(|| eyre::eyre!("pr does not have number"))?;
+        let title = pr
+            .title
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("pr does not have title"))?;
+        println!("created pull request #{}: {}", number, title);
+    }
+
     Ok(())
 }
 
