@@ -324,6 +324,43 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    Migrate {
+        /// URL of the repo to migrate
+        #[clap(id = "HOST/OWNER/REPO")]
+        repo: String,
+        /// Name of the new mirror
+        name: String,
+        /// Whether to mirror the repo instead of migrating it
+        #[clap(long, short)]
+        mirror: bool,
+        /// Whether the new migration should be private
+        #[clap(long, short)]
+        private: bool,
+        /// Comma-separated list of items to include. Defaults to nothing but git data.
+        ///
+        /// These are `lfs`, `wiki`, `issues`, `prs`, `milestones`, `labels`, and `releases`.
+        /// You can use `all` to include everything.
+        #[clap(long, short)]
+        include: Option<MigrateInclude>,
+        /// The URL to fetch LFS files from
+        #[clap(long, short = 'L')]
+        lfs_endpoint: Option<url::Url>,
+        /// The type of Git service the original repo is on. Defaults to `git`
+        #[clap(long, short)]
+        service: Option<MigrateService>,
+        /// If enabled, will read an access token in from stdin to use for fetching.
+        ///
+        /// Mutually exclusive with `--login`
+        #[clap(long, short)]
+        token: bool,
+        /// If enabled, will read a username and password from stdin to use for fetching.
+        ///
+        /// Mutually exclusive with `--token`.
+        ///
+        /// This is not recommended, `--token` should be used instead whenever possible.
+        #[clap(long, short)]
+        login: bool,
+    },
     /// View a repo's info
     View {
         #[clap(id = "[HOST/]OWNER/REPO")]
@@ -400,6 +437,33 @@ impl RepoCommand {
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 fork_repo(&api, repo, name).await?
+            }
+            RepoCommand::Migrate {
+                repo,
+                name,
+                mirror,
+                private,
+                include,
+                lfs_endpoint,
+                service,
+                token,
+                login,
+            } => {
+                let current_repo = RepoInfo::get_current(host_name, None, None, &keys)?;
+                let api = keys.get_api(current_repo.host_url()).await?;
+                migrate_repo(
+                    &api,
+                    repo,
+                    name,
+                    mirror,
+                    private,
+                    include,
+                    lfs_endpoint,
+                    service,
+                    token,
+                    login,
+                )
+                .await?
             }
             RepoCommand::View { name, remote } => {
                 let repo =
@@ -542,6 +606,207 @@ async fn fork_repo(api: &Forgejo, repo: &RepoName, name: Option<String>) -> eyre
         repo.name(),
         fork_full_name
     );
+
+    Ok(())
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum, Default)]
+pub enum MigrateService {
+    #[default]
+    Git,
+    Github,
+    Gitlab,
+    Forgejo,
+    Gitea,
+    Gogs,
+    Onedev,
+    Gitbucket,
+    Codebase,
+}
+
+impl FromStr for MigrateService {
+    type Err = MigrateServiceParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "git" => Ok(Self::Git),
+            "github" => Ok(Self::Github),
+            "gitlab" => Ok(Self::Gitlab),
+            "forgejo" => Ok(Self::Forgejo),
+            "gitea" => Ok(Self::Gitea),
+            "gogs" => Ok(Self::Gogs),
+            "onedev" | "one-dev" => Ok(Self::Onedev),
+            "gitbucket" | "git-bucket" => Ok(Self::Gitbucket),
+            "codebase" => Ok(Self::Codebase),
+            _ => Err(MigrateServiceParseError),
+        }
+    }
+}
+
+impl MigrateService {
+    fn to_api_type(self) -> forgejo_api::structs::MigrateRepoOptionsService {
+        use forgejo_api::structs::MigrateRepoOptionsService as Api;
+        use MigrateService as Cli;
+        match self {
+            Cli::Git => Api::Git,
+            Cli::Github => Api::Github,
+            Cli::Gitlab => Api::Gitlab,
+            Cli::Forgejo => Api::Gitea,
+            Cli::Gitea => Api::Gitea,
+            Cli::Gogs => Api::Gogs,
+            Cli::Onedev => Api::Onedev,
+            Cli::Gitbucket => Api::Gitbucket,
+            Cli::Codebase => Api::Codebase,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MigrateServiceParseError;
+
+impl std::error::Error for MigrateServiceParseError {}
+
+impl std::fmt::Display for MigrateServiceParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("unknown service")
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub struct MigrateInclude {
+    lfs: bool,
+    wiki: bool,
+    issues: bool,
+    prs: bool,
+    milestones: bool,
+    labels: bool,
+    releases: bool,
+}
+
+impl MigrateInclude {
+    /// if the selection includes anything other than LFS (which is supported by base git)
+    fn non_base_git(self) -> bool {
+        self.wiki | self.issues | self.prs | self.milestones | self.labels | self.releases
+    }
+}
+
+impl FromStr for MigrateInclude {
+    type Err = MigrateIncludeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "all" {
+            Ok(Self {
+                lfs: true,
+                wiki: true,
+                issues: true,
+                prs: true,
+                milestones: true,
+                labels: true,
+                releases: true,
+            })
+        } else {
+            let mut out = Self::default();
+            for opt in s.split(",") {
+                match opt {
+                    "lfs" => out.lfs = true,
+                    "wiki" => out.wiki = true,
+                    "issues" => out.issues = true,
+                    "prs" => out.prs = true,
+                    "milestones" => out.milestones = true,
+                    "labels" => out.labels = true,
+                    "releases" => out.releases = true,
+                    _ => return Err(MigrateIncludeParseError),
+                }
+            }
+            Ok(out)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MigrateIncludeParseError;
+
+impl std::error::Error for MigrateIncludeParseError {}
+
+impl std::fmt::Display for MigrateIncludeParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("unknown include option")
+    }
+}
+
+async fn migrate_repo(
+    api: &Forgejo,
+    mut repo: String,
+    name: String,
+    mirror: bool,
+    private: bool,
+    include: Option<MigrateInclude>,
+    lfs_endpoint: Option<url::Url>,
+    service: Option<MigrateService>,
+    token: bool,
+    login: bool,
+) -> eyre::Result<()> {
+    let include = include.unwrap_or_default();
+    let service = service.unwrap_or_default();
+
+    if service == MigrateService::Git && include.non_base_git() {
+        eyre::bail!("Migrating from a `git` service doesn't support migration items other than LFS. Please specify a different service or remove the included items");
+    }
+
+    if repo.ends_with("/") {
+        let _ = repo.pop();
+    }
+    if !repo.ends_with(".git") {
+        repo.push_str(".git");
+    }
+    let clone_url =
+        url::Url::parse(&repo).or_else(|_| url::Url::parse(&format!("https://{repo}")))?;
+
+    let (username, password) = if login {
+        let username = crate::readline("Username: ").await?.trim().to_owned();
+        let password = crate::readline("Password: ").await?.trim().to_owned();
+        (Some(username), Some(password))
+    } else {
+        (None, None)
+    };
+
+    let auth_token = if token {
+        let auth_token = crate::readline("Token: ").await?.trim().to_owned();
+        Some(auth_token.trim().to_owned())
+    } else {
+        None
+    };
+
+    let migrate_options = forgejo_api::structs::MigrateRepoOptions {
+        auth_password: password,
+        auth_username: username,
+        auth_token,
+        clone_addr: clone_url.as_str().to_owned(),
+        description: None,
+        issues: Some(include.issues),
+        labels: Some(include.labels),
+        lfs: Some(include.lfs),
+        lfs_endpoint: lfs_endpoint.map(|url| url.to_string()),
+        milestones: Some(include.milestones),
+        mirror: Some(mirror),
+        mirror_interval: None,
+        private: Some(private),
+        pull_requests: Some(include.prs),
+        releases: Some(include.releases),
+        repo_name: name,
+        repo_owner: None,
+        service: Some(service.to_api_type()),
+        uid: None,
+        wiki: Some(include.wiki),
+    };
+
+    println!("Migrating...");
+    let new_repo = api.repo_migrate(migrate_options).await?;
+    let new_repo_url = new_repo
+        .html_url
+        .as_ref()
+        .ok_or_eyre("new repo doesnt have url")?;
+    println!("Done! View online at {new_repo_url}");
 
     Ok(())
 }
