@@ -381,6 +381,21 @@ impl SpecialRender {
     }
 }
 
+fn max_line_length() -> usize {
+    let (terminal_width, _) = crossterm::terminal::size().unwrap_or((80, 24));
+    (terminal_width as usize - 2).min(80)
+}
+
+fn render_text(text: &str) -> String {
+    let mut ansi_printer = AnsiPrinter::new(max_line_length());
+
+    ansi_printer.pause_style();
+    ansi_printer.prefix();
+    ansi_printer.resume_style();
+    ansi_printer.text(text);
+    ansi_printer.out
+}
+
 fn markdown(text: &str) -> String {
     let SpecialRender {
         fancy,
@@ -427,8 +442,7 @@ fn markdown(text: &str) -> String {
 
     let mut list_numbers = Vec::new();
 
-    let (terminal_width, _) = crossterm::terminal::size().unwrap_or((80, 24));
-    let max_line_len = (terminal_width as usize - 2).min(80);
+    let max_line_len = max_line_length();
 
     let mut links = Vec::new();
 
