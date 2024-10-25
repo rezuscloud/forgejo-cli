@@ -74,6 +74,15 @@ impl KeyInfo {
     }
 }
 
+pub const USER_AGENT: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")"
+);
+
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum LoginInfo {
@@ -100,7 +109,7 @@ impl LoginInfo {
     pub async fn api_for(&mut self, url: &Url) -> eyre::Result<Forgejo> {
         match self {
             LoginInfo::Application { token, .. } => {
-                let api = Forgejo::new(Auth::Token(token), url.clone())?;
+                let api = Forgejo::with_user_agent(Auth::Token(token), url.clone(), USER_AGENT)?;
                 Ok(api)
             }
             LoginInfo::OAuth {
@@ -110,7 +119,7 @@ impl LoginInfo {
                 ..
             } => {
                 if time::OffsetDateTime::now_utc() >= *expires_at {
-                    let api = Forgejo::new(Auth::None, url.clone())?;
+                    let api = Forgejo::with_user_agent(Auth::None, url.clone(), USER_AGENT)?;
                     let (client_id, client_secret) = crate::auth::get_client_info_for(url)
                         .ok_or_else(|| {
                             eyre::eyre!("Can't refresh token; no client info for {url}. How did this happen?")
@@ -131,7 +140,7 @@ impl LoginInfo {
                     );
                     *expires_at = time::OffsetDateTime::now_utc() + expires_in;
                 }
-                let api = Forgejo::new(Auth::Token(token), url.clone())?;
+                let api = Forgejo::with_user_agent(Auth::Token(token), url.clone(), USER_AGENT)?;
                 Ok(api)
             }
         }
