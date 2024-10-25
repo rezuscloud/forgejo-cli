@@ -22,11 +22,13 @@ pub struct IssueCommand {
 pub enum IssueSubcommand {
     /// Create a new issue on a repo
     Create {
-        title: String,
+        title: Option<String>,
         #[clap(long)]
         body: Option<String>,
         #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
+        #[clap(long)]
+        web: bool,
     },
     /// Edit an issue
     Edit {
@@ -176,7 +178,8 @@ impl IssueCommand {
                 repo: _,
                 title,
                 body,
-            } => create_issue(repo, &api, title, body).await?,
+                web,
+            } => create_issue(repo, &api, title, body, web).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_issue(repo, &api, id.number).await?,
                 ViewCommand::Comment { idx } => view_comment(repo, &api, id.number, idx).await?,
@@ -241,42 +244,65 @@ impl IssueCommand {
 async fn create_issue(
     repo: &RepoName,
     api: &Forgejo,
-    title: String,
+    title: Option<String>,
     body: Option<String>,
+    web: bool,
 ) -> eyre::Result<()> {
-    let body = match body {
-        Some(body) => body,
-        None => {
-            let mut body = String::new();
-            crate::editor(&mut body, Some("md")).await?;
-            body
+    match (title, web) {
+        (Some(title), false) => {
+            let body = match body {
+                Some(body) => body,
+                None => {
+                    let mut body = String::new();
+                    crate::editor(&mut body, Some("md")).await?;
+                    body
+                }
+            };
+            let issue = api
+                .issue_create_issue(
+                    repo.owner(),
+                    repo.name(),
+                    CreateIssueOption {
+                        body: Some(body),
+                        title,
+                        assignee: None,
+                        assignees: None,
+                        closed: None,
+                        due_date: None,
+                        labels: None,
+                        milestone: None,
+                        r#ref: None,
+                    },
+                )
+                .await?;
+            let number = issue
+                .number
+                .ok_or_else(|| eyre::eyre!("issue does not have number"))?;
+            let title = issue
+                .title
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("issue does not have title"))?;
+            eprintln!("created issue #{}: {}", number, title);
         }
-    };
-    let issue = api
-        .issue_create_issue(
-            repo.owner(),
-            repo.name(),
-            CreateIssueOption {
-                body: Some(body),
-                title,
-                assignee: None,
-                assignees: None,
-                closed: None,
-                due_date: None,
-                labels: None,
-                milestone: None,
-                r#ref: None,
-            },
-        )
-        .await?;
-    let number = issue
-        .number
-        .ok_or_else(|| eyre::eyre!("issue does not have number"))?;
-    let title = issue
-        .title
-        .as_ref()
-        .ok_or_else(|| eyre::eyre!("issue does not have title"))?;
-    eprintln!("created issue #{}: {}", number, title);
+        (None, true) => {
+            let base_repo = api.repo_get(repo.owner(), repo.name()).await?;
+            let mut issue_create_url = base_repo
+                .html_url
+                .clone()
+                .ok_or_eyre("repo does not have html url")?;
+            issue_create_url
+                .path_segments_mut()
+                .expect("invalid url")
+                .extend(["issues", "new"]);
+            open::that(issue_create_url.as_str())?;
+        }
+        (None, false) => {
+            eyre::bail!("requires either issue title or --web flag")
+        }
+        (Some(_), true) => {
+            eyre::bail!("issue title and --web flag are mutually exclusive")
+        }
+    }
     Ok(())
 }
 
