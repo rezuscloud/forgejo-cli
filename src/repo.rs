@@ -368,6 +368,13 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    /// View a repo's README
+    Readme {
+        #[clap(id = "[HOST/]OWNER/REPO")]
+        name: Option<RepoArg>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
     /// Clone a repo's code locally
     Clone {
         #[clap(id = "[HOST/]OWNER/REPO")]
@@ -473,6 +480,15 @@ impl RepoCommand {
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 view_repo(&api, repo).await?
+            }
+            RepoCommand::Readme { name, remote } => {
+                let repo =
+                    RepoInfo::get_current(host_name, name.as_ref(), remote.as_deref(), &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                view_repo_readme(&api, repo).await?
             }
             RepoCommand::Clone { repo, path } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
@@ -919,6 +935,29 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
     }
 
     Ok(())
+}
+
+async fn view_repo_readme(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
+    let query = forgejo_api::structs::RepoGetRawFileQuery { r#ref: None };
+    let file = api
+        .repo_get_raw_file(repo.owner(), repo.name(), "README.md", query)
+        .await;
+    if let Ok(readme) = file {
+        let readme_str = String::from_utf8_lossy(&readme);
+        println!("{}", crate::markdown(&readme_str));
+        return Ok(());
+    } else {
+        let query = forgejo_api::structs::RepoGetRawFileQuery { r#ref: None };
+        let file = api
+            .repo_get_raw_file(repo.owner(), repo.name(), "README.txt", query)
+            .await;
+        if let Ok(readme) = file {
+            let readme_str = String::from_utf8_lossy(&readme);
+            println!("{}", crate::render_text(&readme_str));
+            return Ok(());
+        }
+    }
+    eyre::bail!("Repo does not have README.md or README.txt");
 }
 
 async fn cmd_clone_repo(
