@@ -1,7 +1,7 @@
 use std::io::IsTerminal;
 
 use clap::{Parser, Subcommand};
-use eyre::{eyre, Context, OptionExt};
+use eyre::eyre;
 use tokio::io::AsyncWriteExt;
 
 mod keys;
@@ -13,6 +13,7 @@ mod prs;
 mod release;
 mod repo;
 mod user;
+mod whoami;
 mod wiki;
 
 #[derive(Parser, Debug)]
@@ -33,10 +34,7 @@ pub enum Command {
     Pr(prs::PrCommand),
     Wiki(wiki::WikiCommand),
     #[command(name = "whoami")]
-    WhoAmI {
-        #[clap(long, short)]
-        remote: Option<String>,
-    },
+    WhoAmI(whoami::WhoAmICommand),
     #[clap(subcommand)]
     Auth(auth::AuthCommand),
     Release(release::ReleaseCommand),
@@ -64,21 +62,7 @@ async fn main() -> eyre::Result<()> {
         Command::Issue(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Pr(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Wiki(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::WhoAmI { remote } => {
-            let url = repo::RepoInfo::get_current(host_name, None, remote.as_deref(), &keys)
-                .wrap_err("could not find host, try specifying with --host")?
-                .host_url()
-                .clone();
-            let name = keys.get_login(&url).ok_or_eyre("not logged in")?.username();
-            let host = url
-                .host_str()
-                .ok_or_eyre("instance url does not have host")?;
-            if url.path() == "/" || url.path().is_empty() {
-                println!("currently signed in to {name}@{host}");
-            } else {
-                println!("currently signed in to {name}@{host}{}", url.path());
-            }
-        }
+        Command::WhoAmI(command) => command.run(&mut keys, host_name).await?,
         Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::User(subcommand) => subcommand.run(&mut keys, host_name).await?,
