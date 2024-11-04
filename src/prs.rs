@@ -528,7 +528,11 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::R
     println!(
         "By {white}{username}{reset} {dash} {state} {dash} {bright_green}+{additions} {bright_red}-{deletions}{reset}"
     );
-    println!("From `{head_name}` into `{base_name}`");
+    if head_name.is_empty() {
+        println!("Into `{base_name}`");
+    } else {
+        println!("From `{head_name}` into `{base_name}`");
+    }
 
     if let Some(body) = &pr.body {
         if !body.trim().is_empty() {
