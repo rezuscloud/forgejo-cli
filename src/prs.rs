@@ -1609,13 +1609,22 @@ async fn guess_pr(
     let config = local_repo.config()?;
     let remote_head_name = config.get_string(&format!("branch.{local_branch_name}.merge"))?;
 
-    let maybe_agit = remote_head_name.strip_prefix("refs/for/").and_then(|s| s.split_once("/"));
+    let maybe_agit = remote_head_name
+        .strip_prefix("refs/for/")
+        .and_then(|s| s.split_once("/"));
 
     match maybe_agit {
         Some((base, head)) => {
-            let username = api.user_get_current().await?.login.ok_or_eyre("user does not have username")?.to_lowercase();
+            let username = api
+                .user_get_current()
+                .await?
+                .login
+                .ok_or_eyre("user does not have username")?
+                .to_lowercase();
             let head = format!("{username}/{head}");
-            return Ok(api.repo_get_pull_request_by_base_head(repo.owner(), repo.name(), base, &head).await?);
+            return Ok(api
+                .repo_get_pull_request_by_base_head(repo.owner(), repo.name(), base, &head)
+                .await?);
         }
         None => {
             let remote_head_short = remote_head_name
@@ -1625,15 +1634,19 @@ async fn guess_pr(
 
             let this_repo = api.repo_get(repo.owner(), repo.name()).await?;
 
-
             // check for PRs on the main branch first
             let base = this_repo
                 .default_branch
                 .as_deref()
                 .ok_or_eyre("repo does not have default branch")?;
             if let Ok(pr) = api
-                .repo_get_pull_request_by_base_head(repo.owner(), repo.name(), base, remote_head_short)
-                    .await
+                .repo_get_pull_request_by_base_head(
+                    repo.owner(),
+                    repo.name(),
+                    base,
+                    remote_head_short,
+                )
+                .await
             {
                 return Ok(pr);
             }
@@ -1657,14 +1670,15 @@ async fn guess_pr(
                         parent_base,
                         &parent_remote_head_name,
                     )
-                        .await
+                    .await
                 {
                     return Ok(pr);
                 }
             }
 
             // then iterate all branches
-            if let Some(pr) = find_pr_from_branch(repo.owner(), repo.name(), api, remote_head_short).await?
+            if let Some(pr) =
+                find_pr_from_branch(repo.owner(), repo.name(), api, remote_head_short).await?
             {
                 return Ok(pr);
             }
@@ -1673,7 +1687,8 @@ async fn guess_pr(
                 let (parent_owner, parent_name) = repo_name_from_repo(parent)?;
 
                 if let Some(pr) =
-                    find_pr_from_branch(parent_owner, parent_name, api, &parent_remote_head_name).await?
+                    find_pr_from_branch(parent_owner, parent_name, api, &parent_remote_head_name)
+                        .await?
                 {
                     return Ok(pr);
                 }
