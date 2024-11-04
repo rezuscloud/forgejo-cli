@@ -48,7 +48,7 @@ pub enum PrSubcommand {
         #[clap(long)]
         base: Option<String>,
         /// The branch to pull changes from.
-        #[clap(long)]
+        #[clap(long, group = "source")]
         head: Option<String>,
         /// What to name the new pull request.
         ///
@@ -64,8 +64,11 @@ pub enum PrSubcommand {
         #[clap(long, short, id = "[HOST/]OWNER/REPO")]
         repo: Option<RepoArg>,
         /// Open the PR creation menu in your web browser
-        #[clap(short, long, group = "web-or-cmd")]
+        #[clap(short, long, group = "web-or-cmd", group = "web-or-agit")]
         web: bool,
+        /// Open the PR creation menu in your web browser
+        #[clap(short, long, group = "source", group = "web-or-agit")]
+        agit: bool,
     },
     /// View the contents of a pull request
     View {
@@ -271,9 +274,10 @@ pub enum ViewCommand {
 impl PrCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         use PrSubcommand::*;
-        let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref(), &keys)?;
-        let api = keys.get_api(repo.host_url()).await?;
-        let repo = repo.name().ok_or_else(|| self.no_repo_error())?;
+        let repo_info =
+            RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref(), &keys)?;
+        let api = keys.get_api(repo_info.host_url()).await?;
+        let repo = repo_info.name().ok_or_else(|| self.no_repo_error())?;
         match self.command {
             Create {
                 title,
@@ -282,7 +286,21 @@ impl PrCommand {
                 body,
                 repo: _,
                 web,
-            } => create_pr(repo, &api, title, base, head, body, web).await?,
+                agit,
+            } => {
+                create_pr(
+                    repo,
+                    &api,
+                    title,
+                    base,
+                    head,
+                    body,
+                    web,
+                    agit,
+                    repo_info.remote_name(),
+                )
+                .await?
+            }
             Merge {
                 pr,
                 method,
@@ -893,11 +911,14 @@ async fn create_pr(
     head: Option<String>,
     body: Option<String>,
     web: bool,
+    agit: bool,
+    remote_name: Option<&str>,
 ) -> eyre::Result<()> {
     let mut repo_data = api.repo_get(repo.owner(), repo.name()).await?;
 
     let head = match head {
-        Some(head) => head,
+        _ if agit => None,
+        Some(head) => Some(head),
         None => {
             let local_repo = git2::Repository::open(".")?;
             let head = local_repo.head()?;
@@ -910,9 +931,15 @@ async fn create_pr(
                 .name()
                 .ok_or_eyre("current branch does not have utf8 name")?;
             let upstream_remote = local_repo.branch_upstream_remote(branch_ref)?;
-            let remote_name = upstream_remote
-                .as_str()
-                .ok_or_eyre("remote does not have utf8 name")?;
+
+            let remote_name = if let Some(remote_name) = remote_name {
+                remote_name
+            } else {
+                let upstream_name = upstream_remote
+                    .as_str()
+                    .ok_or_eyre("remote does not have utf8 name")?;
+                upstream_name
+            };
 
             let remote = local_repo.find_remote(remote_name)?;
             let remote_url_s = remote.url().ok_or_eyre("remote does not have utf8 url")?;
@@ -939,11 +966,13 @@ async fn create_pr(
             let upstream_branch = upstream_branch
                 .as_str()
                 .ok_or_eyre("remote branch does not have utf8 name")?;
-            upstream_branch
-                .rsplit_once("/")
-                .map(|(_, b)| b)
-                .unwrap_or(upstream_branch)
-                .to_owned()
+            Some(
+                upstream_branch
+                    .rsplit_once("/")
+                    .map(|(_, b)| b)
+                    .unwrap_or(upstream_branch)
+                    .to_owned(),
+            )
         }
     };
 
@@ -979,7 +1008,7 @@ async fn create_pr(
             parent_owner,
             parent_name,
             parent_repo,
-            format!("{}:{}", repo.owner(), head),
+            head.map(|head| format!("{}:{}", repo.owner(), head)),
         )
     } else {
         (
@@ -1000,6 +1029,8 @@ async fn create_pr(
     };
 
     if web {
+        // --web and --agit are mutually exclusive, so this shouldn't ever fail
+        let head = head.unwrap();
         let mut pr_create_url = base_repo
             .html_url
             .clone()
@@ -1019,31 +1050,111 @@ async fn create_pr(
                 body
             }
         };
-        let pr = api
-            .repo_create_pull_request(
-                &repo_owner,
-                &repo_name,
-                CreatePullRequestOption {
-                    assignee: None,
-                    assignees: None,
-                    base: Some(base.to_owned()),
-                    body: Some(body),
-                    due_date: None,
-                    head: Some(head),
-                    labels: None,
-                    milestone: None,
-                    title: Some(title),
-                },
-            )
-            .await?;
-        let number = pr
-            .number
-            .ok_or_else(|| eyre::eyre!("pr does not have number"))?;
-        let title = pr
-            .title
-            .as_ref()
-            .ok_or_else(|| eyre::eyre!("pr does not have title"))?;
-        println!("created pull request #{}: {}", number, title);
+        match head {
+            Some(head) => {
+                let pr = api
+                    .repo_create_pull_request(
+                        &repo_owner,
+                        &repo_name,
+                        CreatePullRequestOption {
+                            assignee: None,
+                            assignees: None,
+                            base: Some(base.to_owned()),
+                            body: Some(body),
+                            due_date: None,
+                            head: Some(head),
+                            labels: None,
+                            milestone: None,
+                            title: Some(title),
+                        },
+                    )
+                    .await?;
+                let number = pr
+                    .number
+                    .ok_or_else(|| eyre::eyre!("pr does not have number"))?;
+                let title = pr
+                    .title
+                    .as_ref()
+                    .ok_or_else(|| eyre::eyre!("pr does not have title"))?;
+                println!("created pull request #{}: {}", number, title);
+            }
+            // no head means agit
+            None => {
+                let local_repo = git2::Repository::open(".")?;
+                let mut git_config = local_repo.config()?;
+                let clone_url = base_repo
+                    .clone_url
+                    .as_ref()
+                    .ok_or_eyre("base repo does not have clone url")?;
+
+                let git_auth = auth_git2::GitAuthenticator::new();
+
+                let mut push_options = git2::PushOptions::new();
+
+                let mut remote_callbacks = git2::RemoteCallbacks::new();
+                remote_callbacks.credentials(git_auth.credentials(&git_config));
+                push_options.remote_callbacks(remote_callbacks);
+
+                let current_branch = git2::Branch::wrap(local_repo.head()?.resolve()?);
+                let current_branch_name = current_branch
+                    .name()?
+                    .ok_or_eyre("branch name is not utf8")?;
+                let topic = format!("agit-{current_branch_name}");
+
+                push_options.remote_push_options(&[
+                    &format!("topic={topic}"),
+                    &format!("title={title}"),
+                    &format!("description={body}"),
+                ]);
+
+                let mut remote = if let Some(remote_name) = remote_name {
+                    local_repo.find_remote(remote_name)?
+                } else {
+                    local_repo.remote_anonymous(clone_url.as_str())?
+                };
+
+                remote.push(&[&format!("HEAD:refs/for/{base}")], Some(&mut push_options))?;
+
+                // needed so the mutable reference later is valid
+                drop(push_options);
+
+                println!("created new PR: \"{title}\"");
+
+                let merge_setting_name = format!("branch.{current_branch_name}.merge");
+                let remote_setting_name = format!("branch.{current_branch_name}.remote");
+                let cfg_push_default = git_config.get_string("push.default").ok();
+                let cfg_branch_merge = git_config.get_string(&merge_setting_name).ok();
+                let cfg_branch_remote = git_config.get_string(&remote_setting_name).ok();
+
+                let topic_setting = format!("refs/for/{base}/{topic}");
+
+                let default_is_upstream = cfg_push_default.is_some_and(|s| s == "upstream");
+                let branch_merge_is_agit = cfg_branch_merge.is_some_and(|s| s == topic_setting);
+                let branch_remote_is_agit = cfg_branch_remote.is_some_and(|s| s == topic_setting);
+                if !default_is_upstream || !branch_merge_is_agit || !branch_remote_is_agit {
+                    println!("Would you like to set the needed git config");
+                    println!("items so that `git push` works for this pr?");
+                    loop {
+                        let response = crate::readline("(y/N/?) ").await?;
+                        match response.trim() {
+                            "y" | "Y" | "yes" | "Yes" => {
+                                let remote = remote_name.unwrap_or(clone_url.as_str());
+                                git_config.set_str("push.default", "upstream")?;
+                                git_config.set_str(&merge_setting_name, &topic_setting)?;
+                                git_config.set_str(&remote_setting_name, remote)?;
+                                break;
+                            }
+                            "?" | "h" | "H" | "help" => {
+                                println!("This would set the following config options:");
+                                println!("  push.default = upstream");
+                                println!("  branch.{current_branch_name}.merge = {topic_setting}");
+                            }
+                            _ => break,
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
