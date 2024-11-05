@@ -10,6 +10,7 @@ use crate::SpecialRender;
 pub struct RepoInfo {
     url: Url,
     name: Option<RepoName>,
+    remote_name: Option<String>,
 }
 
 impl RepoInfo {
@@ -72,6 +73,8 @@ impl RepoInfo {
                 .or_else(|| Url::parse(&format!("https://{host}/")).ok())
                 .map(|url| keys.deref_alias(url))
         });
+
+        let mut final_remote_name = None;
 
         let (remote_url, remote_repo_name) = {
             let mut out = (None, None);
@@ -143,9 +146,11 @@ impl RepoInfo {
                     if let Ok(remote) = local_repo.find_remote(&name) {
                         let url_s = std::str::from_utf8(remote.url_bytes())?;
                         let url = keys.deref_alias(crate::ssh_url_parse(url_s)?);
-                        let (url, name) = url_strip_repo_name(url)?;
+                        let (url, repo_name) = url_strip_repo_name(url)?;
 
-                        out = (Some(url), Some(name))
+                        out = (Some(url), Some(repo_name));
+
+                        final_remote_name = Some(name);
                     }
                 }
             } else {
@@ -177,7 +182,11 @@ impl RepoInfo {
         });
 
         let info = match (url, name) {
-            (Some(url), name) => RepoInfo { url, name },
+            (Some(url), name) => RepoInfo {
+                url,
+                name,
+                remote_name: final_remote_name,
+            },
             (None, Some(_)) => eyre::bail!("cannot find repo, no host specified"),
             (None, None) => eyre::bail!("no repo info specified"),
         };
@@ -191,6 +200,10 @@ impl RepoInfo {
 
     pub fn host_url(&self) -> &Url {
         &self.url
+    }
+
+    pub fn remote_name(&self) -> Option<&str> {
+        self.remote_name.as_deref()
     }
 }
 
