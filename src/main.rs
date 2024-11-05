@@ -149,7 +149,7 @@ fn ssh_url_parse(s: &str) -> Result<url::Url, url::ParseError> {
 
         let auth_end = s.find("@").unwrap_or(0);
         new_s.push_str(&s[..auth_end]);
-        new_s.push_str(&s[..auth_end].replacen(":", "/", 1));
+        new_s.push_str(&s[auth_end..].replacen(":", "/", 1));
         url::Url::parse(&new_s)
     })
 }
