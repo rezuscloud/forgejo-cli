@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use clap::{Args, Subcommand};
-use eyre::{eyre, OptionExt};
+use eyre::{eyre, Context, OptionExt};
 use forgejo_api::structs::{
     Comment, CreateIssueCommentOption, CreateIssueOption, EditIssueOption, IssueGetCommentsQuery,
 };
@@ -294,7 +294,7 @@ async fn create_issue(
                 .path_segments_mut()
                 .expect("invalid url")
                 .extend(["issues", "new"]);
-            open::that(issue_create_url.as_str())?;
+            open::that_detached(issue_create_url.as_str()).wrap_err("Failed to open URL")?;
         }
         (None, false) => {
             eyre::bail!("requires either issue title or --web flag")
@@ -483,7 +483,7 @@ pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Resu
         .html_url
         .as_ref()
         .ok_or_else(|| eyre::eyre!("issue does not have html_url"))?;
-    open::that(html_url.as_str())?;
+    open::that_detached(html_url.as_str()).wrap_err("Failed to open URL")?;
     Ok(())
 }
 

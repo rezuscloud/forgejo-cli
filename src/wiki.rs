@@ -124,7 +124,7 @@ async fn browse_wiki_page(repo: &RepoName, api: &Forgejo, page: &str) -> eyre::R
         .html_url
         .as_ref()
         .ok_or_eyre("page does not have html url")?;
-    open::that(html_url.as_str())?;
+    open::that_detached(html_url.as_str()).wrap_err("Failed to open URL")?;
     Ok(())
 }
 
