@@ -1,7 +1,7 @@
 use std::{io::Write, path::PathBuf, str::FromStr};
 
 use clap::Subcommand;
-use eyre::{eyre, OptionExt};
+use eyre::{eyre, Context, OptionExt, Result};
 use forgejo_api::{structs::CreateRepoOption, Forgejo};
 use url::Url;
 
@@ -541,7 +541,7 @@ impl RepoCommand {
                     .map_err(|_| eyre!("url invalid"))?
                     .extend([repo.owner(), repo.name()]);
 
-                open::that(url.as_str())?;
+                open::that_detached(url.as_str()).wrap_err("Failed to open URL")?;
             }
         };
         Ok(())

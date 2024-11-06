@@ -1043,7 +1043,7 @@ async fn create_pr(
             .path_segments_mut()
             .expect("invalid url")
             .extend(["compare", &format!("{base}...{head}")]);
-        open::that(pr_create_url.as_str())?;
+        open::that_detached(pr_create_url.as_str()).wrap_err("Failed to open URL")?;
     } else {
         let title = title.ok_or_eyre("title is required")?;
         let body = match body {
@@ -1557,7 +1557,7 @@ pub async fn browse_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<
         .html_url
         .as_ref()
         .ok_or_else(|| eyre::eyre!("pr does not have html_url"))?;
-    open::that(html_url.as_str())?;
+    open::that_detached(html_url.as_str()).wrap_err("Failed to open URL")?;
     Ok(())
 }
 

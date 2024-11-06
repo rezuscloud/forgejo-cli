@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use eyre::OptionExt;
+use eyre::{Context, OptionExt};
 use forgejo_api::Forgejo;
 
 use crate::{repo::RepoInfo, SpecialRender};
@@ -352,7 +352,7 @@ async fn browse_user(api: &Forgejo, host_url: &url::Url, user: Option<&str>) -> 
     url.path_segments_mut()
         .map_err(|_| eyre::eyre!("invalid host url"))?
         .push(&username);
-    open::that(url.as_str())?;
+    open::that_detached(url.as_str()).wrap_err("Failed to open URL")?;
 
     Ok(())
 }
