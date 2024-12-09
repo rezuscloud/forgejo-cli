@@ -75,7 +75,7 @@ impl RepoInfo {
 
         let (remote_url, remote_repo_name) = {
             let mut out = (None, None);
-            if let Ok(local_repo) = git2::Repository::open(".") {
+            if let Ok(local_repo) = git2::Repository::discover(".") {
                 let mut name = remote.map(|s| s.to_owned());
 
                 // if there's only one remote, use that
@@ -544,7 +544,7 @@ pub async fn create_repo(
     push: bool,
 ) -> eyre::Result<()> {
     if remote.is_some() || push {
-        let repo = git2::Repository::open(".")?;
+        let repo = git2::Repository::discover(".")?;
 
         let upstream = remote.as_deref().unwrap_or("origin");
         if repo.find_remote(upstream).is_ok() {
@@ -573,7 +573,7 @@ pub async fn create_repo(
     println!("created new repo at {}", html_url);
 
     if remote.is_some() || push {
-        let repo = git2::Repository::open(".")?;
+        let repo = git2::Repository::discover(".")?;
 
         let upstream = remote.as_deref().unwrap_or("origin");
         let clone_url = new_repo

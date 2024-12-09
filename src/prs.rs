@@ -391,7 +391,7 @@ impl PrCommand {
                 eyre::eyre!("can't figure what repo to access, try specifying with `--repo`")
             }
             Checkout { .. } => {
-                if git2::Repository::open(".").is_ok() {
+                if git2::Repository::discover(".").is_ok() {
                     eyre::eyre!("can't figure out what repo to access, try setting a remote tracking branch")
                 } else {
                     eyre::eyre!("pr checkout only works if the current directory is a git repo")
@@ -899,7 +899,7 @@ async fn create_pr(
     let head = match head {
         Some(head) => head,
         None => {
-            let local_repo = git2::Repository::open(".")?;
+            let local_repo = git2::Repository::discover(".")?;
             let head = local_repo.head()?;
             eyre::ensure!(
                 head.is_branch(),
@@ -1126,7 +1126,7 @@ async fn checkout_pr(
     pr: PrNumber,
     branch_name: Option<String>,
 ) -> eyre::Result<()> {
-    let local_repo = git2::Repository::open(".").unwrap();
+    let local_repo = git2::Repository::discover(".").unwrap();
 
     let mut options = git2::StatusOptions::new();
     options.include_ignored(false);
@@ -1486,7 +1486,7 @@ async fn guess_pr(
     repo: &RepoName,
     api: &Forgejo,
 ) -> eyre::Result<forgejo_api::structs::PullRequest> {
-    let local_repo = git2::Repository::open(".")?;
+    let local_repo = git2::Repository::discover(".")?;
     let head = local_repo.head()?;
     eyre::ensure!(head.is_branch(), "head is not on branch");
     let local_branch = git2::Branch::wrap(head);
