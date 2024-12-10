@@ -8,11 +8,23 @@ pub struct VersionCommand {
     #[clap(long)]
     #[cfg(feature = "update-check")]
     check: bool,
+    #[clap(short, long)]
+    verbose: bool,
 }
+
+const BUILD_TYPE: &str = match option_env!("BUILD_TYPE") {
+    Some(s) => s,
+    None => "from source",
+};
 
 impl VersionCommand {
     pub async fn run(self) -> eyre::Result<()> {
-        println!("{}", env!("CARGO_PKG_VERSION"));
+        println!("{} v{}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION"));
+        if self.verbose {
+            println!("user agent: {}", crate::keys::USER_AGENT);
+            println!("build type: {BUILD_TYPE}");
+            println!("    target: {}", env!("BUILD_TARGET"));
+        }
         #[cfg(feature = "update-check")]
         self.update_msg().await?;
         Ok(())

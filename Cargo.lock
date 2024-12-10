@@ -603,6 +603,7 @@ version = "0.1.1"
 dependencies = [
  "auth-git2",
  "base64ct",
+ "cfg-if",
  "clap",
  "comrak",
  "crossterm",
