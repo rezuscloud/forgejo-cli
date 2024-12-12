@@ -267,7 +267,8 @@ async fn create_release(
             repo.owner(),
             repo.name(),
             id,
-            tokio::fs::read(file).await?,
+            Some(tokio::fs::read(file).await?),
+            None,
             query,
         )
         .await?;
@@ -473,7 +474,8 @@ async fn create_asset(
         repo.owner(),
         repo.name(),
         id,
-        tokio::fs::read(file).await?,
+        Some(tokio::fs::read(file).await?),
+        None,
         query,
     )
     .await?;
