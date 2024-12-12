@@ -24,6 +24,10 @@
           homepage = "https://codeberg.org/Cyborus/forgejo-cli/";
           license = with licenses; [ asl20 /* or */ mit ];
         };
+
+        env = {
+          BUILD_TYPE = "flake";
+        };
       };
 
       packages.default = packages.forgejo-cli;
