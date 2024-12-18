@@ -54,7 +54,8 @@ impl KeyInfo {
     pub async fn get_api(&mut self, url: &Url) -> eyre::Result<Forgejo> {
         match self.get_login(url) {
             Some(login) => login.api_for(url).await,
-            None => Forgejo::new(Auth::None, url.clone()).map_err(Into::into),
+            None => Forgejo::with_user_agent(Auth::None, url.clone(), crate::USER_AGENT)
+                .map_err(Into::into),
         }
     }
 
@@ -73,15 +74,6 @@ impl KeyInfo {
         }
     }
 }
-
-pub const USER_AGENT: &str = concat!(
-    env!("CARGO_PKG_NAME"),
-    "/",
-    env!("CARGO_PKG_VERSION"),
-    " (",
-    env!("CARGO_PKG_REPOSITORY"),
-    ")"
-);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(tag = "type")]
@@ -109,7 +101,8 @@ impl LoginInfo {
     pub async fn api_for(&mut self, url: &Url) -> eyre::Result<Forgejo> {
         match self {
             LoginInfo::Application { token, .. } => {
-                let api = Forgejo::with_user_agent(Auth::Token(token), url.clone(), USER_AGENT)?;
+                let api =
+                    Forgejo::with_user_agent(Auth::Token(token), url.clone(), crate::USER_AGENT)?;
                 Ok(api)
             }
             LoginInfo::OAuth {
@@ -119,7 +112,7 @@ impl LoginInfo {
                 ..
             } => {
                 if time::OffsetDateTime::now_utc() >= *expires_at {
-                    let api = Forgejo::with_user_agent(Auth::None, url.clone(), USER_AGENT)?;
+                    let api = Forgejo::with_user_agent(Auth::None, url.clone(), crate::USER_AGENT)?;
                     let (client_id, client_secret) = crate::auth::get_client_info_for(url)
                         .ok_or_else(|| {
                             eyre::eyre!("Can't refresh token; no client info for {url}. How did this happen?")
@@ -140,7 +133,8 @@ impl LoginInfo {
                     );
                     *expires_at = time::OffsetDateTime::now_utc() + expires_in;
                 }
-                let api = Forgejo::with_user_agent(Auth::Token(token), url.clone(), USER_AGENT)?;
+                let api =
+                    Forgejo::with_user_agent(Auth::Token(token), url.clone(), crate::USER_AGENT)?;
                 Ok(api)
             }
         }

@@ -17,6 +17,15 @@ mod version;
 mod whoami;
 mod wiki;
 
+pub const USER_AGENT: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")"
+);
+
 #[derive(Parser, Debug)]
 pub struct App {
     #[clap(long, short = 'H')]

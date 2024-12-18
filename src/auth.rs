@@ -145,7 +145,11 @@ async fn oauth_login(
         }
     };
 
-    let api = forgejo_api::Forgejo::new(forgejo_api::Auth::None, host.clone())?;
+    let api = forgejo_api::Forgejo::with_user_agent(
+        forgejo_api::Auth::None,
+        host.clone(),
+        crate::USER_AGENT,
+    )?;
     let request = forgejo_api::structs::OAuthTokenRequest::Public {
         client_id,
         code_verifier: &code_verifier,
@@ -154,9 +158,10 @@ async fn oauth_login(
     };
     let response = api.oauth_get_access_token(request).await?;
 
-    let api = forgejo_api::Forgejo::new(
+    let api = forgejo_api::Forgejo::with_user_agent(
         forgejo_api::Auth::OAuth2(&response.access_token),
         host.clone(),
+        crate::USER_AGENT,
     )?;
     let current_user = api.user_get_current().await?;
     let name = current_user
