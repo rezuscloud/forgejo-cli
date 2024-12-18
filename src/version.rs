@@ -21,7 +21,7 @@ impl VersionCommand {
     pub async fn run(self) -> eyre::Result<()> {
         println!("{} v{}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION"));
         if self.verbose {
-            println!("user agent: {}", crate::keys::USER_AGENT);
+            println!("user agent: {}", crate::USER_AGENT);
             println!("build type: {BUILD_TYPE}");
             println!("    target: {}", env!("BUILD_TARGET"));
         }
@@ -36,7 +36,11 @@ impl VersionCommand {
 
         if self.check {
             let url = url::Url::parse("https://codeberg.org/")?;
-            let api = forgejo_api::Forgejo::new(forgejo_api::Auth::None, url)?;
+            let api = forgejo_api::Forgejo::with_user_agent(
+                forgejo_api::Auth::None,
+                url,
+                crate::USER_AGENT,
+            )?;
 
             let latest = api
                 .repo_get_latest_release("Cyborus", "forgejo-cli")
