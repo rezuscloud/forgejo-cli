@@ -16,6 +16,7 @@ mod user;
 mod version;
 mod whoami;
 mod wiki;
+mod completion;
 
 pub const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
@@ -50,6 +51,7 @@ pub enum Command {
     Release(release::ReleaseCommand),
     User(user::UserCommand),
     Version(version::VersionCommand),
+    Completion(completion::CompletionCommand),
 }
 
 #[tokio::main]
@@ -72,6 +74,7 @@ async fn main() -> eyre::Result<()> {
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::User(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Version(command) => command.run().await?,
+        Command::Completion(subcommand) => subcommand.run(),
     }
 
     keys.save().await?;
