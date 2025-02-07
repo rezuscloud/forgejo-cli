@@ -330,7 +330,6 @@ pub enum RepoCommand {
     },
     /// Fork a repository onto your account
     Fork {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
         #[clap(long)]
         name: Option<String>,
@@ -339,7 +338,6 @@ pub enum RepoCommand {
     },
     Migrate {
         /// URL of the repo to migrate
-        #[clap(id = "HOST/OWNER/REPO")]
         repo: String,
         /// Name of the new mirror
         name: String,
@@ -376,44 +374,37 @@ pub enum RepoCommand {
     },
     /// View a repo's info
     View {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
     /// View a repo's README
     Readme {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
     /// Clone a repo's code locally
     Clone {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
         path: Option<PathBuf>,
     },
     /// Add a star to a repo
     Star {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
     /// Take away a star from a repo
     Unstar {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
     /// Delete a repository
     ///
     /// This cannot be undone!
     Delete {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         repo: RepoArg,
     },
     /// Open a repository's page in your browser
     Browse {
-        #[clap(id = "[HOST/]OWNER/REPO")]
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,

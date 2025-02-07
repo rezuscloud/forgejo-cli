@@ -25,27 +25,24 @@ pub enum IssueSubcommand {
         title: Option<String>,
         #[clap(long)]
         body: Option<String>,
-        #[clap(long, short, id = "[HOST/]OWNER/REPO")]
+        #[clap(long, short)]
         repo: Option<RepoArg>,
         #[clap(long)]
         web: bool,
     },
     /// Edit an issue
     Edit {
-        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         #[clap(subcommand)]
         command: EditCommand,
     },
     /// Add a comment on an issue
     Comment {
-        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         body: Option<String>,
     },
     /// Close an issue
     Close {
-        #[clap(id = "[REPO#]ID")]
         issue: IssueId,
         /// A comment to leave on the issue before closing it
         #[clap(long, short)]
@@ -53,7 +50,7 @@ pub enum IssueSubcommand {
     },
     /// Search for an issue in a repo
     Search {
-        #[clap(long, short, id = "[HOST/]OWNER/REPO")]
+        #[clap(long, short)]
         repo: Option<RepoArg>,
         query: Option<String>,
         #[clap(long, short)]
@@ -67,14 +64,12 @@ pub enum IssueSubcommand {
     },
     /// View an issue's info
     View {
-        #[clap(id = "[REPO#]ID")]
         id: IssueId,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
     /// Open an issue in your browser
     Browse {
-        #[clap(id = "[REPO#]ID")]
         id: IssueId,
     },
 }

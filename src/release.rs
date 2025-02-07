@@ -18,7 +18,7 @@ pub struct ReleaseCommand {
     #[clap(long, short = 'R')]
     remote: Option<String>,
     /// The name of the repository to operate on.
-    #[clap(long, short, id = "[HOST/]OWNER/REPO")]
+    #[clap(long, short)]
     repo: Option<RepoArg>,
     #[clap(subcommand)]
     command: ReleaseSubcommand,
