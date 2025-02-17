@@ -31,7 +31,9 @@ impl CompletionCommand {
             Bash => clap_complete::generate(CCShell::Bash, &mut cmd, app_name, &mut writer),
             Elvish => clap_complete::generate(CCShell::Elvish, &mut cmd, app_name, &mut writer),
             Fish => clap_complete::generate(CCShell::Fish, &mut cmd, app_name, &mut writer),
-            PowerShell => clap_complete::generate(CCShell::PowerShell, &mut cmd, app_name, &mut writer),
+            PowerShell => {
+                clap_complete::generate(CCShell::PowerShell, &mut cmd, app_name, &mut writer)
+            }
             Zsh => clap_complete::generate(CCShell::Zsh, &mut cmd, app_name, &mut writer),
             Nushell => clap_complete::generate(NushellCompletion, &mut cmd, app_name, &mut writer),
         }
@@ -90,7 +92,8 @@ fn generate_subcommand(cmd: &clap::Command, buf: &mut dyn Write) -> eyre::Result
     }
 
     // subcommand completion
-    if cmd.get_subcommands().next().is_some() { // basically `!is_empty`
+    if cmd.get_subcommands().next().is_some() {
+        // basically `!is_empty`
         writeln!(buf, "    rest?: string@\"complete-subcommand {name}\",")?;
     }
 
@@ -114,7 +117,11 @@ fn generate_subcommand(cmd: &clap::Command, buf: &mut dyn Write) -> eyre::Result
         if possible_values.is_empty() {
             continue;
         }
-        writeln!(buf, "  def \"complete-value {name} {}\" [] {{", arg.get_id().as_str())?;
+        writeln!(
+            buf,
+            "  def \"complete-value {name} {}\" [] {{",
+            arg.get_id().as_str()
+        )?;
         writeln!(buf, "    [")?;
         for possible_value in &possible_values {
             write!(buf, "      {{ value: \"{}\"", possible_value.get_name())?;
@@ -152,7 +159,10 @@ fn generate_subcommand(cmd: &clap::Command, buf: &mut dyn Write) -> eyre::Result
 
 fn arg_type(cmd_name: &str, arg: &clap::Arg, buf: &mut dyn Write) -> eyre::Result<()> {
     use clap::ValueHint;
-    let takes_values = arg.get_num_args().map(|r| r.takes_values()).unwrap_or_default();
+    let takes_values = arg
+        .get_num_args()
+        .map(|r| r.takes_values())
+        .unwrap_or_default();
     if takes_values {
         let type_name = match arg.get_value_hint() {
             ValueHint::Unknown => "string",
@@ -176,7 +186,11 @@ fn arg_type(cmd_name: &str, arg: &clap::Arg, buf: &mut dyn Write) -> eyre::Resul
 
     let possible_values = arg.get_possible_values();
     if !possible_values.is_empty() {
-        write!(buf, "@\"complete-value {cmd_name} {}\"", arg.get_id().as_str())?;
+        write!(
+            buf,
+            "@\"complete-value {cmd_name} {}\"",
+            arg.get_id().as_str()
+        )?;
     }
 
     Ok(())

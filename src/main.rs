@@ -8,6 +8,7 @@ mod keys;
 use keys::*;
 
 mod auth;
+mod completion;
 mod issues;
 mod prs;
 mod release;
@@ -16,7 +17,6 @@ mod user;
 mod version;
 mod whoami;
 mod wiki;
-mod completion;
 
 pub const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),

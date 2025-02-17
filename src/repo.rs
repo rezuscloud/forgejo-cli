@@ -390,19 +390,13 @@ pub enum RepoCommand {
         path: Option<PathBuf>,
     },
     /// Add a star to a repo
-    Star {
-        repo: RepoArg,
-    },
+    Star { repo: RepoArg },
     /// Take away a star from a repo
-    Unstar {
-        repo: RepoArg,
-    },
+    Unstar { repo: RepoArg },
     /// Delete a repository
     ///
     /// This cannot be undone!
-    Delete {
-        repo: RepoArg,
-    },
+    Delete { repo: RepoArg },
     /// Open a repository's page in your browser
     Browse {
         name: Option<RepoArg>,
