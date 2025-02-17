@@ -98,18 +98,19 @@ pub enum OrgSubcommand {
         /// The name of the organization to view activity for.
         name: String,
     },
-    Team {
-        /// The name of the organization to operate on.
-        name: String,
-        #[clap(subcommand)]
-        subcommand: TeamSubcommand,
-    },
+    #[clap(subcommand)]
+    Team(TeamSubcommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamSubcommand {
-    List,
+    List {
+        /// The name of the organization to list the teams in.
+        org: String,
+    },
     Create {
+        /// The name of the organization to create the team in.
+        org: String,
         /// The name of the new team
         ///
         /// This must only contain alphanumeric characters.
@@ -211,12 +212,10 @@ impl OrgCommand {
                 .await?
             }
             OrgSubcommand::Activity { name } => list_activity(&api, name).await?,
-            OrgSubcommand::Team {
-                name: org,
-                subcommand,
-            } => match subcommand {
-                TeamSubcommand::List => list_teams(&api, org).await?,
+            OrgSubcommand::Team(subcommand) => match subcommand {
+                TeamSubcommand::List { org } => list_teams(&api, org).await?,
                 TeamSubcommand::Create {
+                    org,
                     name,
                     can_create_repos,
                     description,
