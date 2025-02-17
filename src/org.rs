@@ -92,6 +92,10 @@ pub enum OrgSubcommand {
         #[clap(long, short)]
         admin_can_change_team_access: bool,
     },
+    Activity {
+        /// The name of the organization to view activity for.
+        name: String,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,6 +179,7 @@ impl OrgCommand {
                 )
                 .await?
             }
+            OrgSubcommand::Activity { name } => list_activity(&api, name).await?,
         }
         Ok(())
     }
@@ -369,5 +374,15 @@ async fn edit_org(
         website,
     };
     api.org_edit(&name, opt).await?;
+    Ok(())
+}
+
+async fn list_activity(api: &Forgejo, name: String) -> eyre::Result<()> {
+    let query = forgejo_api::structs::OrgListActivityFeedsQuery::default();
+    let (_, feed) = api.org_list_activity_feeds(&name, query).await?;
+
+    for activity in feed {
+        crate::user::print_activity(&activity)?;
+    }
     Ok(())
 }
