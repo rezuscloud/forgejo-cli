@@ -69,9 +69,7 @@ pub enum IssueSubcommand {
         command: Option<ViewCommand>,
     },
     /// Open an issue in your browser
-    Browse {
-        id: IssueId,
-    },
+    Browse { id: IssueId },
 }
 
 #[derive(Clone, Debug)]
