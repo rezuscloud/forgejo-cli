@@ -370,7 +370,7 @@ async fn unfollow_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
 }
 
 async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let following = match user {
+    let (_, following) = match user {
         Some(user) => {
             let query = forgejo_api::structs::UserListFollowingQuery {
                 limit: Some(u32::MAX),
@@ -412,7 +412,7 @@ async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 }
 
 async fn list_followers(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let followers = match user {
+    let (_, followers) = match user {
         Some(user) => {
             let query = forgejo_api::structs::UserListFollowersQuery {
                 limit: Some(u32::MAX),
@@ -481,7 +481,7 @@ async fn list_repos(
     starred: bool,
     sort: Option<RepoSortOrder>,
 ) -> eyre::Result<()> {
-    let mut repos = if starred {
+    let (_, mut repos) = if starred {
         match user {
             Some(user) => {
                 let query = forgejo_api::structs::UserListStarredQuery {
@@ -561,7 +561,7 @@ async fn list_repos(
 }
 
 async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let mut orgs = match user {
+    let (_, mut orgs) = match user {
         Some(user) => {
             let query = forgejo_api::structs::OrgListUserOrgsQuery {
                 limit: Some(u32::MAX),
@@ -620,7 +620,7 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
         only_performed_by: Some(true),
         ..Default::default()
     };
-    let feed = api.user_list_activity_feeds(&user, query).await?;
+    let (_, feed) = api.user_list_activity_feeds(&user, query).await?;
 
     let SpecialRender {
         bold,

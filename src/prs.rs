@@ -826,7 +826,7 @@ async fn edit_pr_labels(
         limit: Some(u32::MAX),
         ..Default::default()
     };
-    let mut labels = api
+    let (_, mut labels) = api
         .issue_list_labels(repo.owner(), repo.name(), query)
         .await?;
     let query = forgejo_api::structs::OrgListLabelsQuery {
@@ -836,6 +836,7 @@ async fn edit_pr_labels(
     let org_labels = api
         .org_list_labels(repo.owner(), query)
         .await
+        .map(|(_, x)| x)
         .unwrap_or_default();
     labels.extend(org_labels);
 
@@ -1347,7 +1348,7 @@ async fn view_prs(
         page: None,
         limit: None,
     };
-    let prs = api
+    let (_, prs) = api
         .issue_list_issues(repo.owner(), repo.name(), query)
         .await?;
     if prs.len() == 1 {
@@ -1703,14 +1704,9 @@ async fn find_pr_from_branch(
             page: Some(page),
             limit: Some(30),
         };
-        let remote_branches = match api
+        let (headers, remote_branches) = api
             .repo_list_branches(repo_owner, repo_name, branch_query)
-            .await
-        {
-            Ok(x) if !x.is_empty() => x,
-            _ => break,
-        };
-
+            .await?;
         let prs = futures::future::try_join_all(
             remote_branches
                 .into_iter()
@@ -1721,6 +1717,9 @@ async fn find_pr_from_branch(
             if pr.is_some() {
                 return Ok(pr);
             }
+        }
+        if !headers.x_has_more.unwrap_or_default() {
+            break;
         }
     }
     Ok(None)

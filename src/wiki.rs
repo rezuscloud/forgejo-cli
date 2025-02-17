@@ -77,7 +77,7 @@ async fn wiki_contents(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
         page: None,
         limit: None,
     };
-    let pages = api
+    let (_, pages) = api
         .repo_get_wiki_pages(repo.owner(), repo.name(), query)
         .await?;
     for page in pages {
