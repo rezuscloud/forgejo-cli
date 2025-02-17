@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
+
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
-    structs::{CreateOrgOption, EditOrgOption, OrgListTeamsQuery},
+    structs::{CreateOrgOption, CreateTeamOption, EditOrgOption, OrgListTeamsQuery},
     Forgejo,
 };
 
@@ -107,6 +109,24 @@ pub enum OrgSubcommand {
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamSubcommand {
     List,
+    Create {
+        /// The name of the new team
+        ///
+        /// This must only contain alphanumeric characters.
+        name: String,
+        #[clap(long, short)]
+        can_create_repos: bool,
+        #[clap(long, short)]
+        description: Option<String>,
+        #[clap(long, short)]
+        include_all_repos: bool,
+        #[clap(long, short)]
+        read_permissions: Option<String>,
+        #[clap(long, short)]
+        write_permissions: Option<String>,
+        #[clap(long, short = 'A')]
+        admin: bool,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -196,6 +216,28 @@ impl OrgCommand {
                 subcommand,
             } => match subcommand {
                 TeamSubcommand::List => list_teams(&api, org).await?,
+                TeamSubcommand::Create {
+                    name,
+                    can_create_repos,
+                    description,
+                    include_all_repos,
+                    read_permissions,
+                    write_permissions,
+                    admin,
+                } => {
+                    create_team(
+                        &api,
+                        org,
+                        name,
+                        can_create_repos,
+                        description,
+                        include_all_repos,
+                        read_permissions,
+                        write_permissions,
+                        admin,
+                    )
+                    .await?
+                }
             },
         }
         Ok(())
@@ -418,6 +460,7 @@ async fn list_teams(api: &Forgejo, org: String) -> eyre::Result<()> {
         }
     }
     teams.sort_unstable_by_key(permission_sort_id);
+    dbg!(&teams);
 
     let SpecialRender {
         bright_blue,
@@ -442,4 +485,82 @@ fn permission_sort_id(team: &forgejo_api::structs::Team) -> u32 {
         Some(Perm::Read) => 3,
         Some(Perm::None) | None => 4,
     }
+}
+
+const ALL_UNITS: &[&str] = &[
+    "repo.wiki",
+    "repo.ext_wiki",
+    "repo.issues",
+    "repo.ext_issues",
+    "repo.pulls",
+    "repo.projects",
+    "repo.actions",
+    "repo.code",
+    "repo.releases",
+    "repo.packages",
+];
+
+async fn create_team(
+    api: &Forgejo,
+    org: String,
+    name: String,
+    can_create_repo: bool,
+    description: Option<String>,
+    include_all_repos: bool,
+    read_permissions: Option<String>,
+    write_permissions: Option<String>,
+    admin: bool,
+) -> eyre::Result<()> {
+    let mut units = BTreeMap::new();
+    if let Some(ro_perms) = read_permissions {
+        if ro_perms == "all" {
+            for ro in ALL_UNITS {
+                units.insert(ro.to_string(), "read".to_owned());
+            }
+        } else {
+            for ro in ro_perms.split(",") {
+                units.insert(format!("repo.{ro}"), "read".to_owned());
+            }
+        }
+    }
+    if let Some(rw_perms) = write_permissions {
+        if rw_perms.trim() == "all" {
+            for rw in ALL_UNITS {
+                units.insert(rw.to_string(), "write".to_owned());
+            }
+        } else {
+            for rw in rw_perms.split(",") {
+                units.insert(format!("repo.{rw}"), "write".to_owned());
+            }
+        }
+    }
+    let options = CreateTeamOption {
+        can_create_org_repo: Some(can_create_repo),
+        description,
+        includes_all_repositories: Some(include_all_repos),
+        name,
+        permission: admin.then(|| forgejo_api::structs::CreateTeamOptionPermission::Admin),
+        units: None,
+        units_map: Some(units),
+    };
+    let new_team = api.org_create_team(&org, options).await?;
+    let org = new_team.organization.ok_or_eyre("team doesn't have org")?;
+    let org_name = org
+        .name
+        .or(org.full_name)
+        .ok_or_eyre("org doesn't have name")?;
+    let name = new_team.name.ok_or_eyre("team doesn't have name")?;
+
+    let SpecialRender {
+        bright_blue,
+        bold,
+        reset,
+        ..
+    } = crate::special_render();
+    print!("created new ");
+    if admin {
+        print!("admin ");
+    }
+    println!("team {bright_blue}{bold}{name}{reset} in {bold}{org_name}{reset}");
+    Ok(())
 }
