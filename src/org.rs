@@ -55,6 +55,10 @@ pub enum OrgSubcommand {
         #[clap(long, short)]
         admin_can_change_team_access: bool,
     },
+    View {
+        /// The name of the organization to view.
+        name: String,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,6 +107,7 @@ impl OrgCommand {
                 )
                 .await?
             }
+            OrgSubcommand::View { name } => view_org(&api, name).await?,
         }
         Ok(())
     }
@@ -188,5 +193,90 @@ async fn create_org(
             println!("\"{name}\"");
         }
     }
+    Ok(())
+}
+
+async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
+    let org = api.org_get(&name).await?;
+
+    let SpecialRender {
+        bold,
+        dash,
+        bright_cyan,
+        light_grey,
+        reset,
+        ..
+    } = *crate::special_render();
+
+    let name = org.name.as_deref().ok_or_eyre("org does not have name")?;
+    let visibility = org
+        .visibility
+        .as_deref()
+        .ok_or_eyre("new org does not have visibility")?;
+    let vis_pretty = match visibility {
+        "public" => "Public",
+        "limited" => "Limited",
+        "private" => "Private",
+        _ => visibility,
+    };
+
+    if let Some(full_name) = &org.full_name {
+        print!("{bold}{bright_cyan}{full_name}{reset} {light_grey}({name}){reset}");
+    } else {
+        print!("{bold}{bright_cyan}{name}{reset}");
+    }
+    print!(" {dash} {vis_pretty}");
+    println!();
+
+    // This needs the x-total-count header name fixed in forgejo_api before it can work
+    // let members_query = forgejo_api::structs::OrgListPublicMembersQuery {
+    //     page: Some(1),
+    //     limit: Some(1),
+    // };
+    // let (members_headers, _) = api.org_list_public_members(&name, members_query).await?;
+    // let members = members_headers.x_total.unwrap_or_default();
+    // let teams_query = forgejo_api::structs::OrgListTeamsQuery {
+    //     page: Some(1),
+    //     limit: Some(1),
+    // };
+    // let (teams_headers, _) = api.org_list_teams(&name, teams_query).await?;
+    // let teams = teams_headers.x_total.unwrap_or_default();
+    // println!("{bold}{members}{reset} members {dash} {bold}{teams}{reset} teams");
+
+    let mut first = true;
+    if let Some(website) = &org.website {
+        if !website.is_empty() {
+            print!("{bold}{website}{reset}");
+            first = false;
+        }
+    }
+    if let Some(email) = &org.email {
+        if !email.is_empty() {
+            if !first {
+                print!(" {dash} ");
+            }
+            print!("{email}");
+            first = false;
+        }
+    }
+    if let Some(location) = &org.location {
+        if !location.is_empty() {
+            if !first {
+                print!(" {dash} ");
+            }
+            print!("{location}");
+            first = false;
+        }
+    }
+    if !first {
+        println!();
+    }
+
+    if let Some(description) = &org.description {
+        if !description.is_empty() {
+            println!("\n{}\n", crate::markdown(&description));
+        }
+    }
+
     Ok(())
 }
