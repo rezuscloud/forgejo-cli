@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
-    structs::{CreateOrgOption, EditOrgOption},
+    structs::{CreateOrgOption, EditOrgOption, OrgListTeamsQuery},
     Forgejo,
 };
 
@@ -96,6 +96,17 @@ pub enum OrgSubcommand {
         /// The name of the organization to view activity for.
         name: String,
     },
+    Team {
+        /// The name of the organization to operate on.
+        name: String,
+        #[clap(subcommand)]
+        subcommand: TeamSubcommand,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum TeamSubcommand {
+    List,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,6 +191,12 @@ impl OrgCommand {
                 .await?
             }
             OrgSubcommand::Activity { name } => list_activity(&api, name).await?,
+            OrgSubcommand::Team {
+                name: org,
+                subcommand,
+            } => match subcommand {
+                TeamSubcommand::List => list_teams(&api, org).await?,
+            },
         }
         Ok(())
     }
@@ -385,4 +402,44 @@ async fn list_activity(api: &Forgejo, name: String) -> eyre::Result<()> {
         crate::user::print_activity(&activity)?;
     }
     Ok(())
+}
+
+async fn list_teams(api: &Forgejo, org: String) -> eyre::Result<()> {
+    let mut teams = Vec::new();
+    for page_idx in 1.. {
+        let query = OrgListTeamsQuery {
+            page: Some(page_idx),
+            limit: None,
+        };
+        let (headers, page) = api.org_list_teams(&org, query).await?;
+        teams.extend(page);
+        if !headers.x_has_more.unwrap_or_default() {
+            break;
+        }
+    }
+    teams.sort_unstable_by_key(permission_sort_id);
+
+    let SpecialRender {
+        bright_blue,
+        bold,
+        reset,
+        bullet,
+        ..
+    } = crate::special_render();
+    for team in teams {
+        let team_name = team.name.as_deref().ok_or_eyre("team does not have name")?;
+        println!("{bullet} {bold}{bright_blue}{team_name}{reset}");
+    }
+    Ok(())
+}
+
+fn permission_sort_id(team: &forgejo_api::structs::Team) -> u32 {
+    use forgejo_api::structs::TeamPermission as Perm;
+    match &team.permission {
+        Some(Perm::Owner) => 0,
+        Some(Perm::Admin) => 1,
+        Some(Perm::Write) => 2,
+        Some(Perm::Read) => 3,
+        Some(Perm::None) | None => 4,
+    }
 }
