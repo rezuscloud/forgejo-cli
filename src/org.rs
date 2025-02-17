@@ -1,6 +1,9 @@
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
-use forgejo_api::{structs::CreateOrgOption, Forgejo};
+use forgejo_api::{
+    structs::{CreateOrgOption, EditOrgOption},
+    Forgejo,
+};
 
 use crate::{
     repo::{RepoInfo, RepoName},
@@ -59,6 +62,36 @@ pub enum OrgSubcommand {
         /// The name of the organization to view.
         name: String,
     },
+    Edit {
+        /// The name of the organization to edit.
+        ///
+        /// Note that this is the username, *not* the display name.
+        name: String,
+        /// The display name for the organization.
+        #[clap(long, short)]
+        full_name: Option<String>,
+        /// The organization's description
+        #[clap(long, short)]
+        description: Option<String>,
+        /// Contact email for the organization
+        #[clap(long, short)]
+        email: Option<String>,
+        /// The organizations's location
+        #[clap(long, short)]
+        location: Option<String>,
+        /// The organization's website
+        #[clap(long, short)]
+        website: Option<String>,
+        /// The visibility of the organization.
+        ///
+        /// Public organizations can be viewed by anyone, limited orgs can only be viewed by
+        /// logged-in users, and private orgs can only be viewed by members of that org.
+        #[clap(long, short)]
+        visibility: Option<OrgVisibility>,
+        /// Whether the admin of a repo can change org teams' access to it.
+        #[clap(long, short)]
+        admin_can_change_team_access: bool,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,6 +104,17 @@ pub enum OrgVisibility {
 impl Into<forgejo_api::structs::CreateOrgOptionVisibility> for OrgVisibility {
     fn into(self) -> forgejo_api::structs::CreateOrgOptionVisibility {
         use forgejo_api::structs::CreateOrgOptionVisibility as ApiVis;
+        match self {
+            OrgVisibility::Private => ApiVis::Private,
+            OrgVisibility::Limited => ApiVis::Limited,
+            OrgVisibility::Public => ApiVis::Public,
+        }
+    }
+}
+
+impl Into<forgejo_api::structs::EditOrgOptionVisibility> for OrgVisibility {
+    fn into(self) -> forgejo_api::structs::EditOrgOptionVisibility {
+        use forgejo_api::structs::EditOrgOptionVisibility as ApiVis;
         match self {
             OrgVisibility::Private => ApiVis::Private,
             OrgVisibility::Limited => ApiVis::Limited,
@@ -108,6 +152,29 @@ impl OrgCommand {
                 .await?
             }
             OrgSubcommand::View { name } => view_org(&api, name).await?,
+            OrgSubcommand::Edit {
+                name,
+                description,
+                email,
+                full_name,
+                location,
+                website,
+                visibility,
+                admin_can_change_team_access,
+            } => {
+                edit_org(
+                    &api,
+                    name,
+                    description,
+                    email,
+                    full_name,
+                    location,
+                    website,
+                    visibility,
+                    admin_can_change_team_access,
+                )
+                .await?
+            }
         }
         Ok(())
     }
@@ -278,5 +345,29 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+async fn edit_org(
+    api: &Forgejo,
+    name: String,
+    description: Option<String>,
+    email: Option<String>,
+    full_name: Option<String>,
+    location: Option<String>,
+    website: Option<String>,
+    visibility: Option<OrgVisibility>,
+    admin_can_change_team_access: bool,
+) -> eyre::Result<()> {
+    let opt = EditOrgOption {
+        description,
+        email,
+        full_name,
+        location,
+        repo_admin_change_team_access: Some(admin_can_change_team_access),
+        visibility: visibility.map(|v| v.into()),
+        website,
+    };
+    api.org_edit(&name, opt).await?;
     Ok(())
 }
