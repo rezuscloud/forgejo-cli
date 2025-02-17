@@ -1,9 +1,12 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, io::Write};
 
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
-    structs::{CreateOrgOption, CreateTeamOption, EditOrgOption, OrgListTeamsQuery},
+    structs::{
+        CreateOrgOption, CreateTeamOption, EditOrgOption, OrgListTeamMembersQuery,
+        OrgListTeamsQuery, User,
+    },
     Forgejo,
 };
 
@@ -128,6 +131,16 @@ pub enum TeamSubcommand {
         #[clap(long, short = 'A')]
         admin: bool,
     },
+    View {
+        /// The name of the organization the team is part of.
+        org: String,
+        /// The name of the new team
+        name: String,
+        #[clap(long, short = 'p')]
+        list_permissions: bool,
+        #[clap(long, short = 'm')]
+        list_members: bool,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -237,6 +250,12 @@ impl OrgCommand {
                     )
                     .await?
                 }
+                TeamSubcommand::View {
+                    org,
+                    name,
+                    list_permissions,
+                    list_members,
+                } => view_team(&api, org, name, list_permissions, list_members).await?,
             },
         }
         Ok(())
@@ -459,7 +478,6 @@ async fn list_teams(api: &Forgejo, org: String) -> eyre::Result<()> {
         }
     }
     teams.sort_unstable_by_key(permission_sort_id);
-    dbg!(&teams);
 
     let SpecialRender {
         bright_blue,
@@ -561,5 +579,155 @@ async fn create_team(
         print!("admin ");
     }
     println!("team {bright_blue}{bold}{name}{reset} in {bold}{org_name}{reset}");
+    Ok(())
+}
+
+async fn view_team(
+    api: &Forgejo,
+    org: String,
+    name: String,
+    list_permissions: bool,
+    list_members: bool,
+) -> eyre::Result<()> {
+    let team = 'stop: {
+        for page in 1.. {
+            let query = OrgListTeamsQuery {
+                page: Some(page),
+                limit: None,
+            };
+            let (headers, teams) = api.org_list_teams(&org, query).await?;
+            for team in teams {
+                if team
+                    .name
+                    .as_deref()
+                    .is_some_and(|team_name| team_name == name)
+                {
+                    break 'stop team;
+                }
+            }
+            if !headers.x_has_more.unwrap_or_default() {
+                break;
+            }
+        }
+        eyre::bail!("Unknown team {name}");
+    };
+
+    let SpecialRender {
+        bright_blue,
+        bright_red,
+        bold,
+        reset,
+        dash,
+        ..
+    } = crate::special_render();
+
+    print!("{bright_blue}{bold}{name}{reset} {dash} in org {bold}{org}{reset}");
+    if team
+        .permission
+        .is_some_and(|p| p == forgejo_api::structs::TeamPermission::Admin)
+    {
+        print!(" {dash} {bright_red}Admin{reset}");
+    }
+    println!();
+
+    if let Some(description) = &team.description {
+        if !description.is_empty() {
+            println!("\n{}", crate::markdown(description));
+        }
+    }
+
+    if list_permissions {
+        println!();
+        let units = team
+            .units_map
+            .as_ref()
+            .ok_or_eyre("team does not have permission units")?;
+        let mut ro_perms = Vec::new();
+        let mut rw_perms = Vec::new();
+        for (unit, permission) in units {
+            match &**permission {
+                "read" => ro_perms.push(unit),
+                "write" | "admin" | "owner" => rw_perms.push(unit),
+                _ => (),
+            }
+        }
+
+        let get_unit_name = |unit| match unit {
+            "repo.wiki" => "Wikis",
+            "repo.ext_wiki" => "External Wikis",
+            "repo.issues" => "Issues",
+            "repo.ext_issues" => "External Issues",
+            "repo.pulls" => "Pull Requests",
+            "repo.projects" => "Projects",
+            "repo.actions" => "CI",
+            "repo.code" => "Code",
+            "repo.releases" => "Releases",
+            "repo.packages" => "Packages",
+            _ => "Unknown",
+        };
+        if !ro_perms.is_empty() {
+            print!("Read Only: ");
+            for (i, unit) in ro_perms.iter().enumerate() {
+                let unit_name = get_unit_name(unit);
+                if i > 0 {
+                    print!(", ");
+                }
+                print!("{unit_name}");
+            }
+            println!();
+        }
+        if !rw_perms.is_empty() {
+            print!("Read/Write: ");
+            for (i, unit) in rw_perms.iter().enumerate() {
+                let unit_name = get_unit_name(unit);
+                if i != 0 {
+                    print!(", ");
+                }
+                print!("{unit_name}");
+            }
+            println!();
+        }
+    }
+
+    if list_members {
+        let team_id = team.id.ok_or_eyre("team does not have id")?;
+        println!();
+        print!("Loading members...");
+        std::io::stdout().flush()?;
+        let mut members = Vec::new();
+        for page_idx in 1.. {
+            let query = OrgListTeamMembersQuery {
+                page: Some(page_idx),
+                limit: None,
+            };
+            let (_, page) = api.org_list_team_members(team_id as u64, query).await?;
+            if page.is_empty() {
+                break;
+            }
+
+            members.extend(page);
+        }
+        members.sort_by(|a, b| a.login.cmp(&b.login));
+        print!("\r                  \r");
+        println!("{bold}Members:{reset}");
+        let max_line_length = crate::max_line_length();
+        let mut current_line_length = 0;
+        for (i, member) in members.into_iter().enumerate() {
+            let username = member
+                .login
+                .as_deref()
+                .ok_or_eyre("user does not have name")?;
+            if i > 0 {
+                print!(", ");
+            }
+            if current_line_length > 0 && current_line_length + username.len() > max_line_length {
+                println!();
+                current_line_length = 0;
+            }
+            print!("{username}");
+            current_line_length += username.len() + 2;
+        }
+    }
+
     Ok(())
 }
