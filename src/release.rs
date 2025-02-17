@@ -326,12 +326,13 @@ async fn list_releases(
     draft: bool,
 ) -> eyre::Result<()> {
     let query = forgejo_api::structs::RepoListReleasesQuery {
+        q: None,
         pre_release: Some(prerelease),
         draft: Some(draft),
         page: None,
         limit: None,
     };
-    let releases = api
+    let (_, releases) = api
         .repo_list_releases(repo.owner(), repo.name(), query)
         .await?;
     for release in releases {
@@ -585,12 +586,13 @@ async fn find_release(
     name: &str,
 ) -> eyre::Result<forgejo_api::structs::Release> {
     let query = RepoListReleasesQuery {
+        q: None,
         draft: None,
         pre_release: None,
         page: None,
         limit: None,
     };
-    let mut releases = api
+    let (_, mut releases) = api
         .repo_list_releases(repo.owner(), repo.name(), query)
         .await?;
     let idx = releases

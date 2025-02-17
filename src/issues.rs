@@ -373,7 +373,7 @@ async fn view_issues(
     let labels = labels
         .map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
         .unwrap_or_default();
-    let query = forgejo_api::structs::IssueListIssuesQuery {
+    let mut query = forgejo_api::structs::IssueListIssuesQuery {
         q: query_str,
         labels: Some(labels.join(",")),
         created_by: creator,
@@ -387,9 +387,17 @@ async fn view_issues(
         page: None,
         limit: None,
     };
-    let issues = api
-        .issue_list_issues(repo.owner(), repo.name(), query)
-        .await?;
+    let mut issues = Vec::new();
+    for page_idx in 1.. {
+        query.page = Some(page_idx);
+        let (headers, page) = api
+            .issue_list_issues(repo.owner(), repo.name(), query.clone())
+            .await?;
+        issues.extend(page);
+        if !headers.x_has_more.unwrap_or_default() {
+            break;
+        }
+    }
     if issues.len() == 1 {
         println!("1 issue");
     } else {
@@ -421,7 +429,7 @@ pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -
         since: None,
         before: None,
     };
-    let comments = api
+    let (_, comments) = api
         .issue_get_comments(repo.owner(), repo.name(), id, query)
         .await?;
     let comment = comments
@@ -436,7 +444,7 @@ pub async fn view_comments(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Res
         since: None,
         before: None,
     };
-    let comments = api
+    let (_, comments) = api
         .issue_get_comments(repo.owner(), repo.name(), id, query)
         .await?;
     for comment in comments {
@@ -601,7 +609,7 @@ pub async fn edit_comment(
     idx: usize,
     new_body: Option<String>,
 ) -> eyre::Result<()> {
-    let comments = api
+    let (_, comments) = api
         .issue_get_comments(
             repo.owner(),
             repo.name(),
