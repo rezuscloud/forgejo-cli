@@ -166,6 +166,12 @@ pub enum TeamSubcommand {
         #[clap(long, short = 'A')]
         admin: bool,
     },
+    Delete {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to delete
+        name: String,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -307,6 +313,7 @@ impl OrgCommand {
                     )
                     .await?
                 }
+                TeamSubcommand::Delete { org, name } => delete_team(&api, org, name).await?,
             },
         }
         Ok(())
@@ -841,5 +848,22 @@ async fn edit_team(
     };
     api.org_edit_team(id as u32, options).await?;
 
+    Ok(())
+}
+
+async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<()> {
+    let SpecialRender { bold, reset, .. } = crate::special_render();
+    println!("Are you sure you want to delete {bold}{org}/{name}{reset}?");
+    let confirmation = crate::readline("(y/N) ").await?.to_lowercase();
+    if matches!(confirmation.trim(), "y" | "yes") {
+        let id = find_team_by_name(api, &org, &name)
+            .await?
+            .id
+            .ok_or_eyre("team does not have id")?;
+        api.org_delete_team(id as u64).await?;
+        println!("Team deleted.");
+    } else {
+        println!("Team not deleted.");
+    }
     Ok(())
 }
