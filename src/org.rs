@@ -4,8 +4,7 @@ use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
     structs::{
-        CreateOrgOption, CreateTeamOption, EditOrgOption, OrgListTeamMembersQuery,
-        OrgListTeamsQuery, User,
+        CreateOrgOption, CreateTeamOption, EditOrgOption, OrgGetAllQuery, OrgListTeamMembersQuery, OrgListTeamsQuery, User
     },
     Forgejo,
 };
@@ -26,6 +25,11 @@ pub struct OrgCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum OrgSubcommand {
+    List {
+        /// Which page of the results to view
+        #[clap(long, short)]
+        page: Option<u32>,
+    },
     Create {
         /// The username for the organization.
         ///
@@ -177,6 +181,7 @@ impl OrgCommand {
         let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref(), &keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         match self.command {
+            OrgSubcommand::List { page } => list_orgs(&api, page).await?,
             OrgSubcommand::Create {
                 name,
                 description,
@@ -267,6 +272,22 @@ fn is_valid_name_char(c: char) -> bool {
         '-' | '_' | '.' => true,
         _ => c.is_ascii_alphanumeric(),
     }
+}
+
+async fn list_orgs(api: &Forgejo, page: Option<u32>) -> eyre::Result<()> {
+    let query = OrgGetAllQuery { page, limit: None };
+    let (_, orgs) = api.org_get_all(query).await?;
+    let SpecialRender {
+        bullet,
+        bold,
+        reset,
+        ..
+    } = *crate::special_render();
+    for org in orgs {
+        let name = org.name.ok_or_eyre("org does not have name")?;
+        println!("{bullet} {bold}{name}{reset}");
+    }
+    Ok(())
 }
 
 async fn create_org(
