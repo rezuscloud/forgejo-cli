@@ -4,7 +4,8 @@ use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
     structs::{
-        CreateOrgOption, CreateTeamOption, EditOrgOption, OrgGetAllQuery, OrgListTeamMembersQuery, OrgListTeamsQuery, User
+        CreateOrgOption, CreateTeamOption, EditOrgOption, EditTeamOption, OrgGetAllQuery,
+        OrgListTeamMembersQuery, OrgListTeamsQuery, User,
     },
     Forgejo,
 };
@@ -145,6 +146,26 @@ pub enum TeamSubcommand {
         #[clap(long, short = 'm')]
         list_members: bool,
     },
+    Edit {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to edit
+        name: String,
+        #[clap(long, short)]
+        new_name: Option<String>,
+        #[clap(long, short)]
+        can_create_repos: bool,
+        #[clap(long, short)]
+        description: Option<String>,
+        #[clap(long, short)]
+        include_all_repos: bool,
+        #[clap(long, short)]
+        read_permissions: Option<String>,
+        #[clap(long, short)]
+        write_permissions: Option<String>,
+        #[clap(long, short = 'A')]
+        admin: bool,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -261,6 +282,31 @@ impl OrgCommand {
                     list_permissions,
                     list_members,
                 } => view_team(&api, org, name, list_permissions, list_members).await?,
+                TeamSubcommand::Edit {
+                    org,
+                    name,
+                    new_name,
+                    can_create_repos,
+                    description,
+                    include_all_repos,
+                    read_permissions,
+                    write_permissions,
+                    admin,
+                } => {
+                    edit_team(
+                        &api,
+                        org,
+                        name,
+                        new_name,
+                        can_create_repos,
+                        description,
+                        include_all_repos,
+                        read_permissions,
+                        write_permissions,
+                        admin,
+                    )
+                    .await?
+                }
             },
         }
         Ok(())
@@ -485,6 +531,33 @@ async fn list_activity(api: &Forgejo, name: String) -> eyre::Result<()> {
     Ok(())
 }
 
+async fn find_team_by_name(
+    api: &Forgejo,
+    org: &str,
+    name: &str,
+) -> eyre::Result<forgejo_api::structs::Team> {
+    for page in 1.. {
+        let query = OrgListTeamsQuery {
+            page: Some(page),
+            limit: None,
+        };
+        let (headers, teams) = api.org_list_teams(&org, query).await?;
+        for team in teams {
+            if team
+                .name
+                .as_deref()
+                .is_some_and(|team_name| team_name == name)
+            {
+                return Ok(team);
+            }
+        }
+        if !headers.x_has_more.unwrap_or_default() {
+            break;
+        }
+    }
+    eyre::bail!("Unknown team {name}");
+}
+
 async fn list_teams(api: &Forgejo, org: String) -> eyre::Result<()> {
     let mut teams = Vec::new();
     for page_idx in 1.. {
@@ -538,6 +611,33 @@ const ALL_UNITS: &[&str] = &[
     "repo.packages",
 ];
 
+fn create_unit_map(ro_perms: Option<&str>, rw_perms: Option<&str>) -> BTreeMap<String, String> {
+    let mut units = BTreeMap::new();
+    if let Some(ro_perms) = ro_perms {
+        if ro_perms == "all" {
+            for ro in ALL_UNITS {
+                units.insert(ro.to_string(), "read".to_owned());
+            }
+        } else {
+            for ro in ro_perms.split(",") {
+                units.insert(format!("repo.{ro}"), "read".to_owned());
+            }
+        }
+    }
+    if let Some(rw_perms) = rw_perms {
+        if rw_perms.trim() == "all" {
+            for rw in ALL_UNITS {
+                units.insert(rw.to_string(), "write".to_owned());
+            }
+        } else {
+            for rw in rw_perms.split(",") {
+                units.insert(format!("repo.{rw}"), "write".to_owned());
+            }
+        }
+    }
+    units
+}
+
 async fn create_team(
     api: &Forgejo,
     org: String,
@@ -549,29 +649,7 @@ async fn create_team(
     write_permissions: Option<String>,
     admin: bool,
 ) -> eyre::Result<()> {
-    let mut units = BTreeMap::new();
-    if let Some(ro_perms) = read_permissions {
-        if ro_perms == "all" {
-            for ro in ALL_UNITS {
-                units.insert(ro.to_string(), "read".to_owned());
-            }
-        } else {
-            for ro in ro_perms.split(",") {
-                units.insert(format!("repo.{ro}"), "read".to_owned());
-            }
-        }
-    }
-    if let Some(rw_perms) = write_permissions {
-        if rw_perms.trim() == "all" {
-            for rw in ALL_UNITS {
-                units.insert(rw.to_string(), "write".to_owned());
-            }
-        } else {
-            for rw in rw_perms.split(",") {
-                units.insert(format!("repo.{rw}"), "write".to_owned());
-            }
-        }
-    }
+    let units = create_unit_map(read_permissions.as_deref(), write_permissions.as_deref());
     let options = CreateTeamOption {
         can_create_org_repo: Some(can_create_repo),
         description,
@@ -610,28 +688,7 @@ async fn view_team(
     list_permissions: bool,
     list_members: bool,
 ) -> eyre::Result<()> {
-    let team = 'stop: {
-        for page in 1.. {
-            let query = OrgListTeamsQuery {
-                page: Some(page),
-                limit: None,
-            };
-            let (headers, teams) = api.org_list_teams(&org, query).await?;
-            for team in teams {
-                if team
-                    .name
-                    .as_deref()
-                    .is_some_and(|team_name| team_name == name)
-                {
-                    break 'stop team;
-                }
-            }
-            if !headers.x_has_more.unwrap_or_default() {
-                break;
-            }
-        }
-        eyre::bail!("Unknown team {name}");
-    };
+    let team = find_team_by_name(api, &org, &name).await?;
 
     let SpecialRender {
         bright_blue,
@@ -749,6 +806,40 @@ async fn view_team(
             current_line_length += username.len() + 2;
         }
     }
+
+    Ok(())
+}
+
+async fn edit_team(
+    api: &Forgejo,
+    org: String,
+    name: String,
+    new_name: Option<String>,
+    can_create_repo: bool,
+    description: Option<String>,
+    include_all_repos: bool,
+    read_permissions: Option<String>,
+    write_permissions: Option<String>,
+    admin: bool,
+) -> eyre::Result<()> {
+    let team = find_team_by_name(api, &org, &name).await?;
+    let id = team.id.ok_or_eyre("team does not have id")?;
+
+    // EditTeamOption's team field is a String rather than Option<String>
+    // That should be fixed, but this gets around it for now.
+    let new_name = new_name.unwrap_or(name);
+    let units = create_unit_map(read_permissions.as_deref(), write_permissions.as_deref());
+
+    let options = EditTeamOption {
+        can_create_org_repo: Some(can_create_repo),
+        description,
+        includes_all_repositories: Some(include_all_repos),
+        name: new_name,
+        permission: admin.then(|| forgejo_api::structs::EditTeamOptionPermission::Admin),
+        units: None,
+        units_map: Some(units),
+    };
+    api.org_edit_team(id as u32, options).await?;
 
     Ok(())
 }
