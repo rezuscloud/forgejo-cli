@@ -1699,6 +1699,7 @@ async fn find_pr_from_branch(
     api: &Forgejo,
     head: &str,
 ) -> eyre::Result<Option<forgejo_api::structs::PullRequest>> {
+    let mut seen = 0;
     for page in 1.. {
         let branch_query = forgejo_api::structs::RepoListBranchesQuery {
             page: Some(page),
@@ -1713,12 +1714,13 @@ async fn find_pr_from_branch(
                 .map(|branch| check_branch_pair(repo_owner, repo_name, api, branch, head)),
         )
         .await?;
+        seen += prs.len();
         for pr in prs {
             if pr.is_some() {
                 return Ok(pr);
             }
         }
-        if !headers.x_has_more.unwrap_or_default() {
+        if seen < headers.x_total_count.unwrap_or_default() as usize {
             break;
         }
     }
