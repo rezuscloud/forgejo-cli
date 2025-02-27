@@ -394,7 +394,7 @@ async fn view_issues(
             .issue_list_issues(repo.owner(), repo.name(), query.clone())
             .await?;
         issues.extend(page);
-        if !headers.x_has_more.unwrap_or_default() {
+        if issues.len() < headers.x_total_count.unwrap_or_default() as usize {
             break;
         }
     }
