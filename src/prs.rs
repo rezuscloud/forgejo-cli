@@ -1720,7 +1720,7 @@ async fn find_pr_from_branch(
                 return Ok(pr);
             }
         }
-        if seen < headers.x_total_count.unwrap_or_default() as usize {
+        if seen >= headers.x_total_count.unwrap_or_default() as usize {
             break;
         }
     }

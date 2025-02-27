@@ -543,12 +543,14 @@ async fn find_team_by_name(
     org: &str,
     name: &str,
 ) -> eyre::Result<forgejo_api::structs::Team> {
+    let mut seen = 0;
     for page in 1.. {
         let query = OrgListTeamsQuery {
             page: Some(page),
             limit: None,
         };
         let (headers, teams) = api.org_list_teams(&org, query).await?;
+        seen += teams.len();
         for team in teams {
             if team
                 .name
@@ -558,7 +560,7 @@ async fn find_team_by_name(
                 return Ok(team);
             }
         }
-        if !headers.x_has_more.unwrap_or_default() {
+        if seen >= headers.x_total_count.unwrap_or_default() as usize {
             break;
         }
     }
@@ -574,7 +576,7 @@ async fn list_teams(api: &Forgejo, org: String) -> eyre::Result<()> {
         };
         let (headers, page) = api.org_list_teams(&org, query).await?;
         teams.extend(page);
-        if !headers.x_has_more.unwrap_or_default() {
+        if teams.len() >= headers.x_total_count.unwrap_or_default() as usize {
             break;
         }
     }
