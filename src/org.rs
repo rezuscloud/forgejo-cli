@@ -5,7 +5,8 @@ use eyre::OptionExt;
 use forgejo_api::{
     structs::{
         CreateOrgOption, CreateTeamOption, EditOrgOption, EditTeamOption, OrgGetAllQuery,
-        OrgListCurrentUserOrgsQuery, OrgListTeamMembersQuery, OrgListTeamsQuery, User,
+        OrgListCurrentUserOrgsQuery, OrgListTeamMembersQuery, OrgListTeamReposQuery,
+        OrgListTeamsQuery, User,
     },
     Forgejo,
 };
@@ -175,6 +176,21 @@ pub enum TeamSubcommand {
         /// The name of the team to delete
         name: String,
     },
+    #[clap(subcommand)]
+    Repo(TeamRepoSubcommand),
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum TeamRepoSubcommand {
+    List {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to view the repos of.
+        team: String,
+        /// Which page of the results to view
+        #[clap(long, short)]
+        page: Option<u32>,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -320,6 +336,11 @@ impl OrgCommand {
                     .await?
                 }
                 TeamSubcommand::Delete { org, name } => delete_team(&api, org, name).await?,
+                TeamSubcommand::Repo(subcommand) => match subcommand {
+                    TeamRepoSubcommand::List { org, team, page } => {
+                        list_team_repos(&api, org, team, page).await?
+                    }
+                },
             },
         }
         Ok(())
@@ -884,6 +905,34 @@ async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<(
         println!("Team deleted.");
     } else {
         println!("Team not deleted.");
+    }
+    Ok(())
+}
+
+async fn list_team_repos(
+    api: &Forgejo,
+    org: String,
+    team: String,
+    page: Option<u32>,
+) -> eyre::Result<()> {
+    let id = find_team_by_name(api, &org, &team)
+        .await?
+        .id
+        .ok_or_eyre("team does not have id")?;
+    let query = OrgListTeamReposQuery { page, limit: None };
+    let (_, repos) = api.org_list_team_repos(id as u64, query).await?;
+
+    let SpecialRender { bullet, .. } = crate::special_render();
+    if repos.is_empty() {
+        println!("No results");
+    } else {
+        for repo in repos {
+            let full_name = repo
+                .full_name
+                .as_deref()
+                .ok_or_eyre("repo does not have full name")?;
+            println!("{bullet} {full_name}");
+        }
     }
     Ok(())
 }
