@@ -199,6 +199,14 @@ pub enum TeamRepoSubcommand {
         /// The name of the repo to add to the team.
         repo: String,
     },
+    Rm {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to remove the repo from.
+        team: String,
+        /// The name of the repo to remove from the team.
+        repo: String,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -350,6 +358,9 @@ impl OrgCommand {
                     }
                     TeamRepoSubcommand::Add { org, team, repo } => {
                         add_repo_to_team(&api, org, team, repo).await?
+                    }
+                    TeamRepoSubcommand::Rm { org, team, repo } => {
+                        remove_repo_from_team(&api, org, team, repo).await?
                     }
                 },
             },
@@ -966,5 +977,27 @@ async fn add_repo_to_team(
         ..
     } = crate::special_render();
     println!("Added {bold}{org}/{repo}{reset} to team {bright_blue}{bold}{team}{reset}");
+    Ok(())
+}
+
+async fn remove_repo_from_team(
+    api: &Forgejo,
+    org: String,
+    team: String,
+    repo: String,
+) -> eyre::Result<()> {
+    let id = find_team_by_name(api, &org, &team)
+        .await?
+        .id
+        .ok_or_eyre("team does not have id")?;
+    api.org_remove_team_repository(id as u64, &org, &repo)
+        .await?;
+    let SpecialRender {
+        bold,
+        reset,
+        bright_blue,
+        ..
+    } = crate::special_render();
+    println!("Removed {bold}{org}/{repo}{reset} from team {bright_blue}{bold}{team}{reset}");
     Ok(())
 }
