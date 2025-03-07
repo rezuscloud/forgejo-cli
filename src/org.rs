@@ -5,7 +5,7 @@ use eyre::OptionExt;
 use forgejo_api::{
     structs::{
         CreateOrgOption, CreateTeamOption, EditOrgOption, EditTeamOption, OrgGetAllQuery,
-        OrgListTeamMembersQuery, OrgListTeamsQuery, User,
+        OrgListCurrentUserOrgsQuery, OrgListTeamMembersQuery, OrgListTeamsQuery, User,
     },
     Forgejo,
 };
@@ -30,6 +30,9 @@ pub enum OrgSubcommand {
         /// Which page of the results to view
         #[clap(long, short)]
         page: Option<u32>,
+        /// Only list organizations you are a member of.
+        #[clap(long, short)]
+        only_member_of: bool,
     },
     Create {
         /// The username for the organization.
@@ -208,7 +211,10 @@ impl OrgCommand {
         let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref(), &keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         match self.command {
-            OrgSubcommand::List { page } => list_orgs(&api, page).await?,
+            OrgSubcommand::List {
+                page,
+                only_member_of,
+            } => list_orgs(&api, page, only_member_of).await?,
             OrgSubcommand::Create {
                 name,
                 description,
@@ -327,9 +333,17 @@ fn is_valid_name_char(c: char) -> bool {
     }
 }
 
-async fn list_orgs(api: &Forgejo, page: Option<u32>) -> eyre::Result<()> {
-    let query = OrgGetAllQuery { page, limit: None };
-    let (_, orgs) = api.org_get_all(query).await?;
+async fn list_orgs(api: &Forgejo, page: Option<u32>, only_member_of: bool) -> eyre::Result<()> {
+    let orgs = if only_member_of {
+        let query = OrgListCurrentUserOrgsQuery { page, limit: None };
+        let (_, orgs) = api.org_list_current_user_orgs(query).await?;
+        orgs
+    } else {
+        let query = OrgGetAllQuery { page, limit: None };
+        let (_, orgs) = api.org_get_all(query).await?;
+        orgs
+    };
+
     let SpecialRender {
         bullet,
         bold,
