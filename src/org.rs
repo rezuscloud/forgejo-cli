@@ -344,15 +344,19 @@ async fn list_orgs(api: &Forgejo, page: Option<u32>, only_member_of: bool) -> ey
         orgs
     };
 
-    let SpecialRender {
-        bullet,
-        bold,
-        reset,
-        ..
-    } = *crate::special_render();
-    for org in orgs {
-        let name = org.name.ok_or_eyre("org does not have name")?;
-        println!("{bullet} {bold}{name}{reset}");
+    if orgs.is_empty() {
+        println!("No results");
+    } else {
+        let SpecialRender {
+            bullet,
+            bold,
+            reset,
+            ..
+        } = *crate::special_render();
+        for org in orgs {
+            let name = org.name.ok_or_eyre("org does not have name")?;
+            println!("{bullet} {bold}{name}{reset}");
+        }
     }
     Ok(())
 }
