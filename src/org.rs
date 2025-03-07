@@ -191,6 +191,14 @@ pub enum TeamRepoSubcommand {
         #[clap(long, short)]
         page: Option<u32>,
     },
+    Add {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to add a repo to.
+        team: String,
+        /// The name of the repo to add to the team.
+        repo: String,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -339,6 +347,9 @@ impl OrgCommand {
                 TeamSubcommand::Repo(subcommand) => match subcommand {
                     TeamRepoSubcommand::List { org, team, page } => {
                         list_team_repos(&api, org, team, page).await?
+                    }
+                    TeamRepoSubcommand::Add { org, team, repo } => {
+                        add_repo_to_team(&api, org, team, repo).await?
                     }
                 },
             },
@@ -934,5 +945,26 @@ async fn list_team_repos(
             println!("{bullet} {full_name}");
         }
     }
+    Ok(())
+}
+
+async fn add_repo_to_team(
+    api: &Forgejo,
+    org: String,
+    team: String,
+    repo: String,
+) -> eyre::Result<()> {
+    let id = find_team_by_name(api, &org, &team)
+        .await?
+        .id
+        .ok_or_eyre("team does not have id")?;
+    api.org_add_team_repository(id as u64, &org, &repo).await?;
+    let SpecialRender {
+        bold,
+        reset,
+        bright_blue,
+        ..
+    } = crate::special_render();
+    println!("Added {bold}{org}/{repo}{reset} to team {bright_blue}{bold}{team}{reset}");
     Ok(())
 }
