@@ -491,8 +491,11 @@ async fn list_team_repos(
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    let query = OrgListTeamReposQuery { page, limit: None };
-    let (_, repos) = api.org_list_team_repos(id as u64, query).await?;
+    let query = OrgListTeamReposQuery {
+        page,
+        limit: Some(20),
+    };
+    let (headers, repos) = api.org_list_team_repos(id as u64, query).await?;
 
     let SpecialRender { bullet, .. } = crate::special_render();
     if repos.is_empty() {
@@ -505,6 +508,8 @@ async fn list_team_repos(
                 .ok_or_eyre("repo does not have full name")?;
             println!("{bullet} {full_name}");
         }
+        let count = headers.x_total_count.unwrap_or_default() as u64;
+        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
     }
     Ok(())
 }
@@ -608,8 +613,11 @@ async fn list_team_members(
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    let query = OrgListTeamMembersQuery { page, limit: None };
-    let (_, users) = api.org_list_team_members(id as u64, query).await?;
+    let query = OrgListTeamMembersQuery {
+        page,
+        limit: Some(20),
+    };
+    let (headers, users) = api.org_list_team_members(id as u64, query).await?;
 
     let SpecialRender {
         bullet,
@@ -633,6 +641,8 @@ async fn list_team_members(
                 None => println!("{bullet} {bright_cyan}{username}{reset}"),
             }
         }
+        let count = headers.x_total_count.unwrap_or_default() as u64;
+        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
     }
     Ok(())
 }

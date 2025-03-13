@@ -179,14 +179,20 @@ fn is_valid_name_char(c: char) -> bool {
 }
 
 async fn list_orgs(api: &Forgejo, page: Option<u32>, only_member_of: bool) -> eyre::Result<()> {
-    let orgs = if only_member_of {
-        let query = OrgListCurrentUserOrgsQuery { page, limit: None };
-        let (_, orgs) = api.org_list_current_user_orgs(query).await?;
-        orgs
+    let (count, orgs) = if only_member_of {
+        let query = OrgListCurrentUserOrgsQuery {
+            page,
+            limit: Some(20),
+        };
+        let (headers, orgs) = api.org_list_current_user_orgs(query).await?;
+        (headers.x_total_count.unwrap_or_default() as u64, orgs)
     } else {
-        let query = OrgGetAllQuery { page, limit: None };
-        let (_, orgs) = api.org_get_all(query).await?;
-        orgs
+        let query = OrgGetAllQuery {
+            page,
+            limit: Some(20),
+        };
+        let (headers, orgs) = api.org_get_all(query).await?;
+        (headers.x_total_count.unwrap_or_default() as u64, orgs)
     };
 
     if orgs.is_empty() {
@@ -202,6 +208,7 @@ async fn list_orgs(api: &Forgejo, page: Option<u32>, only_member_of: bool) -> ey
             let name = org.name.ok_or_eyre("org does not have name")?;
             println!("{bullet} {bold}{name}{reset}");
         }
+        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
     }
     Ok(())
 }
@@ -398,14 +405,20 @@ async fn list_org_members(api: &Forgejo, org: String, page: Option<u32>) -> eyre
         .await?
         .login
         .ok_or_eyre("current user does not have username")?;
-    let users = if api.org_is_member(&org, &my_username).await.is_ok() {
-        let query = OrgListMembersQuery { page, limit: None };
-        let (_, users) = api.org_list_members(&org, query).await?;
-        users
+    let (count, users) = if api.org_is_member(&org, &my_username).await.is_ok() {
+        let query = OrgListMembersQuery {
+            page,
+            limit: Some(20),
+        };
+        let (headers, users) = api.org_list_members(&org, query).await?;
+        (headers.x_total_count.unwrap_or_default() as u64, users)
     } else {
-        let query = OrgListPublicMembersQuery { page, limit: None };
-        let (_, users) = api.org_list_public_members(&org, query).await?;
-        users
+        let query = OrgListPublicMembersQuery {
+            page,
+            limit: Some(20),
+        };
+        let (headers, users) = api.org_list_public_members(&org, query).await?;
+        (headers.x_total_count.unwrap_or_default() as u64, users)
     };
 
     let SpecialRender {
@@ -430,6 +443,7 @@ async fn list_org_members(api: &Forgejo, org: String, page: Option<u32>) -> eyre
                 None => println!("{bullet} {bright_cyan}{username}{reset}"),
             }
         }
+        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
     }
     Ok(())
 }
@@ -708,8 +722,11 @@ impl RepoSubcommand {
 }
 
 async fn list_org_repos(api: &Forgejo, org: String, page: Option<u32>) -> eyre::Result<()> {
-    let query = OrgListReposQuery { page, limit: None };
-    let (_, repos) = api.org_list_repos(&org, query).await?;
+    let query = OrgListReposQuery {
+        page,
+        limit: Some(20),
+    };
+    let (headers, repos) = api.org_list_repos(&org, query).await?;
     let SpecialRender { bullet, .. } = crate::special_render();
     if repos.is_empty() {
         println!("No results");
@@ -721,6 +738,8 @@ async fn list_org_repos(api: &Forgejo, org: String, page: Option<u32>) -> eyre::
                 .ok_or_eyre("repo does not have full name")?;
             println!("{bullet} {full_name}");
         }
+        let count = headers.x_total_count.unwrap_or_default() as u64;
+        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
     }
     Ok(())
 }
