@@ -4,9 +4,10 @@ use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
     structs::{
-        CreateOrgOption, CreateTeamOption, EditOrgOption, EditTeamOption, OrgGetAllQuery,
-        OrgListCurrentUserOrgsQuery, OrgListMembersQuery, OrgListPublicMembersQuery,
-        OrgListTeamMembersQuery, OrgListTeamReposQuery, OrgListTeamsQuery, User,
+        CreateLabelOption, CreateOrgOption, CreateTeamOption, EditLabelOption, EditOrgOption,
+        EditTeamOption, OrgGetAllQuery, OrgListCurrentUserOrgsQuery, OrgListLabelsQuery,
+        OrgListMembersQuery, OrgListPublicMembersQuery, OrgListTeamMembersQuery,
+        OrgListTeamReposQuery, OrgListTeamsQuery, User,
     },
     Forgejo,
 };
@@ -126,6 +127,8 @@ pub enum OrgSubcommand {
         #[clap(long, short)]
         set: Option<OrgMemberVisibility>,
     },
+    #[clap(subcommand)]
+    Label(LabelSubcommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -251,6 +254,56 @@ pub enum TeamMemberSubcommand {
         team: String,
         /// The name of the user to remove from the team.
         user: String,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum LabelSubcommand {
+    List {
+        /// The name of the organization to list the labels of.
+        org: String,
+    },
+    Add {
+        /// The name of the organization the label should be added to.
+        org: String,
+        /// The name of the label to add.
+        name: String,
+        /// The hexcode of the label to add.
+        color: String,
+        /// A description of what the label is for.
+        #[clap(long, short)]
+        description: Option<String>,
+        /// If this label is named `{scope}/{name}`, make it exclusive with other labels with the
+        /// same scope.
+        #[clap(long, short)]
+        exclusive: bool,
+    },
+    Edit {
+        /// The name of the organization the label is in.
+        org: String,
+        /// The name of the label to edit.
+        name: String,
+        /// Set a new name for the label.
+        #[clap(long, short)]
+        new_name: Option<String>,
+        /// Set a new hexcode for the label.
+        #[clap(long, short)]
+        color: Option<String>,
+        /// Set a description of what the label is for.
+        #[clap(long, short)]
+        description: Option<String>,
+        /// Set whether this label is exclusive with others of the same scope.
+        #[clap(long, short)]
+        exclusive: bool,
+        /// Set whether this label is archived.
+        #[clap(long, short)]
+        archived: Option<bool>,
+    },
+    Rm {
+        /// The name of the organization the label is in.
+        org: String,
+        /// The name of the label to remove from the organization.
+        label: String,
     },
 }
 
@@ -428,6 +481,38 @@ impl OrgCommand {
             },
             OrgSubcommand::Members { org, page } => list_org_members(&api, org, page).await?,
             OrgSubcommand::Visibility { org, set } => member_visibility(&api, org, set).await?,
+            OrgSubcommand::Label(subcommand) => match subcommand {
+                LabelSubcommand::List { org } => list_org_labels(&api, org).await?,
+                LabelSubcommand::Add {
+                    org,
+                    name,
+                    color,
+                    description,
+                    exclusive,
+                } => add_org_label(&api, org, name, color, description, exclusive).await?,
+                LabelSubcommand::Edit {
+                    org,
+                    name,
+                    new_name,
+                    color,
+                    description,
+                    exclusive,
+                    archived,
+                } => {
+                    edit_org_label(
+                        &api,
+                        org,
+                        name,
+                        new_name,
+                        color,
+                        description,
+                        exclusive,
+                        archived,
+                    )
+                    .await?
+                }
+                LabelSubcommand::Rm { org, label } => remove_org_label(&api, org, label).await?,
+            },
         }
         Ok(())
     }
@@ -1225,5 +1310,113 @@ async fn member_visibility(
     } else {
         println!("You are not a member of {bright_blue}{org}{reset}");
     }
+    Ok(())
+}
+
+async fn list_org_labels(api: &Forgejo, org: String) -> eyre::Result<()> {
+    crate::prs::render_label_list(&get_all_org_labels(api, &org).await?)?;
+    Ok(())
+}
+
+async fn get_all_org_labels(
+    api: &Forgejo,
+    org: &str,
+) -> eyre::Result<Vec<forgejo_api::structs::Label>> {
+    let mut labels = Vec::new();
+    for page_idx in 1.. {
+        let query = OrgListLabelsQuery {
+            page: Some(page_idx),
+            limit: None,
+        };
+        let (headers, label_page) = api.org_list_labels(&org, query).await?;
+        labels.extend(label_page);
+        if headers
+            .x_total_count
+            .is_some_and(|n| n as usize <= labels.len())
+        {
+            break;
+        }
+    }
+    Ok(labels)
+}
+
+async fn find_label_by_name(
+    api: &Forgejo,
+    org: &str,
+    label: &str,
+) -> eyre::Result<Option<forgejo_api::structs::Label>> {
+    let labels = get_all_org_labels(api, org).await?;
+    Ok(labels
+        .into_iter()
+        .find(|l| l.name.as_deref().is_some_and(|s| s == label)))
+}
+
+async fn add_org_label(
+    api: &Forgejo,
+    org: String,
+    name: String,
+    color: String,
+    description: Option<String>,
+    exclusive: bool,
+) -> eyre::Result<()> {
+    let color = color
+        .strip_prefix("#")
+        .map(|s| s.to_owned())
+        .unwrap_or(color);
+    let opt = CreateLabelOption {
+        color,
+        description,
+        exclusive: Some(exclusive),
+        is_archived: Some(false),
+        name,
+    };
+    let label = api.org_create_label(&org, opt).await?;
+    println!("Created new label {}", crate::prs::render_label(&label)?);
+    Ok(())
+}
+
+async fn edit_org_label(
+    api: &Forgejo,
+    org: String,
+    name: String,
+    new_name: Option<String>,
+    color: Option<String>,
+    description: Option<String>,
+    exclusive: bool,
+    archived: Option<bool>,
+) -> eyre::Result<()> {
+    let old_label = find_label_by_name(api, &org, &name)
+        .await?
+        .ok_or_eyre("label not found")?;
+    let id = old_label.id.ok_or_eyre("label does not have id")?;
+    let color = color.map(|color| {
+        color
+            .strip_prefix("#")
+            .map(|s| s.to_owned())
+            .unwrap_or(color)
+    });
+    let opt = EditLabelOption {
+        color,
+        description,
+        exclusive: Some(exclusive),
+        is_archived: archived,
+        name: new_name,
+    };
+    let label = api.org_edit_label(&org, id as u64, opt).await?;
+    println!(
+        "Changed label {} to {}",
+        crate::prs::render_label(&old_label)?,
+        crate::prs::render_label(&label)?
+    );
+    Ok(())
+}
+
+async fn remove_org_label(api: &Forgejo, org: String, name: String) -> eyre::Result<()> {
+    let label = find_label_by_name(api, &org, &name)
+        .await?
+        .ok_or_eyre("label not found")?;
+    let id = label.id.ok_or_eyre("label does not have id")?;
+    api.org_delete_label(&org, id as u64).await?;
+    println!("Removed label {}", crate::prs::render_label(&label)?);
     Ok(())
 }

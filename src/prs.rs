@@ -545,13 +545,12 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::R
 async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
     let labels = pr.labels.as_deref().unwrap_or_default();
-    let SpecialRender {
-        fancy,
-        black,
-        white,
-        reset,
-        ..
-    } = *crate::special_render();
+    render_label_list(&labels)?;
+    Ok(())
+}
+
+pub fn render_label_list(labels: &[forgejo_api::structs::Label]) -> eyre::Result<()> {
+    let SpecialRender { fancy, .. } = *crate::special_render();
     if fancy {
         let mut total_width = 0;
         for label in labels {
@@ -560,20 +559,7 @@ async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre
                 println!();
                 total_width = 0;
             }
-            let color_s = label.color.as_deref().unwrap_or("FFFFFF");
-            let (r, g, b) = parse_color(color_s)?;
-            let text_color = if luma(r, g, b) > 0.5 { black } else { white };
-            let rgb_bg = format!("\x1b[48;2;{r};{g};{b}m");
-            if label.exclusive.unwrap_or_default() {
-                let (r2, g2, b2) = darken(r, g, b);
-                let (category, name) = name
-                    .split_once("/")
-                    .ok_or_eyre("label is exclusive but does not have slash")?;
-                let rgb_bg_dark = format!("\x1b[48;2;{r2};{g2};{b2}m");
-                print!("{rgb_bg_dark}{text_color} {category} {rgb_bg} {name} {reset} ");
-            } else {
-                print!("{rgb_bg}{text_color} {name} {reset} ");
-            }
+            print!("{} ", render_label(label)?);
             total_width += name.len();
         }
         println!();
@@ -584,6 +570,36 @@ async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre
         }
     }
     Ok(())
+}
+
+pub fn render_label(label: &forgejo_api::structs::Label) -> eyre::Result<String> {
+    use std::fmt::Write;
+    let mut s = String::new();
+    let SpecialRender {
+        black,
+        white,
+        reset,
+        ..
+    } = *crate::special_render();
+    let name = label.name.as_deref().unwrap_or("???").trim();
+    let color_s = label.color.as_deref().unwrap_or("FFFFFF");
+    let (r, g, b) = parse_color(color_s)?;
+    let text_color = if luma(r, g, b) > 0.5 { black } else { white };
+    let rgb_bg = format!("\x1b[48;2;{r};{g};{b}m");
+    if label.exclusive.unwrap_or_default() {
+        let (r2, g2, b2) = darken(r, g, b);
+        let (category, name) = name
+            .split_once("/")
+            .ok_or_eyre("label is exclusive but does not have slash")?;
+        let rgb_bg_dark = format!("\x1b[48;2;{r2};{g2};{b2}m");
+        write!(
+            &mut s,
+            "{rgb_bg_dark}{text_color} {category} {rgb_bg} {name} {reset}"
+        )?;
+    } else {
+        write!(&mut s, "{rgb_bg}{text_color} {name} {reset}")?;
+    }
+    Ok(s)
 }
 
 fn parse_color(color: &str) -> eyre::Result<(u8, u8, u8)> {
