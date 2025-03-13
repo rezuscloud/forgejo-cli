@@ -238,20 +238,31 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
     print!(" {dash} {vis_pretty}");
     println!();
 
-    // This needs the x-total-count header name fixed in forgejo_api before it can work
-    // let members_query = forgejo_api::structs::OrgListPublicMembersQuery {
-    //     page: Some(1),
-    //     limit: Some(1),
-    // };
-    // let (members_headers, _) = api.org_list_public_members(&name, members_query).await?;
-    // let members = members_headers.x_total.unwrap_or_default();
-    // let teams_query = forgejo_api::structs::OrgListTeamsQuery {
-    //     page: Some(1),
-    //     limit: Some(1),
-    // };
-    // let (teams_headers, _) = api.org_list_teams(&name, teams_query).await?;
-    // let teams = teams_headers.x_total.unwrap_or_default();
-    // println!("{bold}{members}{reset} members {dash} {bold}{teams}{reset} teams");
+    let members_query = forgejo_api::structs::OrgListMembersQuery {
+        page: Some(1),
+        limit: Some(1),
+    };
+    let member_count = match api.org_list_members(&name, members_query).await {
+        Ok((members_headers, _)) => members_headers.x_total_count.unwrap_or_default(),
+        Err(_) => {
+            let members_query = forgejo_api::structs::OrgListPublicMembersQuery {
+                page: Some(1),
+                limit: Some(1),
+            };
+            let (members_headers, _) = api.org_list_public_members(&name, members_query).await?;
+            members_headers.x_total_count.unwrap_or_default()
+        }
+    };
+    print!("{bold}{member_count}{reset} members");
+    let teams_query = forgejo_api::structs::OrgListTeamsQuery {
+        page: Some(1),
+        limit: Some(1),
+    };
+    if let Ok((teams_headers, _)) = api.org_list_teams(&name, teams_query).await {
+        let teams = teams_headers.x_total_count.unwrap_or_default();
+        println!(" {dash} {bold}{teams}{reset} teams");
+    }
+    println!();
 
     let mut first = true;
     if let Some(website) = &org.website {
