@@ -5,8 +5,8 @@ use eyre::OptionExt;
 use forgejo_api::{
     structs::{
         CreateOrgOption, CreateTeamOption, EditOrgOption, EditTeamOption, OrgGetAllQuery,
-        OrgListCurrentUserOrgsQuery, OrgListTeamMembersQuery, OrgListTeamReposQuery,
-        OrgListTeamsQuery, User,
+        OrgListCurrentUserOrgsQuery, OrgListMembersQuery, OrgListPublicMembersQuery,
+        OrgListTeamMembersQuery, OrgListTeamReposQuery, OrgListTeamsQuery, User,
     },
     Forgejo,
 };
@@ -112,6 +112,13 @@ pub enum OrgSubcommand {
     },
     #[clap(subcommand)]
     Team(TeamSubcommand),
+    Members {
+        /// The name of the organization to view the members of.
+        org: String,
+        /// Which page of the results to view
+        #[clap(long, short)]
+        page: Option<u32>,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -244,6 +251,12 @@ pub enum TeamMemberSubcommand {
 pub enum OrgVisibility {
     Private,
     Limited,
+    Public,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OrgMemberVisibility {
+    Private,
     Public,
 }
 
@@ -406,6 +419,7 @@ impl OrgCommand {
                     }
                 },
             },
+            OrgSubcommand::Members { org, page } => list_org_members(&api, org, page).await?,
         }
         Ok(())
     }
@@ -1076,7 +1090,7 @@ async fn list_team_members(
                 Some(full_name) => println!(
                     "{bullet} {bright_cyan}{full_name}{reset} {light_grey}({username}){reset}"
                 ),
-                None => println!("{bullet}  {bright_cyan}{username}{reset}"),
+                None => println!("{bullet} {bright_cyan}{username}{reset}"),
             }
         }
     }
@@ -1124,5 +1138,47 @@ async fn remove_user_from_team(
         ..
     } = crate::special_render();
     println!("Removed {bright_cyan}{bold}{user}{reset} from team {bright_blue}{bold}{team}{reset}");
+    Ok(())
+}
+
+async fn list_org_members(api: &Forgejo, org: String, page: Option<u32>) -> eyre::Result<()> {
+    let my_username = api
+        .user_get_current()
+        .await?
+        .login
+        .ok_or_eyre("current user does not have username")?;
+    let users = if api.org_is_member(&org, &my_username).await.is_ok() {
+        let query = OrgListMembersQuery { page, limit: None };
+        let (_, users) = api.org_list_members(&org, query).await?;
+        users
+    } else {
+        let query = OrgListPublicMembersQuery { page, limit: None };
+        let (_, users) = api.org_list_public_members(&org, query).await?;
+        users
+    };
+
+    let SpecialRender {
+        bullet,
+        light_grey,
+        bright_cyan,
+        reset,
+        ..
+    } = crate::special_render();
+    if users.is_empty() {
+        println!("No results");
+    } else {
+        for user in users {
+            let username = user
+                .login
+                .as_deref()
+                .ok_or_eyre("repo does not have full name")?;
+            match user.full_name.as_deref().filter(|s| !s.is_empty()) {
+                Some(full_name) => println!(
+                    "{bullet} {bright_cyan}{full_name}{reset} {light_grey}({username}){reset}"
+                ),
+                None => println!("{bullet} {bright_cyan}{username}{reset}"),
+            }
+        }
+    }
     Ok(())
 }
