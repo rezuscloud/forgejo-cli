@@ -24,6 +24,7 @@ pub struct OrgCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum OrgSubcommand {
+    /// List all organizations
     List {
         /// Which page of the results to view
         #[clap(long, short)]
@@ -32,10 +33,12 @@ pub enum OrgSubcommand {
         #[clap(long, short)]
         only_member_of: bool,
     },
+    /// View info about an organization
     View {
         /// The name of the organization to view.
         name: String,
     },
+    /// Create a new organization
     Create {
         /// The username for the organization.
         ///
@@ -48,6 +51,7 @@ pub enum OrgSubcommand {
         #[clap(flatten)]
         options: OrgOptions,
     },
+    /// Edit an organization's information.
     Edit {
         /// The name of the organization to edit.
         ///
@@ -56,10 +60,12 @@ pub enum OrgSubcommand {
         #[clap(flatten)]
         options: OrgOptions,
     },
+    /// View the activity in an organization
     Activity {
         /// The name of the organization to view activity for.
         name: String,
     },
+    /// List the members of an organization
     Members {
         /// The name of the organization to view the members of.
         org: String,
@@ -67,6 +73,7 @@ pub enum OrgSubcommand {
         #[clap(long, short)]
         page: Option<u32>,
     },
+    /// View and change the visibility of your membership in an organization
     Visibility {
         /// The name of the organization to view your visibility in.
         org: String,
@@ -487,10 +494,12 @@ async fn member_visibility(
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum LabelSubcommand {
+    /// List all the issue labels an organization uses.
     List {
         /// The name of the organization to list the labels of.
         org: String,
     },
+    /// Add a new issue label to an organization.
     Add {
         /// The name of the organization the label should be added to.
         org: String,
@@ -506,6 +515,7 @@ pub enum LabelSubcommand {
         #[clap(long, short)]
         exclusive: bool,
     },
+    /// Edit an issue label an organization uses.
     Edit {
         /// The name of the organization the label is in.
         org: String,
@@ -527,6 +537,7 @@ pub enum LabelSubcommand {
         #[clap(long, short)]
         archived: Option<bool>,
     },
+    /// Remove an issue label from an organization.
     Rm {
         /// The name of the organization the label is in.
         org: String,
@@ -683,6 +694,7 @@ async fn remove_org_label(api: &Forgejo, org: String, name: String) -> eyre::Res
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoSubcommand {
+    /// List all the repos owned by this organization.
     List {
         /// The name of the organization to list the repos of.
         org: String,
@@ -690,6 +702,7 @@ pub enum RepoSubcommand {
         #[clap(long, short)]
         page: Option<u32>,
     },
+    /// Create a new repository in this organization.
     Create {
         /// The name of the organization to create the repo in.
         org: String,

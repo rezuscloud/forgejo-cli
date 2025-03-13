@@ -14,10 +14,12 @@ use crate::SpecialRender;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamSubcommand {
+    /// View all the teams in an organization
     List {
         /// The name of the organization to list the teams in.
         org: String,
     },
+    /// View info about a single team
     View {
         /// The name of the organization the team is part of.
         org: String,
@@ -26,6 +28,7 @@ pub enum TeamSubcommand {
         #[clap(long, short = 'p')]
         list_permissions: bool,
     },
+    /// Create a new team
     Create {
         /// The name of the organization to create the team in.
         org: String,
@@ -38,6 +41,7 @@ pub enum TeamSubcommand {
         #[clap(flatten)]
         options: TeamOptions,
     },
+    /// Edit a team's information and permissions
     Edit {
         /// The name of the organization the team is in.
         org: String,
@@ -51,6 +55,9 @@ pub enum TeamSubcommand {
         #[clap(flatten)]
         options: TeamOptions,
     },
+    /// Delete a team from an organization.
+    ///
+    /// Note that this does NOT delete the repos the team has!
     Delete {
         /// The name of the organization the team is in.
         org: String,
@@ -68,8 +75,38 @@ pub struct TeamOptions {
     /// A description of what the team does.
     #[clap(long, short)]
     description: Option<String>,
+    /// A comma-separated list of read permissions to give this team
+    ///
+    /// List of permissions:
+    ///  - wiki
+    ///  - ext_wiki
+    ///  - issues
+    ///  - ext_issues
+    ///  - pulls
+    ///  - projects
+    ///  - actions
+    ///  - code
+    ///  - releases
+    ///  - packages
+    ///
+    /// Alternatively, you can use `all` to allow every read permission.
     #[clap(long, short)]
     read_permissions: Option<String>,
+    /// A comma-separated list of read+write permissions to give this team
+    ///
+    /// List of permissions:
+    ///  - wiki
+    ///  - ext_wiki
+    ///  - issues
+    ///  - ext_issues
+    ///  - pulls
+    ///  - projects
+    ///  - actions
+    ///  - code
+    ///  - releases
+    ///  - packages
+    ///
+    /// Alternatively, you can use `all` to allow every read+write permission
     #[clap(long, short)]
     write_permissions: Option<String>,
 }
@@ -79,18 +116,23 @@ pub struct TeamCreateFlags {
     /// Allow members of this team to create repos in the organization.
     #[clap(long, short)]
     can_create_repos: bool,
+    /// Give this team access to every repo.
     #[clap(long, short)]
     include_all_repos: bool,
+    /// Give this team administrator abilities in the organization.
     #[clap(long, short = 'A')]
     admin: bool,
 }
 
 #[derive(Args, Clone, Debug)]
 pub struct TeamEditFlags {
+    /// Allow members of this team to create repos in the organization.
     #[clap(long, short)]
     can_create_repos: Option<bool>,
+    /// Give this team access to every repo.
     #[clap(long, short)]
     include_all_repos: Option<bool>,
+    /// Give this team administrator abilities in the organization.
     #[clap(long, short = 'A')]
     admin: Option<bool>,
 }
@@ -420,6 +462,7 @@ async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<(
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamRepoSubcommand {
+    /// List all the repos this team can access
     List {
         /// The name of the organization the team is in.
         org: String,
@@ -429,6 +472,7 @@ pub enum TeamRepoSubcommand {
         #[clap(long, short)]
         page: Option<u32>,
     },
+    /// Add access to an existing repo to a team
     Add {
         /// The name of the organization the team is in.
         org: String,
@@ -437,6 +481,9 @@ pub enum TeamRepoSubcommand {
         /// The name of the repo to add to the team.
         repo: String,
     },
+    /// Remove access to a repo from a team
+    ///
+    /// Note that this does NOT delete the repository!
     Rm {
         /// The name of the organization the team is in.
         org: String,
@@ -542,6 +589,7 @@ async fn remove_repo_from_team(
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamMemberSubcommand {
+    /// List all the members of a team
     List {
         /// The name of the organization the team is in.
         org: String,
@@ -551,6 +599,7 @@ pub enum TeamMemberSubcommand {
         #[clap(long, short)]
         page: Option<u32>,
     },
+    /// Add someone to a team
     Add {
         /// The name of the organization the team is in.
         org: String,
@@ -559,6 +608,7 @@ pub enum TeamMemberSubcommand {
         /// The name of the user to add to the team.
         user: String,
     },
+    /// Remove someone from a team
     Rm {
         /// The name of the organization the team is in.
         org: String,
