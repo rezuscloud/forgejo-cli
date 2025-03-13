@@ -178,6 +178,8 @@ pub enum TeamSubcommand {
     },
     #[clap(subcommand)]
     Repo(TeamRepoSubcommand),
+    #[clap(subcommand)]
+    Member(TeamMemberSubcommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -206,6 +208,35 @@ pub enum TeamRepoSubcommand {
         team: String,
         /// The name of the repo to remove from the team.
         repo: String,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum TeamMemberSubcommand {
+    List {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to view the members of.
+        team: String,
+        /// Which page of the results to view
+        #[clap(long, short)]
+        page: Option<u32>,
+    },
+    Add {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to add a user to.
+        team: String,
+        /// The name of the user to add to the team.
+        user: String,
+    },
+    Rm {
+        /// The name of the organization the team is in.
+        org: String,
+        /// The name of the team to remove the user from.
+        team: String,
+        /// The name of the user to remove from the team.
+        user: String,
     },
 }
 
@@ -361,6 +392,17 @@ impl OrgCommand {
                     }
                     TeamRepoSubcommand::Rm { org, team, repo } => {
                         remove_repo_from_team(&api, org, team, repo).await?
+                    }
+                },
+                TeamSubcommand::Member(subcommand) => match subcommand {
+                    TeamMemberSubcommand::List { org, team, page } => {
+                        list_team_members(&api, org, team, page).await?
+                    }
+                    TeamMemberSubcommand::Add { org, team, user } => {
+                        add_user_to_team(&api, org, team, user).await?
+                    }
+                    TeamMemberSubcommand::Rm { org, team, user } => {
+                        remove_user_from_team(&api, org, team, user).await?
                     }
                 },
             },
@@ -999,5 +1041,88 @@ async fn remove_repo_from_team(
         ..
     } = crate::special_render();
     println!("Removed {bold}{org}/{repo}{reset} from team {bright_blue}{bold}{team}{reset}");
+    Ok(())
+}
+
+async fn list_team_members(
+    api: &Forgejo,
+    org: String,
+    team: String,
+    page: Option<u32>,
+) -> eyre::Result<()> {
+    let id = find_team_by_name(api, &org, &team)
+        .await?
+        .id
+        .ok_or_eyre("team does not have id")?;
+    let query = OrgListTeamMembersQuery { page, limit: None };
+    let (_, users) = api.org_list_team_members(id as u64, query).await?;
+
+    let SpecialRender {
+        bullet,
+        light_grey,
+        bright_cyan,
+        reset,
+        ..
+    } = crate::special_render();
+    if users.is_empty() {
+        println!("No results");
+    } else {
+        for user in users {
+            let username = user
+                .login
+                .as_deref()
+                .ok_or_eyre("repo does not have full name")?;
+            match user.full_name.as_deref().filter(|s| !s.is_empty()) {
+                Some(full_name) => println!(
+                    "{bullet} {bright_cyan}{full_name}{reset} {light_grey}({username}){reset}"
+                ),
+                None => println!("{bullet}  {bright_cyan}{username}{reset}"),
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn add_user_to_team(
+    api: &Forgejo,
+    org: String,
+    team: String,
+    user: String,
+) -> eyre::Result<()> {
+    let id = find_team_by_name(api, &org, &team)
+        .await?
+        .id
+        .ok_or_eyre("team does not have id")?;
+    api.org_add_team_member(id as u64, &user).await?;
+    let SpecialRender {
+        bold,
+        reset,
+        bright_blue,
+        bright_cyan,
+        ..
+    } = crate::special_render();
+    println!("Added {bright_cyan}{bold}{user}{reset} to team {bright_blue}{bold}{team}{reset}");
+    Ok(())
+}
+
+async fn remove_user_from_team(
+    api: &Forgejo,
+    org: String,
+    team: String,
+    user: String,
+) -> eyre::Result<()> {
+    let id = find_team_by_name(api, &org, &team)
+        .await?
+        .id
+        .ok_or_eyre("team does not have id")?;
+    api.org_remove_team_member(id as u64, &user).await?;
+    let SpecialRender {
+        bold,
+        reset,
+        bright_blue,
+        bright_cyan,
+        ..
+    } = crate::special_render();
+    println!("Removed {bright_cyan}{bold}{user}{reset} from team {bright_blue}{bold}{team}{reset}");
     Ok(())
 }
