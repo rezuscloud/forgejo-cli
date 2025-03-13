@@ -119,6 +119,13 @@ pub enum OrgSubcommand {
         #[clap(long, short)]
         page: Option<u32>,
     },
+    Visibility {
+        /// The name of the organization to view your visibility in.
+        org: String,
+        /// Set a new visibility for yourself.
+        #[clap(long, short)]
+        set: Option<OrgMemberVisibility>,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -420,6 +427,7 @@ impl OrgCommand {
                 },
             },
             OrgSubcommand::Members { org, page } => list_org_members(&api, org, page).await?,
+            OrgSubcommand::Visibility { org, set } => member_visibility(&api, org, set).await?,
         }
         Ok(())
     }
@@ -1179,6 +1187,43 @@ async fn list_org_members(api: &Forgejo, org: String, page: Option<u32>) -> eyre
                 None => println!("{bullet} {bright_cyan}{username}{reset}"),
             }
         }
+    }
+    Ok(())
+}
+
+async fn member_visibility(
+    api: &Forgejo,
+    org: String,
+    visibility: Option<OrgMemberVisibility>,
+) -> eyre::Result<()> {
+    let username = api
+        .user_get_current()
+        .await?
+        .login
+        .ok_or_eyre("current user does not have username")?;
+    let SpecialRender {
+        bright_blue, reset, ..
+    } = crate::special_render();
+    if api.org_is_member(&org, &username).await.is_ok() {
+        match visibility {
+            Some(OrgMemberVisibility::Private) => {
+                api.org_conceal_member(&org, &username).await?;
+                println!("You are now a private member of {bright_blue}{org}{reset}");
+            }
+            Some(OrgMemberVisibility::Public) => {
+                api.org_conceal_member(&org, &username).await?;
+                println!("You are now a public member of {bright_blue}{org}{reset}");
+            }
+            None => {
+                if api.org_is_public_member(&org, &username).await.is_ok() {
+                    println!("You are a public member of {bright_blue}{org}{reset}");
+                } else {
+                    println!("You are a private member of {bright_blue}{org}{reset}");
+                }
+            }
+        }
+    } else {
+        println!("You are not a member of {bright_blue}{org}{reset}");
     }
     Ok(())
 }
