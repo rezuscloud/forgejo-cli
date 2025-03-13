@@ -1,21 +1,17 @@
-use std::{collections::BTreeMap, io::Write};
-
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
     structs::{
-        CreateLabelOption, CreateOrgOption, CreateTeamOption, EditLabelOption, EditOrgOption,
-        EditTeamOption, OrgGetAllQuery, OrgListCurrentUserOrgsQuery, OrgListLabelsQuery,
-        OrgListMembersQuery, OrgListPublicMembersQuery, OrgListReposQuery, OrgListTeamMembersQuery,
-        OrgListTeamReposQuery, OrgListTeamsQuery, User,
+        CreateLabelOption, CreateOrgOption, EditLabelOption, EditOrgOption, OrgGetAllQuery,
+        OrgListCurrentUserOrgsQuery, OrgListLabelsQuery, OrgListMembersQuery,
+        OrgListPublicMembersQuery, OrgListReposQuery,
     },
     Forgejo,
 };
 
-use crate::{
-    repo::{RepoInfo, RepoName},
-    SpecialRender,
-};
+use crate::{repo::RepoInfo, SpecialRender};
+
+mod team;
 
 #[derive(Args, Clone, Debug)]
 pub struct OrgCommand {
@@ -36,6 +32,10 @@ pub enum OrgSubcommand {
         #[clap(long, short)]
         only_member_of: bool,
     },
+    View {
+        /// The name of the organization to view.
+        name: String,
+    },
     Create {
         /// The username for the organization.
         ///
@@ -45,74 +45,21 @@ pub enum OrgSubcommand {
         ///
         /// If you want a name that doesn't have these restrictions, see the `--full-name` option.
         name: String,
-        /// The display name for the organization.
-        ///
-        /// This doesn't have the restrictions the `name` argument does, and can contain any UTF-8
-        /// text.
-        #[clap(long, short)]
-        full_name: Option<String>,
-        /// The organization's description
-        #[clap(long, short)]
-        description: Option<String>,
-        /// Contact email for the organization
-        #[clap(long, short)]
-        email: Option<String>,
-        /// The organizations's location
-        #[clap(long, short)]
-        location: Option<String>,
-        /// The organization's website
-        #[clap(long, short)]
-        website: Option<String>,
-        /// The visibility of the organization.
-        ///
-        /// Public organizations can be viewed by anyone, limited orgs can only be viewed by
-        /// logged-in users, and private orgs can only be viewed by members of that org.
-        #[clap(long, short)]
-        visibility: Option<OrgVisibility>,
-        /// Whether the admin of a repo can change org teams' access to it.
-        #[clap(long, short)]
-        admin_can_change_team_access: bool,
-    },
-    View {
-        /// The name of the organization to view.
-        name: String,
+        #[clap(flatten)]
+        options: OrgOptions,
     },
     Edit {
         /// The name of the organization to edit.
         ///
         /// Note that this is the username, *not* the display name.
         name: String,
-        /// The display name for the organization.
-        #[clap(long, short)]
-        full_name: Option<String>,
-        /// The organization's description
-        #[clap(long, short)]
-        description: Option<String>,
-        /// Contact email for the organization
-        #[clap(long, short)]
-        email: Option<String>,
-        /// The organizations's location
-        #[clap(long, short)]
-        location: Option<String>,
-        /// The organization's website
-        #[clap(long, short)]
-        website: Option<String>,
-        /// The visibility of the organization.
-        ///
-        /// Public organizations can be viewed by anyone, limited orgs can only be viewed by
-        /// logged-in users, and private orgs can only be viewed by members of that org.
-        #[clap(long, short)]
-        visibility: Option<OrgVisibility>,
-        /// Whether the admin of a repo can change org teams' access to it.
-        #[clap(long, short)]
-        admin_can_change_team_access: bool,
+        #[clap(flatten)]
+        options: OrgOptions,
     },
     Activity {
         /// The name of the organization to view activity for.
         name: String,
     },
-    #[clap(subcommand)]
-    Team(TeamSubcommand),
     Members {
         /// The name of the organization to view the members of.
         org: String,
@@ -128,214 +75,54 @@ pub enum OrgSubcommand {
         set: Option<OrgMemberVisibility>,
     },
     #[clap(subcommand)]
+    Team(team::TeamSubcommand),
+    #[clap(subcommand)]
     Label(LabelSubcommand),
     #[clap(subcommand)]
     Repo(RepoSubcommand),
 }
 
-#[derive(Subcommand, Clone, Debug)]
-pub enum TeamSubcommand {
-    List {
-        /// The name of the organization to list the teams in.
-        org: String,
-    },
-    Create {
-        /// The name of the organization to create the team in.
-        org: String,
-        /// The name of the new team
-        ///
-        /// This must only contain alphanumeric characters.
-        name: String,
-        #[clap(long, short)]
-        can_create_repos: bool,
-        #[clap(long, short)]
-        description: Option<String>,
-        #[clap(long, short)]
-        include_all_repos: bool,
-        #[clap(long, short)]
-        read_permissions: Option<String>,
-        #[clap(long, short)]
-        write_permissions: Option<String>,
-        #[clap(long, short = 'A')]
-        admin: bool,
-    },
-    View {
-        /// The name of the organization the team is part of.
-        org: String,
-        /// The name of the new team
-        name: String,
-        #[clap(long, short = 'p')]
-        list_permissions: bool,
-        #[clap(long, short = 'm')]
-        list_members: bool,
-    },
-    Edit {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to edit
-        name: String,
-        #[clap(long, short)]
-        new_name: Option<String>,
-        #[clap(long, short)]
-        can_create_repos: bool,
-        #[clap(long, short)]
-        description: Option<String>,
-        #[clap(long, short)]
-        include_all_repos: bool,
-        #[clap(long, short)]
-        read_permissions: Option<String>,
-        #[clap(long, short)]
-        write_permissions: Option<String>,
-        #[clap(long, short = 'A')]
-        admin: bool,
-    },
-    Delete {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to delete
-        name: String,
-    },
-    #[clap(subcommand)]
-    Repo(TeamRepoSubcommand),
-    #[clap(subcommand)]
-    Member(TeamMemberSubcommand),
+#[derive(Args, Clone, Debug)]
+pub struct OrgOptions {
+    /// The display name for the organization.
+    ///
+    /// This doesn't have the restrictions the `name` argument does, and can contain any UTF-8
+    /// text.
+    #[clap(long, short)]
+    full_name: Option<String>,
+    /// The organization's description
+    #[clap(long, short)]
+    description: Option<String>,
+    /// Contact email for the organization
+    #[clap(long, short)]
+    email: Option<String>,
+    /// The organizations's location
+    #[clap(long, short)]
+    location: Option<String>,
+    /// The organization's website
+    #[clap(long, short)]
+    website: Option<String>,
+    /// The visibility of the organization.
+    ///
+    /// Public organizations can be viewed by anyone, limited orgs can only be viewed by
+    /// logged-in users, and private orgs can only be viewed by members of that org.
+    #[clap(long, short)]
+    visibility: Option<OrgVisibility>,
+    /// Whether the admin of a repo can change org teams' access to it.
+    #[clap(long, short)]
+    admin_can_change_team_access: bool,
 }
 
-#[derive(Subcommand, Clone, Debug)]
-pub enum TeamRepoSubcommand {
-    List {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to view the repos of.
-        team: String,
-        /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
-    },
-    Add {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to add a repo to.
-        team: String,
-        /// The name of the repo to add to the team.
-        repo: String,
-    },
-    Rm {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to remove the repo from.
-        team: String,
-        /// The name of the repo to remove from the team.
-        repo: String,
-    },
-}
-
-#[derive(Subcommand, Clone, Debug)]
-pub enum TeamMemberSubcommand {
-    List {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to view the members of.
-        team: String,
-        /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
-    },
-    Add {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to add a user to.
-        team: String,
-        /// The name of the user to add to the team.
-        user: String,
-    },
-    Rm {
-        /// The name of the organization the team is in.
-        org: String,
-        /// The name of the team to remove the user from.
-        team: String,
-        /// The name of the user to remove from the team.
-        user: String,
-    },
-}
-
-#[derive(Subcommand, Clone, Debug)]
-pub enum LabelSubcommand {
-    List {
-        /// The name of the organization to list the labels of.
-        org: String,
-    },
-    Add {
-        /// The name of the organization the label should be added to.
-        org: String,
-        /// The name of the label to add.
-        name: String,
-        /// The hexcode of the label to add.
-        color: String,
-        /// A description of what the label is for.
-        #[clap(long, short)]
-        description: Option<String>,
-        /// If this label is named `{scope}/{name}`, make it exclusive with other labels with the
-        /// same scope.
-        #[clap(long, short)]
-        exclusive: bool,
-    },
-    Edit {
-        /// The name of the organization the label is in.
-        org: String,
-        /// The name of the label to edit.
-        name: String,
-        /// Set a new name for the label.
-        #[clap(long, short)]
-        new_name: Option<String>,
-        /// Set a new hexcode for the label.
-        #[clap(long, short)]
-        color: Option<String>,
-        /// Set a description of what the label is for.
-        #[clap(long, short)]
-        description: Option<String>,
-        /// Set whether this label is exclusive with others of the same scope.
-        #[clap(long, short)]
-        exclusive: bool,
-        /// Set whether this label is archived.
-        #[clap(long, short)]
-        archived: Option<bool>,
-    },
-    Rm {
-        /// The name of the organization the label is in.
-        org: String,
-        /// The name of the label to remove from the organization.
-        label: String,
-    },
-}
-
-#[derive(Subcommand, Clone, Debug)]
-pub enum RepoSubcommand {
-    List {
-        /// The name of the organization to list the repos of.
-        org: String,
-        /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
-    },
-    Create {
-        /// The name of the organization to create the repo in.
-        org: String,
-        #[clap(flatten)]
-        args: crate::repo::RepoCreateArgs,
-    },
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OrgMemberVisibility {
+    Private,
+    Public,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrgVisibility {
     Private,
     Limited,
-    Public,
-}
-
-#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OrgMemberVisibility {
-    Private,
     Public,
 }
 
@@ -370,193 +157,15 @@ impl OrgCommand {
                 page,
                 only_member_of,
             } => list_orgs(&api, page, only_member_of).await?,
-            OrgSubcommand::Create {
-                name,
-                description,
-                email,
-                full_name,
-                location,
-                website,
-                visibility,
-                admin_can_change_team_access,
-            } => {
-                create_org(
-                    &api,
-                    name,
-                    description,
-                    email,
-                    full_name,
-                    location,
-                    website,
-                    visibility,
-                    admin_can_change_team_access,
-                )
-                .await?
-            }
             OrgSubcommand::View { name } => view_org(&api, name).await?,
-            OrgSubcommand::Edit {
-                name,
-                description,
-                email,
-                full_name,
-                location,
-                website,
-                visibility,
-                admin_can_change_team_access,
-            } => {
-                edit_org(
-                    &api,
-                    name,
-                    description,
-                    email,
-                    full_name,
-                    location,
-                    website,
-                    visibility,
-                    admin_can_change_team_access,
-                )
-                .await?
-            }
+            OrgSubcommand::Create { name, options } => create_org(&api, name, options).await?,
+            OrgSubcommand::Edit { name, options } => edit_org(&api, name, options).await?,
             OrgSubcommand::Activity { name } => list_activity(&api, name).await?,
-            OrgSubcommand::Team(subcommand) => match subcommand {
-                TeamSubcommand::List { org } => list_teams(&api, org).await?,
-                TeamSubcommand::Create {
-                    org,
-                    name,
-                    can_create_repos,
-                    description,
-                    include_all_repos,
-                    read_permissions,
-                    write_permissions,
-                    admin,
-                } => {
-                    create_team(
-                        &api,
-                        org,
-                        name,
-                        can_create_repos,
-                        description,
-                        include_all_repos,
-                        read_permissions,
-                        write_permissions,
-                        admin,
-                    )
-                    .await?
-                }
-                TeamSubcommand::View {
-                    org,
-                    name,
-                    list_permissions,
-                    list_members,
-                } => view_team(&api, org, name, list_permissions, list_members).await?,
-                TeamSubcommand::Edit {
-                    org,
-                    name,
-                    new_name,
-                    can_create_repos,
-                    description,
-                    include_all_repos,
-                    read_permissions,
-                    write_permissions,
-                    admin,
-                } => {
-                    edit_team(
-                        &api,
-                        org,
-                        name,
-                        new_name,
-                        can_create_repos,
-                        description,
-                        include_all_repos,
-                        read_permissions,
-                        write_permissions,
-                        admin,
-                    )
-                    .await?
-                }
-                TeamSubcommand::Delete { org, name } => delete_team(&api, org, name).await?,
-                TeamSubcommand::Repo(subcommand) => match subcommand {
-                    TeamRepoSubcommand::List { org, team, page } => {
-                        list_team_repos(&api, org, team, page).await?
-                    }
-                    TeamRepoSubcommand::Add { org, team, repo } => {
-                        add_repo_to_team(&api, org, team, repo).await?
-                    }
-                    TeamRepoSubcommand::Rm { org, team, repo } => {
-                        remove_repo_from_team(&api, org, team, repo).await?
-                    }
-                },
-                TeamSubcommand::Member(subcommand) => match subcommand {
-                    TeamMemberSubcommand::List { org, team, page } => {
-                        list_team_members(&api, org, team, page).await?
-                    }
-                    TeamMemberSubcommand::Add { org, team, user } => {
-                        add_user_to_team(&api, org, team, user).await?
-                    }
-                    TeamMemberSubcommand::Rm { org, team, user } => {
-                        remove_user_from_team(&api, org, team, user).await?
-                    }
-                },
-            },
             OrgSubcommand::Members { org, page } => list_org_members(&api, org, page).await?,
             OrgSubcommand::Visibility { org, set } => member_visibility(&api, org, set).await?,
-            OrgSubcommand::Label(subcommand) => match subcommand {
-                LabelSubcommand::List { org } => list_org_labels(&api, org).await?,
-                LabelSubcommand::Add {
-                    org,
-                    name,
-                    color,
-                    description,
-                    exclusive,
-                } => add_org_label(&api, org, name, color, description, exclusive).await?,
-                LabelSubcommand::Edit {
-                    org,
-                    name,
-                    new_name,
-                    color,
-                    description,
-                    exclusive,
-                    archived,
-                } => {
-                    edit_org_label(
-                        &api,
-                        org,
-                        name,
-                        new_name,
-                        color,
-                        description,
-                        exclusive,
-                        archived,
-                    )
-                    .await?
-                }
-                LabelSubcommand::Rm { org, label } => remove_org_label(&api, org, label).await?,
-            },
-            OrgSubcommand::Repo(subcommand) => match subcommand {
-                RepoSubcommand::List { org, page } => list_org_repos(&api, org, page).await?,
-                RepoSubcommand::Create {
-                    org,
-                    args:
-                        crate::repo::RepoCreateArgs {
-                            repo,
-                            description,
-                            private,
-                            remote,
-                            push,
-                        },
-                } => {
-                    crate::repo::create_repo(
-                        &api,
-                        Some(org),
-                        repo,
-                        description,
-                        private,
-                        remote,
-                        push,
-                    )
-                    .await?
-                }
-            },
+            OrgSubcommand::Team(subcommand) => subcommand.run(&api).await?,
+            OrgSubcommand::Label(subcommand) => subcommand.run(&api).await?,
+            OrgSubcommand::Repo(subcommand) => subcommand.run(&api).await?,
         }
         Ok(())
     }
@@ -592,82 +201,6 @@ async fn list_orgs(api: &Forgejo, page: Option<u32>, only_member_of: bool) -> ey
         for org in orgs {
             let name = org.name.ok_or_eyre("org does not have name")?;
             println!("{bullet} {bold}{name}{reset}");
-        }
-    }
-    Ok(())
-}
-
-async fn create_org(
-    api: &Forgejo,
-    name: String,
-    description: Option<String>,
-    email: Option<String>,
-    full_name: Option<String>,
-    location: Option<String>,
-    website: Option<String>,
-    visibility: Option<OrgVisibility>,
-    admin_can_change_team_access: bool,
-) -> eyre::Result<()> {
-    if !name.chars().all(is_valid_name_char) {
-        eyre::bail!("Organization names can only have alphanumeric characters, dash, underscore, or period. \n  If you want a name with other characters, try setting the --full-name flag");
-    }
-    if !name
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_alphanumeric())
-    {
-        eyre::bail!("Organization names can only start with alphanumeric characters. \n  If you want a name that starts with other characters, try setting the --full-name flag");
-    }
-    if !name
-        .chars()
-        .last()
-        .is_some_and(|c| c.is_ascii_alphanumeric())
-    {
-        eyre::bail!("Organization names can only end with alphanumeric characters. \n  If you want a name that ends with other characters, try setting the --full-name flag");
-    }
-    let mut chars = name.chars().peekable();
-    while let Some(c) = chars.next() {
-        // because of the prior check, if it isn't alphanumeric, it's definitely one of - _ or .
-        if !c.is_alphanumeric() && !chars.peek().is_some_and(|c| c.is_alphanumeric()) {
-            eyre::bail!("Organization names can't have consecutive non-alphanumberic characters.\n  If you want that in the name, try setting the --full-name flag");
-        }
-    }
-    let opt = CreateOrgOption {
-        description,
-        email,
-        full_name,
-        location,
-        repo_admin_change_team_access: Some(admin_can_change_team_access),
-        username: name,
-        visibility: visibility.map(|v| v.into()),
-        website,
-    };
-    let new_org = api.org_create(opt).await?;
-
-    let name = new_org.name.ok_or_eyre("new org does not have name")?;
-    let visibility = new_org
-        .visibility
-        .ok_or_eyre("new org does not have visibility")?;
-
-    let SpecialRender {
-        fancy,
-        bold,
-        light_grey,
-        reset,
-        ..
-    } = *crate::special_render();
-    print!("created new {visibility} org ");
-    if let Some(full_name) = &new_org.full_name {
-        if fancy {
-            println!("{bold}{full_name}{reset} {light_grey}({name}){reset}");
-        } else {
-            println!("\"{full_name}\" ({name})");
-        }
-    } else {
-        if fancy {
-            println!("{bold}{name}{reset}");
-        } else {
-            println!("\"{name}\"");
         }
     }
     Ok(())
@@ -758,25 +291,81 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
     Ok(())
 }
 
-async fn edit_org(
-    api: &Forgejo,
-    name: String,
-    description: Option<String>,
-    email: Option<String>,
-    full_name: Option<String>,
-    location: Option<String>,
-    website: Option<String>,
-    visibility: Option<OrgVisibility>,
-    admin_can_change_team_access: bool,
-) -> eyre::Result<()> {
+async fn create_org(api: &Forgejo, name: String, options: OrgOptions) -> eyre::Result<()> {
+    if !name.chars().all(is_valid_name_char) {
+        eyre::bail!("Organization names can only have alphanumeric characters, dash, underscore, or period. \n  If you want a name with other characters, try setting the --full-name flag");
+    }
+    if !name
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphanumeric())
+    {
+        eyre::bail!("Organization names can only start with alphanumeric characters. \n  If you want a name that starts with other characters, try setting the --full-name flag");
+    }
+    if !name
+        .chars()
+        .last()
+        .is_some_and(|c| c.is_ascii_alphanumeric())
+    {
+        eyre::bail!("Organization names can only end with alphanumeric characters. \n  If you want a name that ends with other characters, try setting the --full-name flag");
+    }
+    let mut chars = name.chars().peekable();
+    while let Some(c) = chars.next() {
+        // because of the prior check, if it isn't alphanumeric, it's definitely one of - _ or .
+        if !c.is_alphanumeric() && !chars.peek().is_some_and(|c| c.is_alphanumeric()) {
+            eyre::bail!("Organization names can't have consecutive non-alphanumberic characters.\n  If you want that in the name, try setting the --full-name flag");
+        }
+    }
+    let opt = CreateOrgOption {
+        description: options.description,
+        email: options.email,
+        full_name: options.full_name,
+        location: options.location,
+        repo_admin_change_team_access: Some(options.admin_can_change_team_access),
+        username: name,
+        visibility: options.visibility.map(|v| v.into()),
+        website: options.website,
+    };
+    let new_org = api.org_create(opt).await?;
+
+    let name = new_org.name.ok_or_eyre("new org does not have name")?;
+    let visibility = new_org
+        .visibility
+        .ok_or_eyre("new org does not have visibility")?;
+
+    let SpecialRender {
+        fancy,
+        bold,
+        light_grey,
+        reset,
+        ..
+    } = *crate::special_render();
+    print!("created new {visibility} org ");
+    if let Some(full_name) = &new_org.full_name {
+        if fancy {
+            println!("{bold}{full_name}{reset} {light_grey}({name}){reset}");
+        } else {
+            println!("\"{full_name}\" ({name})");
+        }
+    } else {
+        if fancy {
+            println!("{bold}{name}{reset}");
+        } else {
+            println!("\"{name}\"");
+        }
+    }
+    Ok(())
+}
+
+async fn edit_org(api: &Forgejo, name: String, options: OrgOptions) -> eyre::Result<()> {
     let opt = EditOrgOption {
-        description,
-        email,
-        full_name,
-        location,
-        repo_admin_change_team_access: Some(admin_can_change_team_access),
-        visibility: visibility.map(|v| v.into()),
-        website,
+        description: options.description,
+        email: options.email,
+        full_name: options.full_name,
+        location: options.location,
+        repo_admin_change_team_access: Some(options.admin_can_change_team_access),
+        visibility: options.visibility.map(|v| v.into()),
+        website: options.website,
     };
     api.org_edit(&name, opt).await?;
     Ok(())
@@ -789,492 +378,6 @@ async fn list_activity(api: &Forgejo, name: String) -> eyre::Result<()> {
     for activity in feed {
         crate::user::print_activity(&activity)?;
     }
-    Ok(())
-}
-
-async fn find_team_by_name(
-    api: &Forgejo,
-    org: &str,
-    name: &str,
-) -> eyre::Result<forgejo_api::structs::Team> {
-    let mut seen = 0;
-    for page in 1.. {
-        let query = OrgListTeamsQuery {
-            page: Some(page),
-            limit: None,
-        };
-        let (headers, teams) = api.org_list_teams(&org, query).await?;
-        seen += teams.len();
-        for team in teams {
-            if team
-                .name
-                .as_deref()
-                .is_some_and(|team_name| team_name == name)
-            {
-                return Ok(team);
-            }
-        }
-        if seen >= headers.x_total_count.unwrap_or_default() as usize {
-            break;
-        }
-    }
-    eyre::bail!("Unknown team {name}");
-}
-
-async fn list_teams(api: &Forgejo, org: String) -> eyre::Result<()> {
-    let mut teams = Vec::new();
-    for page_idx in 1.. {
-        let query = OrgListTeamsQuery {
-            page: Some(page_idx),
-            limit: None,
-        };
-        let (headers, page) = api.org_list_teams(&org, query).await?;
-        teams.extend(page);
-        if teams.len() >= headers.x_total_count.unwrap_or_default() as usize {
-            break;
-        }
-    }
-    teams.sort_unstable_by_key(permission_sort_id);
-
-    let SpecialRender {
-        bright_blue,
-        bold,
-        reset,
-        bullet,
-        ..
-    } = crate::special_render();
-    for team in teams {
-        let team_name = team.name.as_deref().ok_or_eyre("team does not have name")?;
-        println!("{bullet} {bold}{bright_blue}{team_name}{reset}");
-    }
-    Ok(())
-}
-
-fn permission_sort_id(team: &forgejo_api::structs::Team) -> u32 {
-    use forgejo_api::structs::TeamPermission as Perm;
-    match &team.permission {
-        Some(Perm::Owner) => 0,
-        Some(Perm::Admin) => 1,
-        Some(Perm::Write) => 2,
-        Some(Perm::Read) => 3,
-        Some(Perm::None) | None => 4,
-    }
-}
-
-const ALL_UNITS: &[&str] = &[
-    "repo.wiki",
-    "repo.ext_wiki",
-    "repo.issues",
-    "repo.ext_issues",
-    "repo.pulls",
-    "repo.projects",
-    "repo.actions",
-    "repo.code",
-    "repo.releases",
-    "repo.packages",
-];
-
-fn create_unit_map(ro_perms: Option<&str>, rw_perms: Option<&str>) -> BTreeMap<String, String> {
-    let mut units = BTreeMap::new();
-    if let Some(ro_perms) = ro_perms {
-        if ro_perms == "all" {
-            for ro in ALL_UNITS {
-                units.insert(ro.to_string(), "read".to_owned());
-            }
-        } else {
-            for ro in ro_perms.split(",") {
-                units.insert(format!("repo.{ro}"), "read".to_owned());
-            }
-        }
-    }
-    if let Some(rw_perms) = rw_perms {
-        if rw_perms.trim() == "all" {
-            for rw in ALL_UNITS {
-                units.insert(rw.to_string(), "write".to_owned());
-            }
-        } else {
-            for rw in rw_perms.split(",") {
-                units.insert(format!("repo.{rw}"), "write".to_owned());
-            }
-        }
-    }
-    units
-}
-
-async fn create_team(
-    api: &Forgejo,
-    org: String,
-    name: String,
-    can_create_repo: bool,
-    description: Option<String>,
-    include_all_repos: bool,
-    read_permissions: Option<String>,
-    write_permissions: Option<String>,
-    admin: bool,
-) -> eyre::Result<()> {
-    let units = create_unit_map(read_permissions.as_deref(), write_permissions.as_deref());
-    let options = CreateTeamOption {
-        can_create_org_repo: Some(can_create_repo),
-        description,
-        includes_all_repositories: Some(include_all_repos),
-        name,
-        permission: admin.then(|| forgejo_api::structs::CreateTeamOptionPermission::Admin),
-        units: None,
-        units_map: Some(units),
-    };
-    let new_team = api.org_create_team(&org, options).await?;
-    let org = new_team.organization.ok_or_eyre("team doesn't have org")?;
-    let org_name = org
-        .name
-        .or(org.full_name)
-        .ok_or_eyre("org doesn't have name")?;
-    let name = new_team.name.ok_or_eyre("team doesn't have name")?;
-
-    let SpecialRender {
-        bright_blue,
-        bold,
-        reset,
-        ..
-    } = crate::special_render();
-    print!("created new ");
-    if admin {
-        print!("admin ");
-    }
-    println!("team {bright_blue}{bold}{name}{reset} in {bold}{org_name}{reset}");
-    Ok(())
-}
-
-async fn view_team(
-    api: &Forgejo,
-    org: String,
-    name: String,
-    list_permissions: bool,
-    list_members: bool,
-) -> eyre::Result<()> {
-    let team = find_team_by_name(api, &org, &name).await?;
-
-    let SpecialRender {
-        bright_blue,
-        bright_red,
-        bold,
-        reset,
-        dash,
-        ..
-    } = crate::special_render();
-
-    print!("{bright_blue}{bold}{name}{reset} {dash} in org {bold}{org}{reset}");
-    if team
-        .permission
-        .is_some_and(|p| p == forgejo_api::structs::TeamPermission::Admin)
-    {
-        print!(" {dash} {bright_red}Admin{reset}");
-    }
-    println!();
-
-    if let Some(description) = &team.description {
-        if !description.is_empty() {
-            println!("\n{}", crate::markdown(description));
-        }
-    }
-
-    if list_permissions {
-        println!();
-        let units = team
-            .units_map
-            .as_ref()
-            .ok_or_eyre("team does not have permission units")?;
-        let mut ro_perms = Vec::new();
-        let mut rw_perms = Vec::new();
-        for (unit, permission) in units {
-            match &**permission {
-                "read" => ro_perms.push(unit),
-                "write" | "admin" | "owner" => rw_perms.push(unit),
-                _ => (),
-            }
-        }
-
-        let get_unit_name = |unit| match unit {
-            "repo.wiki" => "Wikis",
-            "repo.ext_wiki" => "External Wikis",
-            "repo.issues" => "Issues",
-            "repo.ext_issues" => "External Issues",
-            "repo.pulls" => "Pull Requests",
-            "repo.projects" => "Projects",
-            "repo.actions" => "CI",
-            "repo.code" => "Code",
-            "repo.releases" => "Releases",
-            "repo.packages" => "Packages",
-            _ => "Unknown",
-        };
-        if !ro_perms.is_empty() {
-            print!("Read Only: ");
-            for (i, unit) in ro_perms.iter().enumerate() {
-                let unit_name = get_unit_name(unit);
-                if i > 0 {
-                    print!(", ");
-                }
-                print!("{unit_name}");
-            }
-            println!();
-        }
-        if !rw_perms.is_empty() {
-            print!("Read/Write: ");
-            for (i, unit) in rw_perms.iter().enumerate() {
-                let unit_name = get_unit_name(unit);
-                if i != 0 {
-                    print!(", ");
-                }
-                print!("{unit_name}");
-            }
-            println!();
-        }
-    }
-
-    if list_members {
-        let team_id = team.id.ok_or_eyre("team does not have id")?;
-        println!();
-        print!("Loading members...");
-        std::io::stdout().flush()?;
-        let mut members = Vec::new();
-        for page_idx in 1.. {
-            let query = OrgListTeamMembersQuery {
-                page: Some(page_idx),
-                limit: None,
-            };
-            let (_, page) = api.org_list_team_members(team_id as u64, query).await?;
-            if page.is_empty() {
-                break;
-            }
-
-            members.extend(page);
-        }
-        members.sort_by(|a, b| a.login.cmp(&b.login));
-        print!("\r                  \r");
-        println!("{bold}Members:{reset}");
-        let max_line_length = crate::max_line_length();
-        let mut current_line_length = 0;
-        for (i, member) in members.into_iter().enumerate() {
-            let username = member
-                .login
-                .as_deref()
-                .ok_or_eyre("user does not have name")?;
-            if i > 0 {
-                print!(", ");
-            }
-            if current_line_length > 0 && current_line_length + username.len() > max_line_length {
-                println!();
-                current_line_length = 0;
-            }
-            print!("{username}");
-            current_line_length += username.len() + 2;
-        }
-    }
-
-    Ok(())
-}
-
-async fn edit_team(
-    api: &Forgejo,
-    org: String,
-    name: String,
-    new_name: Option<String>,
-    can_create_repo: bool,
-    description: Option<String>,
-    include_all_repos: bool,
-    read_permissions: Option<String>,
-    write_permissions: Option<String>,
-    admin: bool,
-) -> eyre::Result<()> {
-    let team = find_team_by_name(api, &org, &name).await?;
-    let id = team.id.ok_or_eyre("team does not have id")?;
-
-    // EditTeamOption's team field is a String rather than Option<String>
-    // That should be fixed, but this gets around it for now.
-    let new_name = new_name.unwrap_or(name);
-    let units = create_unit_map(read_permissions.as_deref(), write_permissions.as_deref());
-
-    let options = EditTeamOption {
-        can_create_org_repo: Some(can_create_repo),
-        description,
-        includes_all_repositories: Some(include_all_repos),
-        name: new_name,
-        permission: admin.then(|| forgejo_api::structs::EditTeamOptionPermission::Admin),
-        units: None,
-        units_map: Some(units),
-    };
-    api.org_edit_team(id as u32, options).await?;
-
-    Ok(())
-}
-
-async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<()> {
-    let SpecialRender { bold, reset, .. } = crate::special_render();
-    println!("Are you sure you want to delete {bold}{org}/{name}{reset}?");
-    let confirmation = crate::readline("(y/N) ").await?.to_lowercase();
-    if matches!(confirmation.trim(), "y" | "yes") {
-        let id = find_team_by_name(api, &org, &name)
-            .await?
-            .id
-            .ok_or_eyre("team does not have id")?;
-        api.org_delete_team(id as u64).await?;
-        println!("Team deleted.");
-    } else {
-        println!("Team not deleted.");
-    }
-    Ok(())
-}
-
-async fn list_team_repos(
-    api: &Forgejo,
-    org: String,
-    team: String,
-    page: Option<u32>,
-) -> eyre::Result<()> {
-    let id = find_team_by_name(api, &org, &team)
-        .await?
-        .id
-        .ok_or_eyre("team does not have id")?;
-    let query = OrgListTeamReposQuery { page, limit: None };
-    let (_, repos) = api.org_list_team_repos(id as u64, query).await?;
-
-    let SpecialRender { bullet, .. } = crate::special_render();
-    if repos.is_empty() {
-        println!("No results");
-    } else {
-        for repo in repos {
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
-            println!("{bullet} {full_name}");
-        }
-    }
-    Ok(())
-}
-
-async fn add_repo_to_team(
-    api: &Forgejo,
-    org: String,
-    team: String,
-    repo: String,
-) -> eyre::Result<()> {
-    let id = find_team_by_name(api, &org, &team)
-        .await?
-        .id
-        .ok_or_eyre("team does not have id")?;
-    api.org_add_team_repository(id as u64, &org, &repo).await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        ..
-    } = crate::special_render();
-    println!("Added {bold}{org}/{repo}{reset} to team {bright_blue}{bold}{team}{reset}");
-    Ok(())
-}
-
-async fn remove_repo_from_team(
-    api: &Forgejo,
-    org: String,
-    team: String,
-    repo: String,
-) -> eyre::Result<()> {
-    let id = find_team_by_name(api, &org, &team)
-        .await?
-        .id
-        .ok_or_eyre("team does not have id")?;
-    api.org_remove_team_repository(id as u64, &org, &repo)
-        .await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        ..
-    } = crate::special_render();
-    println!("Removed {bold}{org}/{repo}{reset} from team {bright_blue}{bold}{team}{reset}");
-    Ok(())
-}
-
-async fn list_team_members(
-    api: &Forgejo,
-    org: String,
-    team: String,
-    page: Option<u32>,
-) -> eyre::Result<()> {
-    let id = find_team_by_name(api, &org, &team)
-        .await?
-        .id
-        .ok_or_eyre("team does not have id")?;
-    let query = OrgListTeamMembersQuery { page, limit: None };
-    let (_, users) = api.org_list_team_members(id as u64, query).await?;
-
-    let SpecialRender {
-        bullet,
-        light_grey,
-        bright_cyan,
-        reset,
-        ..
-    } = crate::special_render();
-    if users.is_empty() {
-        println!("No results");
-    } else {
-        for user in users {
-            let username = user
-                .login
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
-            match user.full_name.as_deref().filter(|s| !s.is_empty()) {
-                Some(full_name) => println!(
-                    "{bullet} {bright_cyan}{full_name}{reset} {light_grey}({username}){reset}"
-                ),
-                None => println!("{bullet} {bright_cyan}{username}{reset}"),
-            }
-        }
-    }
-    Ok(())
-}
-
-async fn add_user_to_team(
-    api: &Forgejo,
-    org: String,
-    team: String,
-    user: String,
-) -> eyre::Result<()> {
-    let id = find_team_by_name(api, &org, &team)
-        .await?
-        .id
-        .ok_or_eyre("team does not have id")?;
-    api.org_add_team_member(id as u64, &user).await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        bright_cyan,
-        ..
-    } = crate::special_render();
-    println!("Added {bright_cyan}{bold}{user}{reset} to team {bright_blue}{bold}{team}{reset}");
-    Ok(())
-}
-
-async fn remove_user_from_team(
-    api: &Forgejo,
-    org: String,
-    team: String,
-    user: String,
-) -> eyre::Result<()> {
-    let id = find_team_by_name(api, &org, &team)
-        .await?
-        .id
-        .ok_or_eyre("team does not have id")?;
-    api.org_remove_team_member(id as u64, &user).await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        bright_cyan,
-        ..
-    } = crate::special_render();
-    println!("Removed {bright_cyan}{bold}{user}{reset} from team {bright_blue}{bold}{team}{reset}");
     Ok(())
 }
 
@@ -1355,6 +458,94 @@ async fn member_visibility(
         println!("You are not a member of {bright_blue}{org}{reset}");
     }
     Ok(())
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum LabelSubcommand {
+    List {
+        /// The name of the organization to list the labels of.
+        org: String,
+    },
+    Add {
+        /// The name of the organization the label should be added to.
+        org: String,
+        /// The name of the label to add.
+        name: String,
+        /// The hexcode of the label to add.
+        color: String,
+        /// A description of what the label is for.
+        #[clap(long, short)]
+        description: Option<String>,
+        /// If this label is named `{scope}/{name}`, make it exclusive with other labels with the
+        /// same scope.
+        #[clap(long, short)]
+        exclusive: bool,
+    },
+    Edit {
+        /// The name of the organization the label is in.
+        org: String,
+        /// The name of the label to edit.
+        name: String,
+        /// Set a new name for the label.
+        #[clap(long, short)]
+        new_name: Option<String>,
+        /// Set a new hexcode for the label.
+        #[clap(long, short)]
+        color: Option<String>,
+        /// Set a description of what the label is for.
+        #[clap(long, short)]
+        description: Option<String>,
+        /// Set whether this label is exclusive with others of the same scope.
+        #[clap(long, short)]
+        exclusive: bool,
+        /// Set whether this label is archived.
+        #[clap(long, short)]
+        archived: Option<bool>,
+    },
+    Rm {
+        /// The name of the organization the label is in.
+        org: String,
+        /// The name of the label to remove from the organization.
+        label: String,
+    },
+}
+
+impl LabelSubcommand {
+    async fn run(self, api: &Forgejo) -> eyre::Result<()> {
+        match self {
+            LabelSubcommand::List { org } => list_org_labels(&api, org).await?,
+            LabelSubcommand::Add {
+                org,
+                name,
+                color,
+                description,
+                exclusive,
+            } => add_org_label(&api, org, name, color, description, exclusive).await?,
+            LabelSubcommand::Edit {
+                org,
+                name,
+                new_name,
+                color,
+                description,
+                exclusive,
+                archived,
+            } => {
+                edit_org_label(
+                    &api,
+                    org,
+                    name,
+                    new_name,
+                    color,
+                    description,
+                    exclusive,
+                    archived,
+                )
+                .await?
+            }
+            LabelSubcommand::Rm { org, label } => remove_org_label(&api, org, label).await?,
+        }
+        Ok(())
+    }
 }
 
 async fn list_org_labels(api: &Forgejo, org: String) -> eyre::Result<()> {
@@ -1463,6 +654,46 @@ async fn remove_org_label(api: &Forgejo, org: String, name: String) -> eyre::Res
     api.org_delete_label(&org, id as u64).await?;
     println!("Removed label {}", crate::prs::render_label(&label)?);
     Ok(())
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum RepoSubcommand {
+    List {
+        /// The name of the organization to list the repos of.
+        org: String,
+        /// Which page of the results to view
+        #[clap(long, short)]
+        page: Option<u32>,
+    },
+    Create {
+        /// The name of the organization to create the repo in.
+        org: String,
+        #[clap(flatten)]
+        args: crate::repo::RepoCreateArgs,
+    },
+}
+
+impl RepoSubcommand {
+    async fn run(self, api: &Forgejo) -> eyre::Result<()> {
+        match self {
+            RepoSubcommand::List { org, page } => list_org_repos(&api, org, page).await?,
+            RepoSubcommand::Create {
+                org,
+                args:
+                    crate::repo::RepoCreateArgs {
+                        repo,
+                        description,
+                        private,
+                        remote,
+                        push,
+                    },
+            } => {
+                crate::repo::create_repo(&api, Some(org), repo, description, private, remote, push)
+                    .await?
+            }
+        }
+        Ok(())
+    }
 }
 
 async fn list_org_repos(api: &Forgejo, org: String, page: Option<u32>) -> eyre::Result<()> {
