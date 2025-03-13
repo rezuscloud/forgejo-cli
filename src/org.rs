@@ -6,7 +6,7 @@ use forgejo_api::{
     structs::{
         CreateLabelOption, CreateOrgOption, CreateTeamOption, EditLabelOption, EditOrgOption,
         EditTeamOption, OrgGetAllQuery, OrgListCurrentUserOrgsQuery, OrgListLabelsQuery,
-        OrgListMembersQuery, OrgListPublicMembersQuery, OrgListTeamMembersQuery,
+        OrgListMembersQuery, OrgListPublicMembersQuery, OrgListReposQuery, OrgListTeamMembersQuery,
         OrgListTeamReposQuery, OrgListTeamsQuery, User,
     },
     Forgejo,
@@ -129,6 +129,8 @@ pub enum OrgSubcommand {
     },
     #[clap(subcommand)]
     Label(LabelSubcommand),
+    #[clap(subcommand)]
+    Repo(RepoSubcommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -304,6 +306,23 @@ pub enum LabelSubcommand {
         org: String,
         /// The name of the label to remove from the organization.
         label: String,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum RepoSubcommand {
+    List {
+        /// The name of the organization to list the repos of.
+        org: String,
+        /// Which page of the results to view
+        #[clap(long, short)]
+        page: Option<u32>,
+    },
+    Create {
+        /// The name of the organization to create the repo in.
+        org: String,
+        #[clap(flatten)]
+        args: crate::repo::RepoCreateArgs,
     },
 }
 
@@ -512,6 +531,31 @@ impl OrgCommand {
                     .await?
                 }
                 LabelSubcommand::Rm { org, label } => remove_org_label(&api, org, label).await?,
+            },
+            OrgSubcommand::Repo(subcommand) => match subcommand {
+                RepoSubcommand::List { org, page } => list_org_repos(&api, org, page).await?,
+                RepoSubcommand::Create {
+                    org,
+                    args:
+                        crate::repo::RepoCreateArgs {
+                            repo,
+                            description,
+                            private,
+                            remote,
+                            push,
+                        },
+                } => {
+                    crate::repo::create_repo(
+                        &api,
+                        Some(org),
+                        repo,
+                        description,
+                        private,
+                        remote,
+                        push,
+                    )
+                    .await?
+                }
             },
         }
         Ok(())
@@ -1418,5 +1462,23 @@ async fn remove_org_label(api: &Forgejo, org: String, name: String) -> eyre::Res
     let id = label.id.ok_or_eyre("label does not have id")?;
     api.org_delete_label(&org, id as u64).await?;
     println!("Removed label {}", crate::prs::render_label(&label)?);
+    Ok(())
+}
+
+async fn list_org_repos(api: &Forgejo, org: String, page: Option<u32>) -> eyre::Result<()> {
+    let query = OrgListReposQuery { page, limit: None };
+    let (_, repos) = api.org_list_repos(&org, query).await?;
+    let SpecialRender { bullet, .. } = crate::special_render();
+    if repos.is_empty() {
+        println!("No results");
+    } else {
+        for repo in repos {
+            let full_name = repo
+                .full_name
+                .as_deref()
+                .ok_or_eyre("repo does not have full name")?;
+            println!("{bullet} {full_name}");
+        }
+    }
     Ok(())
 }
