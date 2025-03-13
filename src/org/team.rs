@@ -34,6 +34,8 @@ pub enum TeamSubcommand {
         /// This must only contain alphanumeric characters.
         name: String,
         #[clap(flatten)]
+        flags: TeamCreateFlags,
+        #[clap(flatten)]
         options: TeamOptions,
     },
     Edit {
@@ -41,8 +43,11 @@ pub enum TeamSubcommand {
         org: String,
         /// The name of the team to edit
         name: String,
+        /// Can members of this team to create repos in the organization?
         #[clap(long, short)]
         new_name: Option<String>,
+        #[clap(flatten)]
+        flags: TeamEditFlags,
         #[clap(flatten)]
         options: TeamOptions,
     },
@@ -60,18 +65,34 @@ pub enum TeamSubcommand {
 
 #[derive(Args, Clone, Debug)]
 pub struct TeamOptions {
-    #[clap(long, short)]
-    can_create_repos: bool,
+    /// A description of what the team does.
     #[clap(long, short)]
     description: Option<String>,
-    #[clap(long, short)]
-    include_all_repos: bool,
     #[clap(long, short)]
     read_permissions: Option<String>,
     #[clap(long, short)]
     write_permissions: Option<String>,
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct TeamCreateFlags {
+    /// Allow members of this team to create repos in the organization.
+    #[clap(long, short)]
+    can_create_repos: bool,
+    #[clap(long, short)]
+    include_all_repos: bool,
     #[clap(long, short = 'A')]
     admin: bool,
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct TeamEditFlags {
+    #[clap(long, short)]
+    can_create_repos: Option<bool>,
+    #[clap(long, short)]
+    include_all_repos: Option<bool>,
+    #[clap(long, short = 'A')]
+    admin: Option<bool>,
 }
 
 impl TeamSubcommand {
@@ -83,15 +104,19 @@ impl TeamSubcommand {
                 name,
                 list_permissions,
             } => view_team(&api, org, name, list_permissions).await?,
-            TeamSubcommand::Create { org, name, options } => {
-                create_team(&api, org, name, options).await?
-            }
+            TeamSubcommand::Create {
+                org,
+                name,
+                flags,
+                options,
+            } => create_team(&api, org, name, flags, options).await?,
             TeamSubcommand::Edit {
                 org,
                 name,
                 new_name,
+                flags,
                 options,
-            } => edit_team(&api, org, name, new_name, options).await?,
+            } => edit_team(&api, org, name, new_name, flags, options).await?,
             TeamSubcommand::Delete { org, name } => delete_team(&api, org, name).await?,
             TeamSubcommand::Repo(subcommand) => subcommand.run(&api).await?,
             TeamSubcommand::Member(subcommand) => subcommand.run(&api).await?,
@@ -301,6 +326,7 @@ async fn create_team(
     api: &Forgejo,
     org: String,
     name: String,
+    flags: TeamCreateFlags,
     options: TeamOptions,
 ) -> eyre::Result<()> {
     let units = create_unit_map(
@@ -308,11 +334,11 @@ async fn create_team(
         options.write_permissions.as_deref(),
     );
     let opt = CreateTeamOption {
-        can_create_org_repo: Some(options.can_create_repos),
+        can_create_org_repo: Some(flags.can_create_repos),
         description: options.description,
-        includes_all_repositories: Some(options.include_all_repos),
+        includes_all_repositories: Some(flags.include_all_repos),
         name,
-        permission: options
+        permission: flags
             .admin
             .then(|| forgejo_api::structs::CreateTeamOptionPermission::Admin),
         units: None,
@@ -333,7 +359,7 @@ async fn create_team(
         ..
     } = crate::special_render();
     print!("created new ");
-    if options.admin {
+    if flags.admin {
         print!("admin ");
     }
     println!("team {bright_blue}{bold}{name}{reset} in {bold}{org_name}{reset}");
@@ -345,6 +371,7 @@ async fn edit_team(
     org: String,
     name: String,
     new_name: Option<String>,
+    flags: TeamEditFlags,
     options: TeamOptions,
 ) -> eyre::Result<()> {
     let team = find_team_by_name(api, &org, &name).await?;
@@ -359,13 +386,13 @@ async fn edit_team(
     );
 
     let options = EditTeamOption {
-        can_create_org_repo: Some(options.can_create_repos),
+        can_create_org_repo: flags.can_create_repos,
         description: options.description,
-        includes_all_repositories: Some(options.include_all_repos),
+        includes_all_repositories: flags.include_all_repos,
         name: new_name,
-        permission: options
+        permission: flags
             .admin
-            .then(|| forgejo_api::structs::EditTeamOptionPermission::Admin),
+            .and_then(|b| b.then(|| forgejo_api::structs::EditTeamOptionPermission::Admin)),
         units: None,
         units_map: Some(units),
     };

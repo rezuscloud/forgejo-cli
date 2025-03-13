@@ -110,7 +110,7 @@ pub struct OrgOptions {
     visibility: Option<OrgVisibility>,
     /// Whether the admin of a repo can change org teams' access to it.
     #[clap(long, short)]
-    admin_can_change_team_access: bool,
+    admin_can_change_team_access: Option<bool>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -339,7 +339,7 @@ async fn create_org(api: &Forgejo, name: String, options: OrgOptions) -> eyre::R
         email: options.email,
         full_name: options.full_name,
         location: options.location,
-        repo_admin_change_team_access: Some(options.admin_can_change_team_access),
+        repo_admin_change_team_access: options.admin_can_change_team_access,
         username: name,
         visibility: options.visibility.map(|v| v.into()),
         website: options.website,
@@ -381,7 +381,7 @@ async fn edit_org(api: &Forgejo, name: String, options: OrgOptions) -> eyre::Res
         email: options.email,
         full_name: options.full_name,
         location: options.location,
-        repo_admin_change_team_access: Some(options.admin_can_change_team_access),
+        repo_admin_change_team_access: options.admin_can_change_team_access,
         visibility: options.visibility.map(|v| v.into()),
         website: options.website,
     };
