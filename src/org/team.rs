@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, io::Write};
+use std::collections::BTreeMap;
 
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
@@ -25,8 +25,6 @@ pub enum TeamSubcommand {
         name: String,
         #[clap(long, short = 'p')]
         list_permissions: bool,
-        #[clap(long, short = 'm')]
-        list_members: bool,
     },
     Create {
         /// The name of the organization to create the team in.
@@ -84,8 +82,7 @@ impl TeamSubcommand {
                 org,
                 name,
                 list_permissions,
-                list_members,
-            } => view_team(&api, org, name, list_permissions, list_members).await?,
+            } => view_team(&api, org, name, list_permissions).await?,
             TeamSubcommand::Create { org, name, options } => {
                 create_team(&api, org, name, options).await?
             }
@@ -190,7 +187,6 @@ async fn view_team(
     org: String,
     name: String,
     list_permissions: bool,
-    list_members: bool,
 ) -> eyre::Result<()> {
     let team = find_team_by_name(api, &org, &name).await?;
 
@@ -268,46 +264,6 @@ async fn view_team(
                 print!("{unit_name}");
             }
             println!();
-        }
-    }
-
-    if list_members {
-        let team_id = team.id.ok_or_eyre("team does not have id")?;
-        println!();
-        print!("Loading members...");
-        std::io::stdout().flush()?;
-        let mut members = Vec::new();
-        for page_idx in 1.. {
-            let query = OrgListTeamMembersQuery {
-                page: Some(page_idx),
-                limit: None,
-            };
-            let (_, page) = api.org_list_team_members(team_id as u64, query).await?;
-            if page.is_empty() {
-                break;
-            }
-
-            members.extend(page);
-        }
-        members.sort_by(|a, b| a.login.cmp(&b.login));
-        print!("\r                  \r");
-        println!("{bold}Members:{reset}");
-        let max_line_length = crate::max_line_length();
-        let mut current_line_length = 0;
-        for (i, member) in members.into_iter().enumerate() {
-            let username = member
-                .login
-                .as_deref()
-                .ok_or_eyre("user does not have name")?;
-            if i > 0 {
-                print!(", ");
-            }
-            if current_line_length > 0 && current_line_length + username.len() > max_line_length {
-                println!();
-                current_line_length = 0;
-            }
-            print!("{username}");
-            current_line_length += username.len() + 2;
         }
     }
 
