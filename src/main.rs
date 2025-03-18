@@ -10,6 +10,7 @@ use keys::*;
 mod auth;
 mod completion;
 mod issues;
+mod org;
 mod prs;
 mod release;
 mod repo;
@@ -50,6 +51,7 @@ pub enum Command {
     Auth(auth::AuthCommand),
     Release(release::ReleaseCommand),
     User(user::UserCommand),
+    Org(org::OrgCommand),
     Version(version::VersionCommand),
     Completion(completion::CompletionCommand),
 }
@@ -73,6 +75,7 @@ async fn main() -> eyre::Result<()> {
         Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::User(subcommand) => subcommand.run(&mut keys, host_name).await?,
+        Command::Org(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Version(command) => command.run().await?,
         Command::Completion(subcommand) => subcommand.run(),
     }

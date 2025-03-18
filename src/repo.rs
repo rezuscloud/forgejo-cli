@@ -1,6 +1,6 @@
 use std::{io::Write, path::PathBuf, str::FromStr};
 
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use eyre::{eyre, Context, OptionExt, Result};
 use forgejo_api::{structs::CreateRepoOption, Forgejo};
 use url::Url;
@@ -309,24 +309,30 @@ impl std::fmt::Display for RepoArgError {
     }
 }
 
+#[derive(Args, Clone, Debug)]
+pub struct RepoCreateArgs {
+    pub repo: String,
+
+    // flags
+    #[clap(long, short)]
+    pub description: Option<String>,
+    #[clap(long, short = 'P')]
+    pub private: bool,
+    /// Creates a new remote with the given name for the new repo
+    #[clap(long, short)]
+    pub remote: Option<String>,
+    /// Pushes the current branch to the default branch on the new repo.
+    /// Implies `--remote=origin` (setting remote manually overrides this)
+    #[clap(long, short)]
+    pub push: bool,
+}
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
     /// Creates a new repository
     Create {
-        repo: String,
-
-        // flags
-        #[clap(long, short)]
-        description: Option<String>,
-        #[clap(long, short = 'P')]
-        private: bool,
-        /// Creates a new remote with the given name for the new repo
-        #[clap(long, short)]
-        remote: Option<String>,
-        /// Pushes the current branch to the default branch on the new repo.
-        /// Implies `--remote=origin` (setting remote manually overrides this)
-        #[clap(long, short)]
-        push: bool,
+        #[clap(flatten)]
+        args: RepoCreateArgs,
     },
     /// Fork a repository onto your account
     Fork {
@@ -409,16 +415,19 @@ impl RepoCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         match self {
             RepoCommand::Create {
-                repo,
+                args:
+                    RepoCreateArgs {
+                        repo,
 
-                description,
-                private,
-                remote,
-                push,
+                        description,
+                        private,
+                        remote,
+                        push,
+                    },
             } => {
                 let host = RepoInfo::get_current(host_name, None, None, &keys)?;
                 let api = keys.get_api(host.host_url()).await?;
-                create_repo(&api, repo, description, private, remote, push).await?;
+                create_repo(&api, None, repo, description, private, remote, push).await?;
             }
             RepoCommand::Fork { repo, name, remote } => {
                 fn strip(s: &str) -> &str {
@@ -535,6 +544,7 @@ impl RepoCommand {
 
 pub async fn create_repo(
     api: &Forgejo,
+    org: Option<String>,
     repo: String,
     description: Option<String>,
     private: bool,
@@ -563,7 +573,11 @@ pub async fn create_repo(
         template: Some(false),
         trust_model: Some(forgejo_api::structs::CreateRepoOptionTrustModel::Default),
     };
-    let new_repo = api.create_current_user_repo(repo_spec).await?;
+    let new_repo = if let Some(org) = org {
+        api.create_org_repo(&org, repo_spec).await?
+    } else {
+        api.create_current_user_repo(repo_spec).await?
+    };
     let html_url = new_repo
         .html_url
         .as_ref()
