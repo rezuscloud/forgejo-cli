@@ -7,6 +7,7 @@ use tokio::io::AsyncWriteExt;
 mod keys;
 use keys::*;
 
+mod actions;
 mod auth;
 mod completion;
 mod issues;
@@ -45,6 +46,7 @@ pub enum Command {
     Issue(issues::IssueCommand),
     Pr(prs::PrCommand),
     Wiki(wiki::WikiCommand),
+    Actions(actions::ActionsCommand),
     #[command(name = "whoami")]
     WhoAmI(whoami::WhoAmICommand),
     #[clap(subcommand)]
@@ -71,6 +73,7 @@ async fn main() -> eyre::Result<()> {
         Command::Issue(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Pr(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Wiki(subcommand) => subcommand.run(&mut keys, host_name).await?,
+        Command::Actions(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::WhoAmI(command) => command.run(&mut keys, host_name).await?,
         Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
