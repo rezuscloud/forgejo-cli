@@ -4,8 +4,8 @@ use clap::{Args, Subcommand};
 use eyre::{bail, OptionExt};
 use forgejo_api::{
     structs::{
-        ActionVariable, CreateVariableOption, GetRepoVariablesListQuery,
-        RepoListActionsSecretsQuery, UpdateVariableOption,
+        ActionVariable, CreateOrUpdateSecretOption, CreateVariableOption,
+        GetRepoVariablesListQuery, RepoListActionsSecretsQuery, UpdateVariableOption,
     },
     Forgejo, ForgejoError,
 };
@@ -79,6 +79,15 @@ pub enum ActionsVariablesSubcommmand {
 pub enum ActionsSecretsSubcommmand {
     /// List secrets
     List,
+
+    /// Create a new secret
+    Create {
+        /// The name of the new secret
+        name: String,
+
+        /// The data to save into the secret. Omit to invoke editor.
+        data: Option<String>,
+    },
 }
 
 impl ActionsCommand {
@@ -106,6 +115,9 @@ impl ActionsCommand {
             ActionsSubcommand::Secrets {
                 command: ActionsSecretsSubcommmand::List,
             } => list_secrets(repo, &api).await?,
+            ActionsSubcommand::Secrets {
+                command: ActionsSecretsSubcommmand::Create { name, data },
+            } => create_secret(repo, &api, name, data).await?,
         }
 
         Ok(())
@@ -315,6 +327,31 @@ async fn list_secrets(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
             crate::DisplayOptional(secret.name, "?")
         );
     }
+
+    Ok(())
+}
+
+async fn create_secret(
+    repo: &RepoName,
+    api: &Forgejo,
+    name: String,
+    data: Option<String>,
+) -> eyre::Result<()> {
+    let data = if let Some(data) = data {
+        data
+    } else {
+        let mut data = String::new();
+        crate::editor(&mut data, Some("secret_content.txt")).await?;
+        data
+    };
+
+    api.update_repo_secret(
+        repo.owner(),
+        repo.name(),
+        &name,
+        CreateOrUpdateSecretOption { data },
+    )
+    .await?;
 
     Ok(())
 }
