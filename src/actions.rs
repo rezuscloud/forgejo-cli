@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::BTreeMap, fmt::Display};
 
 use clap::{Args, Subcommand};
 use eyre::{bail, OptionExt};
@@ -44,6 +44,18 @@ pub enum ActionsSubcommand {
     Secrets {
         #[clap(subcommand)]
         command: ActionsSecretsSubcommmand,
+    },
+
+    /// Dispatch a workflow
+    Dispatch {
+        /// Name of the workflow to dispatch
+        name: String,
+
+        /// Git revision to dispatch the workflow on
+        r#ref: String,
+
+        #[clap(long, short = 'I', value_parser = parse_dispatch_kvs)]
+        inputs: Vec<(String, String)>,
     },
 }
 
@@ -126,6 +138,12 @@ impl ActionsCommand {
             ActionsSubcommand::Secrets {
                 command: ActionsSecretsSubcommmand::Delete { name },
             } => delete_secret(repo, &api, name).await?,
+
+            ActionsSubcommand::Dispatch {
+                name,
+                r#ref,
+                inputs,
+            } => dispatch(repo, &api, name, r#ref, inputs.into_iter().collect()).await?,
         }
 
         Ok(())
@@ -365,7 +383,29 @@ async fn create_secret(
 }
 
 async fn delete_secret(repo: &RepoName, api: &Forgejo, name: String) -> eyre::Result<()> {
-    api.delete_repo_secret(repo.owner(), repo.name(), &name).await?;
+    api.delete_repo_secret(repo.owner(), repo.name(), &name)
+        .await?;
+
+    Ok(())
+}
+
+async fn dispatch(
+    repo: &RepoName,
+    api: &Forgejo,
+    name: String,
+    r#ref: String,
+    inputs: BTreeMap<String, String>,
+) -> eyre::Result<()> {
+    api.dispatch_workflow(
+        repo.owner(),
+        repo.name(),
+        &name,
+        forgejo_api::structs::DispatchWorkflowOption {
+            inputs: Some(inputs),
+            r#ref,
+        },
+    )
+    .await?;
 
     Ok(())
 }
@@ -413,4 +453,12 @@ impl Display for DisplayActionVariable {
 
         Ok(())
     }
+}
+
+fn parse_dispatch_kvs(s: &str) -> eyre::Result<(String, String)> {
+    let eq_idx = s
+        .find('=')
+        .ok_or_eyre("Input argument does not contain a '=' character!")?;
+
+    Ok((s[..eq_idx].to_string(), s[eq_idx + 1..].to_string()))
 }
