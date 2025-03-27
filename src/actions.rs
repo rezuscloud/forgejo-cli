@@ -62,6 +62,11 @@ pub enum ActionsVariablesSubcommmand {
         #[clap(long, short)]
         force: bool,
     },
+
+    Delete {
+        /// The variable to delete
+        name: String,
+    },
 }
 
 impl ActionsCommand {
@@ -81,6 +86,9 @@ impl ActionsCommand {
             ActionsSubcommand::Variables {
                 command: ActionsVariablesSubcommmand::Create { name, data, force },
             } => create_variable(repo, &api, name, data, force).await?,
+            ActionsSubcommand::Variables {
+                command: ActionsVariablesSubcommmand::Delete { name },
+            } => delete_variable(repo, &api, name).await?,
         }
 
         Ok(())
@@ -241,6 +249,18 @@ async fn create_variable(
     Ok(())
 }
 
+async fn delete_variable(repo: &RepoName, api: &Forgejo, name: String) -> eyre::Result<()> {
+    let var = api
+        .delete_repo_variable(repo.owner(), repo.name(), &name)
+        .await?;
+
+    if let Some(var) = var {
+        println!("Deleted: {}", DisplayActionVariable::new(var, false)?);
+    }
+
+    Ok(())
+}
+
 struct DisplayActionVariable {
     name: String,
     data: String,
@@ -252,7 +272,9 @@ struct DisplayActionVariable {
 impl DisplayActionVariable {
     fn new(value: ActionVariable, verbose: bool) -> eyre::Result<Self> {
         Ok(Self {
-            name: value.name.ok_or_eyre("Server returned ActionVariable without name?!")?,
+            name: value
+                .name
+                .ok_or_eyre("Server returned ActionVariable without name?!")?,
             // The API usually (always?) returns Some("") here. The page on variables also notes
             // that their value cannot be read by other means than being passed to a CI job.
             data: value.data.unwrap_or_default(),
