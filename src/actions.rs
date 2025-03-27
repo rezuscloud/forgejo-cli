@@ -172,12 +172,12 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
         };
 
         println!(
-            "#{bold}{}{reset} ({bright_blue}{}{reset}) {} {bright_green}{}{reset} {} ({}): {yellow}{}{reset}",
+            "#{bold}{}{reset} ({bright_blue}{}{reset}) {} {} {bright_green}{}{reset} ({}): {yellow}{}{reset}",
             task.run_number.unwrap_or(0),
             sha,
             task_sym,
-            time,
             task.name.unwrap_or_default(),
+            time,
             task.event.unwrap_or_default(),
             task.display_title.unwrap_or_default(),
         );
