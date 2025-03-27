@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
-use forgejo_api::Forgejo;
+use forgejo_api::{structs::GetRepoVariablesListQuery, Forgejo};
 use time::Duration;
 
 use crate::{
@@ -25,6 +25,22 @@ pub struct ActionsCommand {
 pub enum ActionsSubcommand {
     /// List the tasks on a repo
     Tasks,
+
+    /// List and manage variables
+    Variables {
+        #[clap(subcommand)]
+        command: ActionsVariablesSubcommmand,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum ActionsVariablesSubcommmand {
+    /// List variables
+    List {
+        /// Also print owner_id and repo_id
+        #[clap(long, short)]
+        verbose: bool,
+    },
 }
 
 impl ActionsCommand {
@@ -38,6 +54,9 @@ impl ActionsCommand {
             .ok_or_eyre("can't figure what repo to access, try specifying with `--repo`")?;
         match self.command {
             ActionsSubcommand::Tasks => view_tasks(repo, &api).await?,
+            ActionsSubcommand::Variables {
+                command: ActionsVariablesSubcommmand::List { verbose },
+            } => list_variables(repo, &api, verbose).await?,
         }
 
         Ok(())
@@ -117,3 +136,53 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
 
     Ok(())
 }
+
+async fn list_variables(repo: &RepoName, api: &Forgejo, verbose: bool) -> eyre::Result<()> {
+    let per_page = 64;
+    let mut variables = vec![];
+
+    for page in 1.. {
+        let (_headers, vars) = api
+            .get_repo_variables_list(
+                repo.owner(),
+                repo.name(),
+                GetRepoVariablesListQuery {
+                    page: Some(page),
+                    limit: Some(per_page),
+                },
+            )
+            .await?;
+
+        let done = vars.len() < per_page as usize;
+        variables.extend(vars.into_iter());
+        if done {
+            break;
+        }
+    }
+
+    for var in variables {
+        if let Some(name) = var.name {
+            let prefix = if verbose {
+                format!(
+                    "({}, {}) ",
+                    crate::DisplayOptional(var.owner_id, "?"),
+                    crate::DisplayOptional(var.repo_id, "?"),
+                )
+            } else {
+                String::new()
+            };
+
+            // The API usually (always?) returns Some("") here. The page on variables also notes
+            // that their value cannot be read by other means than being passed to a CI job.
+            let data = var.data.unwrap_or_default();
+            if data.is_empty() {
+                println!("{prefix}{name}");
+            } else {
+                println!("{prefix}{name} = {data}");
+            }
+        }
+    }
+
+    Ok(())
+}
+

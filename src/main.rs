@@ -1,4 +1,5 @@
 use std::io::IsTerminal;
+use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
 use eyre::eyre;
@@ -775,5 +776,18 @@ impl std::fmt::Write for AnsiPrinter {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.text(s);
         Ok(())
+    }
+}
+
+/// When formatted, display either the inner value if `Some`, or the fallback if `None`.
+struct DisplayOptional<T: Display, F: Display>(Option<T>, F);
+
+impl<T: Display, F: Display> Display for DisplayOptional<T, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(x) = &self.0 {
+            write!(f, "{x}")
+        } else {
+            write!(f, "{}", self.1)
+        }
     }
 }
