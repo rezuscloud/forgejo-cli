@@ -1,7 +1,11 @@
+use std::fmt::Display;
+
 use clap::{Args, Subcommand};
 use eyre::{bail, OptionExt};
 use forgejo_api::{
-    structs::{CreateVariableOption, GetRepoVariablesListQuery, UpdateVariableOption},
+    structs::{
+        ActionVariable, CreateVariableOption, GetRepoVariablesListQuery, UpdateVariableOption,
+    },
     Forgejo, ForgejoError,
 };
 use hyper::StatusCode;
@@ -181,26 +185,7 @@ async fn list_variables(repo: &RepoName, api: &Forgejo, verbose: bool) -> eyre::
     }
 
     for var in variables {
-        if let Some(name) = var.name {
-            let prefix = if verbose {
-                format!(
-                    "({}, {}) ",
-                    crate::DisplayOptional(var.owner_id, "?"),
-                    crate::DisplayOptional(var.repo_id, "?"),
-                )
-            } else {
-                String::new()
-            };
-
-            // The API usually (always?) returns Some("") here. The page on variables also notes
-            // that their value cannot be read by other means than being passed to a CI job.
-            let data = var.data.unwrap_or_default();
-            if data.is_empty() {
-                println!("{prefix}{name}");
-            } else {
-                println!("{prefix}{name} = {data}");
-            }
-        }
+        println!("{}", DisplayActionVariable::new(var, verbose)?);
     }
 
     Ok(())
@@ -246,11 +231,55 @@ async fn create_variable(
                     name: None,
                     value: data,
                 },
-            ).await?;
+            )
+            .await?;
         }
         Err(e) => return Err(e.into()),
         Ok(()) => {}
     }
 
     Ok(())
+}
+
+struct DisplayActionVariable {
+    name: String,
+    data: String,
+    owner_id: Option<i64>,
+    repo_id: Option<i64>,
+    verbose: bool,
+}
+
+impl DisplayActionVariable {
+    fn new(value: ActionVariable, verbose: bool) -> eyre::Result<Self> {
+        Ok(Self {
+            name: value.name.ok_or_eyre("Server returned ActionVariable without name?!")?,
+            // The API usually (always?) returns Some("") here. The page on variables also notes
+            // that their value cannot be read by other means than being passed to a CI job.
+            data: value.data.unwrap_or_default(),
+            owner_id: value.owner_id,
+            repo_id: value.repo_id,
+            verbose,
+        })
+    }
+}
+
+impl Display for DisplayActionVariable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.verbose {
+            write!(
+                f,
+                "({}, {}) ",
+                crate::DisplayOptional(self.owner_id, "?"),
+                crate::DisplayOptional(self.repo_id, "?"),
+            )?;
+        }
+
+        write!(f, "{}", self.name)?;
+
+        if !self.data.is_empty() {
+            write!(f, " = {}", self.data)?;
+        }
+
+        Ok(())
+    }
 }
