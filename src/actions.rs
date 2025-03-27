@@ -88,6 +88,11 @@ pub enum ActionsSecretsSubcommmand {
         /// The data to save into the secret. Omit to invoke editor.
         data: Option<String>,
     },
+
+    Delete {
+        /// The secret to delete
+        name: String,
+    },
 }
 
 impl ActionsCommand {
@@ -118,6 +123,9 @@ impl ActionsCommand {
             ActionsSubcommand::Secrets {
                 command: ActionsSecretsSubcommmand::Create { name, data },
             } => create_secret(repo, &api, name, data).await?,
+            ActionsSubcommand::Secrets {
+                command: ActionsSecretsSubcommmand::Delete { name },
+            } => delete_secret(repo, &api, name).await?,
         }
 
         Ok(())
@@ -352,6 +360,12 @@ async fn create_secret(
         CreateOrUpdateSecretOption { data },
     )
     .await?;
+
+    Ok(())
+}
+
+async fn delete_secret(repo: &RepoName, api: &Forgejo, name: String) -> eyre::Result<()> {
+    api.delete_repo_secret(repo.owner(), repo.name(), &name).await?;
 
     Ok(())
 }
