@@ -1,6 +1,7 @@
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::Forgejo;
+use time::Duration;
 
 use crate::{
     repo::{RepoArg, RepoInfo, RepoName},
@@ -28,12 +29,8 @@ pub enum ActionsSubcommand {
 
 impl ActionsCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
-        let repo = RepoInfo::get_current(
-            host_name,
-            self.repo.as_ref(),
-            self.remote.as_deref(),
-            &keys,
-        )?;
+        let repo =
+            RepoInfo::get_current(host_name, self.repo.as_ref(), self.remote.as_deref(), &keys)?;
 
         let api = keys.get_api(repo.host_url()).await?;
         let repo = repo
@@ -68,17 +65,23 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
     }
 
     let SpecialRender {
+        fancy,
+        reset,
+
         bold,
         bright_green,
         light_grey,
         bright_red,
         yellow,
-        reset,
+        bright_blue,
         ..
     } = *crate::special_render();
 
     for task in res.workflow_runs.unwrap_or_default() {
         let task_sym = match task.status.as_deref() {
+            // Don't use symbols when we're not in fancy mode.
+            x if !fancy => x.unwrap_or("?"),
+
             // See: https://codeberg.org/forgejo/forgejo/src/branch/forgejo/models/actions/status.go#L26
             Some("success") => &format!("{bright_green}✓{reset}"),
             Some("cancelled") => &format!("{light_grey}!{reset}"),
@@ -90,13 +93,25 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
             Some(x) => x,
             None => "?",
         };
+
+        let sha = task.head_sha.unwrap_or_default();
+        let sha = if sha.len() > 10 { &sha[0..10] } else { &sha };
+
+        let time = if let (Some(end), Some(start)) = (task.updated_at, task.run_started_at) {
+            end - start
+        } else {
+            Duration::default()
+        };
+
         println!(
-            "#{bold}{}{reset} {} {} ({}): {}",
+            "#{bold}{}{reset} ({bright_blue}{}{reset}) {} {bright_green}{}{reset} {} ({}): {yellow}{}{reset}",
             task.run_number.unwrap_or(0),
+            sha,
             task_sym,
+            time,
             task.name.unwrap_or_default(),
             task.event.unwrap_or_default(),
-            task.head_sha.unwrap_or_default(),
+            task.display_title.unwrap_or_default(),
         );
     }
 
