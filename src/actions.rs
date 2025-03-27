@@ -4,7 +4,8 @@ use clap::{Args, Subcommand};
 use eyre::{bail, OptionExt};
 use forgejo_api::{
     structs::{
-        ActionVariable, CreateVariableOption, GetRepoVariablesListQuery, UpdateVariableOption,
+        ActionVariable, CreateVariableOption, GetRepoVariablesListQuery,
+        RepoListActionsSecretsQuery, UpdateVariableOption,
     },
     Forgejo, ForgejoError,
 };
@@ -39,6 +40,11 @@ pub enum ActionsSubcommand {
         #[clap(subcommand)]
         command: ActionsVariablesSubcommmand,
     },
+
+    Secrets {
+        #[clap(subcommand)]
+        command: ActionsSecretsSubcommmand,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -69,6 +75,12 @@ pub enum ActionsVariablesSubcommmand {
     },
 }
 
+#[derive(Subcommand, Clone, Debug)]
+pub enum ActionsSecretsSubcommmand {
+    /// List secrets
+    List,
+}
+
 impl ActionsCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         let repo =
@@ -80,6 +92,7 @@ impl ActionsCommand {
             .ok_or_eyre("can't figure what repo to access, try specifying with `--repo`")?;
         match self.command {
             ActionsSubcommand::Tasks => view_tasks(repo, &api).await?,
+
             ActionsSubcommand::Variables {
                 command: ActionsVariablesSubcommmand::List { verbose },
             } => list_variables(repo, &api, verbose).await?,
@@ -89,6 +102,10 @@ impl ActionsCommand {
             ActionsSubcommand::Variables {
                 command: ActionsVariablesSubcommmand::Delete { name },
             } => delete_variable(repo, &api, name).await?,
+
+            ActionsSubcommand::Secrets {
+                command: ActionsSecretsSubcommmand::List,
+            } => list_secrets(repo, &api).await?,
         }
 
         Ok(())
@@ -263,6 +280,40 @@ async fn delete_variable(repo: &RepoName, api: &Forgejo, name: String) -> eyre::
 
     if let Some(var) = var {
         println!("Deleted: {}", DisplayActionVariable::new(var, false)?);
+    }
+
+    Ok(())
+}
+
+async fn list_secrets(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
+    let per_page = 64;
+    let mut secrets = vec![];
+
+    for page in 1.. {
+        let (_headers, page_secrets) = api
+            .repo_list_actions_secrets(
+                repo.owner(),
+                repo.name(),
+                RepoListActionsSecretsQuery {
+                    page: Some(page),
+                    limit: Some(per_page),
+                },
+            )
+            .await?;
+
+        let done = page_secrets.len() < per_page as usize;
+        secrets.extend(page_secrets.into_iter());
+        if done {
+            break;
+        }
+    }
+
+    for secret in secrets {
+        println!(
+            "({}) {}",
+            crate::DisplayOptional(secret.created_at, "?"),
+            crate::DisplayOptional(secret.name, "?")
+        );
     }
 
     Ok(())
