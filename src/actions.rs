@@ -1,6 +1,10 @@
 use clap::{Args, Subcommand};
-use eyre::OptionExt;
-use forgejo_api::{structs::GetRepoVariablesListQuery, Forgejo};
+use eyre::{bail, OptionExt};
+use forgejo_api::{
+    structs::{CreateVariableOption, GetRepoVariablesListQuery, UpdateVariableOption},
+    Forgejo, ForgejoError,
+};
+use hyper::StatusCode;
 use time::Duration;
 
 use crate::{
@@ -41,6 +45,19 @@ pub enum ActionsVariablesSubcommmand {
         #[clap(long, short)]
         verbose: bool,
     },
+
+    /// Create a new variable
+    Create {
+        /// The name of the new variable
+        name: String,
+
+        /// The data to save into the variable. Omit to invoke editor.
+        data: Option<String>,
+
+        /// Override existing variables
+        #[clap(long, short)]
+        force: bool,
+    },
 }
 
 impl ActionsCommand {
@@ -57,6 +74,9 @@ impl ActionsCommand {
             ActionsSubcommand::Variables {
                 command: ActionsVariablesSubcommmand::List { verbose },
             } => list_variables(repo, &api, verbose).await?,
+            ActionsSubcommand::Variables {
+                command: ActionsVariablesSubcommmand::Create { name, data, force },
+            } => create_variable(repo, &api, name, data, force).await?,
         }
 
         Ok(())
@@ -186,3 +206,51 @@ async fn list_variables(repo: &RepoName, api: &Forgejo, verbose: bool) -> eyre::
     Ok(())
 }
 
+async fn create_variable(
+    repo: &RepoName,
+    api: &Forgejo,
+    name: String,
+    data: Option<String>,
+    force: bool,
+) -> eyre::Result<()> {
+    let data = if let Some(data) = data {
+        data
+    } else {
+        let mut data = String::new();
+        crate::editor(&mut data, Some("variable_content.txt")).await?;
+        data
+    };
+
+    match api
+        .create_repo_variable(
+            repo.owner(),
+            repo.name(),
+            &name,
+            CreateVariableOption {
+                value: data.clone(),
+            },
+        )
+        .await
+    {
+        Err(ForgejoError::ApiError(StatusCode::CONFLICT, _)) => {
+            if !force {
+                bail!("variable already exists, pass --force to replace it.");
+            }
+
+            eprintln!("variable already exists, updating.");
+            api.update_repo_variable(
+                repo.owner(),
+                repo.name(),
+                &name,
+                UpdateVariableOption {
+                    name: None,
+                    value: data,
+                },
+            ).await?;
+        }
+        Err(e) => return Err(e.into()),
+        Ok(()) => {}
+    }
+
+    Ok(())
+}
