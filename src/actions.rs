@@ -206,7 +206,7 @@ async fn create_variable(
     data: Option<String>,
     force: bool,
 ) -> eyre::Result<()> {
-    let data = if let Some(data) = data {
+    let mut data = if let Some(data) = data {
         data
     } else {
         let mut data = String::new();
@@ -220,7 +220,14 @@ async fn create_variable(
             repo.name(),
             &name,
             CreateVariableOption {
-                value: data.clone(),
+                // If we don't have force enabled, we will not need the data again to (potentially)
+                // make another request. To avoid a clone in this case, we take the string here,
+                // replacing it with an empty one.
+                value: if force {
+                    data.clone()
+                } else {
+                    std::mem::take(&mut data)
+                },
             },
         )
         .await
