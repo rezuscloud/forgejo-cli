@@ -33,7 +33,11 @@ pub struct ActionsCommand {
 #[derive(Subcommand, Clone, Debug)]
 pub enum ActionsSubcommand {
     /// List the tasks on a repo
-    Tasks,
+    Tasks {
+        /// The page to show. One page always includes up to 20 tasks.
+        #[clap(long, short, default_value = "1")]
+        page: u32,
+    },
 
     /// List and manage variables
     Variables {
@@ -117,7 +121,7 @@ impl ActionsCommand {
             .name()
             .ok_or_eyre("can't figure what repo to access, try specifying with `--repo`")?;
         match self.command {
-            ActionsSubcommand::Tasks => view_tasks(repo, &api).await?,
+            ActionsSubcommand::Tasks {page} => view_tasks(repo, &api, page).await?,
 
             ActionsSubcommand::Variables { command } => match command {
                 ActionsVariablesSubcommmand::List { verbose } => {
@@ -152,7 +156,7 @@ impl ActionsCommand {
     }
 }
 
-async fn view_tasks(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
+async fn view_tasks(repo: &RepoName, api: &Forgejo, page: u32) -> eyre::Result<()> {
     // We don't iterate this to collect all tasks (not just the ones on the first page) like the
     // issue search subcommand will do, because it's unlikely someone wants to see *all* tasks.
     let res = api
@@ -160,8 +164,8 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
             repo.owner(),
             repo.name(),
             forgejo_api::structs::ListActionTasksQuery {
-                page: None,
-                limit: None,
+                page: Some(page),
+                limit: Some(20),
             },
         )
         .await?;
