@@ -194,7 +194,7 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo, page: u32) -> eyre::Result<(
             // Don't use symbols when we're not in fancy mode.
             x if !fancy => x.unwrap_or("?"),
 
-            // See: https://codeberg.org/forgejo/forgejo/src/branch/forgejo/models/actions/status.go#L26
+            // See: https://codeberg.org/forgejo/forgejo/src/commit/5380f23daba969057d9afc53c3dc746eca95188c/models/actions/status.go#L26
             Some("success") => &format!("{bright_green}✓{reset}"),
             Some("cancelled") => &format!("{light_grey}!{reset}"),
             Some("failure") => &format!("{bright_red}×{reset}"),
