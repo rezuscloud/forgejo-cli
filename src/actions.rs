@@ -324,6 +324,8 @@ async fn delete_variable(repo: &RepoName, api: &Forgejo, name: String) -> eyre::
 
     if let Some(var) = var {
         println!("Deleted: {}", DisplayActionVariable::new(var, false)?);
+    } else {
+        println!("Variable {name} deleted.");
     }
 
     Ok(())
@@ -394,16 +396,19 @@ async fn dispatch(
     r#ref: String,
     inputs: BTreeMap<String, String>,
 ) -> eyre::Result<()> {
+    let n_inputs = inputs.len();
     api.dispatch_workflow(
         repo.owner(),
         repo.name(),
         &name,
         forgejo_api::structs::DispatchWorkflowOption {
             inputs: Some(inputs),
-            r#ref,
+            r#ref: r#ref.clone(),
         },
     )
     .await?;
+
+    println!("Dispatched workflow {name} in {ref} with {n_inputs} input(s).");
 
     Ok(())
 }
