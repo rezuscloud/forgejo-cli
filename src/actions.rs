@@ -110,7 +110,7 @@ pub enum ActionsSecretsSubcommmand {
 impl ActionsCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         let repo =
-            RepoInfo::get_current(host_name, self.repo.as_ref(), self.remote.as_deref(), &keys)?;
+            RepoInfo::get_current(host_name, self.repo.as_ref(), self.remote.as_deref(), keys)?;
 
         let api = keys.get_api(repo.host_url()).await?;
         let repo = repo
@@ -119,25 +119,27 @@ impl ActionsCommand {
         match self.command {
             ActionsSubcommand::Tasks => view_tasks(repo, &api).await?,
 
-            ActionsSubcommand::Variables {
-                command: ActionsVariablesSubcommmand::List { verbose },
-            } => list_variables(repo, &api, verbose).await?,
-            ActionsSubcommand::Variables {
-                command: ActionsVariablesSubcommmand::Create { name, data, force },
-            } => create_variable(repo, &api, name, data, force).await?,
-            ActionsSubcommand::Variables {
-                command: ActionsVariablesSubcommmand::Delete { name },
-            } => delete_variable(repo, &api, name).await?,
+            ActionsSubcommand::Variables { command } => match command {
+                ActionsVariablesSubcommmand::List { verbose } => {
+                    list_variables(repo, &api, verbose).await?
+                }
+                ActionsVariablesSubcommmand::Create { name, data, force } => {
+                    create_variable(repo, &api, name, data, force).await?
+                }
+                ActionsVariablesSubcommmand::Delete { name } => {
+                    delete_variable(repo, &api, name).await?
+                }
+            },
 
-            ActionsSubcommand::Secrets {
-                command: ActionsSecretsSubcommmand::List,
-            } => list_secrets(repo, &api).await?,
-            ActionsSubcommand::Secrets {
-                command: ActionsSecretsSubcommmand::Create { name, data },
-            } => create_secret(repo, &api, name, data).await?,
-            ActionsSubcommand::Secrets {
-                command: ActionsSecretsSubcommmand::Delete { name },
-            } => delete_secret(repo, &api, name).await?,
+            ActionsSubcommand::Secrets { command } => match command {
+                ActionsSecretsSubcommmand::List => list_secrets(repo, &api).await?,
+                ActionsSecretsSubcommmand::Create { name, data } => {
+                    create_secret(repo, &api, name, data).await?
+                }
+                ActionsSecretsSubcommmand::Delete { name } => {
+                    delete_secret(repo, &api, name).await?
+                }
+            },
 
             ActionsSubcommand::Dispatch {
                 name,
