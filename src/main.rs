@@ -1,5 +1,5 @@
-use std::io::IsTerminal;
 use std::fmt::Display;
+use std::io::IsTerminal;
 
 use clap::{Parser, Subcommand};
 use eyre::eyre;
