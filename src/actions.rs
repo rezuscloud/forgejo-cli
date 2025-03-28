@@ -121,7 +121,7 @@ impl ActionsCommand {
             .name()
             .ok_or_eyre("can't figure what repo to access, try specifying with `--repo`")?;
         match self.command {
-            ActionsSubcommand::Tasks {page} => view_tasks(repo, &api, page).await?,
+            ActionsSubcommand::Tasks { page } => view_tasks(repo, &api, page).await?,
 
             ActionsSubcommand::Variables { command } => match command {
                 ActionsVariablesSubcommmand::List { verbose } => {
