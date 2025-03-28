@@ -1,4 +1,5 @@
 use std::io::IsTerminal;
+use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
 use eyre::eyre;
@@ -7,6 +8,7 @@ use tokio::io::AsyncWriteExt;
 mod keys;
 use keys::*;
 
+mod actions;
 mod auth;
 mod completion;
 mod issues;
@@ -45,6 +47,7 @@ pub enum Command {
     Issue(issues::IssueCommand),
     Pr(prs::PrCommand),
     Wiki(wiki::WikiCommand),
+    Actions(actions::ActionsCommand),
     #[command(name = "whoami")]
     WhoAmI(whoami::WhoAmICommand),
     #[clap(subcommand)]
@@ -71,6 +74,7 @@ async fn main() -> eyre::Result<()> {
         Command::Issue(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Pr(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Wiki(subcommand) => subcommand.run(&mut keys, host_name).await?,
+        Command::Actions(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::WhoAmI(command) => command.run(&mut keys, host_name).await?,
         Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
         Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
@@ -772,5 +776,18 @@ impl std::fmt::Write for AnsiPrinter {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.text(s);
         Ok(())
+    }
+}
+
+/// When formatted, display either the inner value if `Some`, or the fallback if `None`.
+struct DisplayOptional<T: Display, F: Display>(Option<T>, F);
+
+impl<T: Display, F: Display> Display for DisplayOptional<T, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(x) = &self.0 {
+            write!(f, "{x}")
+        } else {
+            write!(f, "{}", self.1)
+        }
     }
 }
