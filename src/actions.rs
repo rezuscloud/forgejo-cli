@@ -101,8 +101,8 @@ pub enum ActionsSecretsSubcommmand {
         /// The name of the new secret
         name: String,
 
-        /// The data to save into the secret. Omit to invoke editor.
-        data: Option<String>,
+        /// The data to save into the secret.
+        data: String,
     },
 
     Delete {
@@ -367,16 +367,8 @@ async fn create_secret(
     repo: &RepoName,
     api: &Forgejo,
     name: String,
-    data: Option<String>,
+    data: String,
 ) -> eyre::Result<()> {
-    let data = if let Some(data) = data {
-        data
-    } else {
-        let mut data = String::new();
-        crate::editor(&mut data, Some("secret_content.txt")).await?;
-        data
-    };
-
     api.update_repo_secret(
         repo.owner(),
         repo.name(),
