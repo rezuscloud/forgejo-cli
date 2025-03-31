@@ -97,9 +97,9 @@ async fn oauth_login(
     client_id: &'static str,
 ) -> eyre::Result<()> {
     use base64ct::Encoding;
-    use rand::{distributions::Alphanumeric, prelude::*};
+    use rand::{distr::Alphanumeric, prelude::*};
 
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
 
     let state = (0..32)
         .map(|_| rng.sample(Alphanumeric) as char)
