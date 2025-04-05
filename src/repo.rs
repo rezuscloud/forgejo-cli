@@ -3,6 +3,7 @@ use std::{io::Write, path::PathBuf, str::FromStr};
 use clap::{Args, Subcommand};
 use eyre::{eyre, Context, OptionExt, Result};
 use forgejo_api::{structs::CreateRepoOption, Forgejo};
+use ssh2_config::ParseRule;
 use url::Url;
 
 use crate::SpecialRender;
@@ -325,6 +326,9 @@ pub struct RepoCreateArgs {
     /// Implies `--remote=origin` (setting remote manually overrides this)
     #[clap(long, short)]
     pub push: bool,
+    /// Use SSH for the new remote instead of HTTP(S)
+    #[clap(long, short = 'S')]
+    pub ssh: bool,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -394,6 +398,9 @@ pub enum RepoCommand {
     Clone {
         repo: RepoArg,
         path: Option<PathBuf>,
+        /// Clone the repo over SSH instead of HTTP(S)
+        #[clap(long, short = 'S')]
+        ssh: bool,
     },
     /// Add a star to a repo
     Star { repo: RepoArg },
@@ -423,11 +430,12 @@ impl RepoCommand {
                         private,
                         remote,
                         push,
+                        ssh,
                     },
             } => {
                 let host = RepoInfo::get_current(host_name, None, None, &keys)?;
                 let api = keys.get_api(host.host_url()).await?;
-                create_repo(&api, None, repo, description, private, remote, push).await?;
+                create_repo(&api, None, repo, description, private, remote, push, ssh).await?;
             }
             RepoCommand::Fork { repo, name, remote } => {
                 fn strip(s: &str) -> &str {
@@ -497,11 +505,11 @@ impl RepoCommand {
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 view_repo_readme(&api, repo).await?
             }
-            RepoCommand::Clone { repo, path } => {
+            RepoCommand::Clone { repo, path, ssh } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
-                cmd_clone_repo(&api, name, path).await?;
+                cmd_clone_repo(&api, name, path, ssh).await?;
             }
             RepoCommand::Star { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
@@ -550,6 +558,7 @@ pub async fn create_repo(
     private: bool,
     remote: Option<String>,
     push: bool,
+    ssh: bool,
 ) -> eyre::Result<()> {
     if remote.is_some() || push {
         let repo = git2::Repository::discover(".")?;
@@ -588,11 +597,8 @@ pub async fn create_repo(
         let repo = git2::Repository::discover(".")?;
 
         let upstream = remote.as_deref().unwrap_or("origin");
-        let clone_url = new_repo
-            .clone_url
-            .as_ref()
-            .ok_or_else(|| eyre::eyre!("new_repo does not have clone_url"))?;
-        let mut remote = repo.remote(upstream, clone_url.as_str())?;
+        let remote_url = git_url(&new_repo, ssh)?;
+        let mut remote = repo.remote(upstream, remote_url.as_str())?;
 
         if push {
             let head = repo.head()?;
@@ -976,12 +982,10 @@ async fn cmd_clone_repo(
     api: &Forgejo,
     name: &RepoName,
     path: Option<std::path::PathBuf>,
+    ssh: bool,
 ) -> eyre::Result<()> {
     let repo_data = api.repo_get(name.owner(), name.name()).await?;
-    let clone_url = repo_data
-        .clone_url
-        .as_ref()
-        .ok_or_eyre("repo does not have clone url")?;
+    let clone_url = git_url(&repo_data, ssh)?;
 
     let repo_name = repo_data
         .name
@@ -997,14 +1001,22 @@ async fn cmd_clone_repo(
     let local_repo = clone_repo(repo_full_name, clone_url, &path)?;
 
     if let Some(parent) = repo_data.parent.as_deref() {
-        let parent_clone_url = parent
-            .clone_url
-            .as_ref()
-            .ok_or_eyre("parent repo does not have clone url")?;
-        local_repo.remote("upstream", parent_clone_url.as_str())?;
+        local_repo.remote("upstream", git_url(&parent, ssh)?.as_str())?;
     }
 
     Ok(())
+}
+
+fn git_url(repo: &forgejo_api::structs::Repository, ssh: bool) -> eyre::Result<&Url> {
+    if ssh {
+        repo.ssh_url
+            .as_ref()
+            .ok_or_eyre("repo does not have ssh url")
+    } else {
+        repo.clone_url
+            .as_ref()
+            .ok_or_eyre("repo does not have clone url")
+    }
 }
 
 pub fn clone_repo(
@@ -1020,7 +1032,20 @@ pub fn clone_repo(
         ..
     } = *crate::special_render();
 
-    let auth = auth_git2::GitAuthenticator::new();
+    let mut auth = auth_git2::GitAuthenticator::new();
+    // I find it surprising that auth_git2 just hardcodes what key files to look for instead of
+    // looking in .ssh/config
+    if url.scheme() == "ssh" {
+        let ssh_config =
+            ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)?;
+        let params = ssh_config.query(url.host_str().ok_or_eyre("url does not have host")?);
+        if let Some(identity_file) = params.identity_file.as_deref() {
+            for path in identity_file {
+                auth = auth.add_ssh_key_from_file(path, None);
+            }
+        }
+    }
+
     let git_config = git2::Config::open_default()?;
 
     let mut options = git2::FetchOptions::new();
@@ -1061,8 +1086,8 @@ pub fn clone_repo(
             let _ = std::io::stdout().flush();
             true
         });
-        options.remote_callbacks(callbacks);
     }
+    options.remote_callbacks(callbacks);
 
     let local_repo = git2::build::RepoBuilder::new()
         .fetch_options(options)

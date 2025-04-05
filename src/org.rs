@@ -724,10 +724,20 @@ impl RepoSubcommand {
                         private,
                         remote,
                         push,
+                        ssh,
                     },
             } => {
-                crate::repo::create_repo(&api, Some(org), repo, description, private, remote, push)
-                    .await?
+                crate::repo::create_repo(
+                    &api,
+                    Some(org),
+                    repo,
+                    description,
+                    private,
+                    remote,
+                    push,
+                    ssh,
+                )
+                .await?
             }
         }
         Ok(())
