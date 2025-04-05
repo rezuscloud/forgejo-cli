@@ -22,6 +22,16 @@ cargo install forgejo-cli
 cargo install --git https://codeberg.org/Cyborus/forgejo-cli.git --branch main
 ```
 
+### Fedora
+
+An **unofficial** [COPR repository](https://copr.fedorainfracloud.org/coprs/lihaohong/forgejo-cli/) is available. Fedora users can install forgejo-cli with
+```sh
+sudo dnf copr enable lihaohong/forgejo-cli
+sudo dnf install forgejo-cli
+```
+
+If you see an error about copr not being an available command, run `sudo dnf install dnf-plugins-core`.
+
 ### Nix
 
 A Nix flake is included in this repository that you may use. You could install it into your Nix
