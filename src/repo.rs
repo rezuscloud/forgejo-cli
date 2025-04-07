@@ -1015,7 +1015,7 @@ async fn cmd_clone_repo(
     Ok(())
 }
 
-fn git_url(repo: &forgejo_api::structs::Repository, ssh: bool) -> eyre::Result<&Url> {
+pub fn git_url(repo: &forgejo_api::structs::Repository, ssh: bool) -> eyre::Result<&Url> {
     if ssh {
         repo.ssh_url
             .as_ref()
