@@ -172,7 +172,7 @@ impl OrgCommand {
             OrgSubcommand::Visibility { org, set } => member_visibility(&api, org, set).await?,
             OrgSubcommand::Team(subcommand) => subcommand.run(&api).await?,
             OrgSubcommand::Label(subcommand) => subcommand.run(&api).await?,
-            OrgSubcommand::Repo(subcommand) => subcommand.run(&api).await?,
+            OrgSubcommand::Repo(subcommand) => subcommand.run(keys, &repo, &api).await?,
         }
         Ok(())
     }
@@ -712,7 +712,12 @@ pub enum RepoSubcommand {
 }
 
 impl RepoSubcommand {
-    async fn run(self, api: &Forgejo) -> eyre::Result<()> {
+    async fn run(
+        self,
+        keys: &crate::KeyInfo,
+        repo_info: &RepoInfo,
+        api: &Forgejo,
+    ) -> eyre::Result<()> {
         match self {
             RepoSubcommand::List { org, page } => list_org_repos(&api, org, page).await?,
             RepoSubcommand::Create {
@@ -727,6 +732,10 @@ impl RepoSubcommand {
                         ssh,
                     },
             } => {
+                let url_host = crate::host_with_port(&repo_info.host_url());
+                let ssh = ssh
+                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or(true);
                 crate::repo::create_repo(
                     &api,
                     Some(org),

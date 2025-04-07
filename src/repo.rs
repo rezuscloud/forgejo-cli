@@ -328,7 +328,7 @@ pub struct RepoCreateArgs {
     pub push: bool,
     /// Use SSH for the new remote instead of HTTP(S)
     #[clap(long, short = 'S')]
-    pub ssh: bool,
+    pub ssh: Option<Option<bool>>,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -400,7 +400,7 @@ pub enum RepoCommand {
         path: Option<PathBuf>,
         /// Clone the repo over SSH instead of HTTP(S)
         #[clap(long, short = 'S')]
-        ssh: bool,
+        ssh: Option<Option<bool>>,
     },
     /// Add a star to a repo
     Star { repo: RepoArg },
@@ -435,6 +435,10 @@ impl RepoCommand {
             } => {
                 let host = RepoInfo::get_current(host_name, None, None, &keys)?;
                 let api = keys.get_api(host.host_url()).await?;
+                let url_host = crate::host_with_port(&host.host_url());
+                let ssh = ssh
+                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or(true);
                 create_repo(&api, None, repo, description, private, remote, push, ssh).await?;
             }
             RepoCommand::Fork { repo, name, remote } => {
@@ -509,6 +513,10 @@ impl RepoCommand {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
+                let url_host = crate::host_with_port(&repo.host_url());
+                let ssh = ssh
+                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or(true);
                 cmd_clone_repo(&api, name, path, ssh).await?;
             }
             RepoCommand::Star { repo } => {
