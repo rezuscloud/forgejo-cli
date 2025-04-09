@@ -8,7 +8,9 @@ pub enum AuthCommand {
     /// Opens an auth page in your browser
     Login,
     /// Deletes login info for an instance
-    Logout { host: String },
+    Logout {
+        host: String,
+    },
     /// Add an application token for an instance
     ///
     /// Use this if `fj auth login` doesn't work
@@ -17,6 +19,9 @@ pub enum AuthCommand {
         user: String,
         /// The key to add. If not present, the key will be read in from stdin.
         key: Option<String>,
+    },
+    UseSsh {
+        use_ssh: Option<bool>,
     },
     /// List all instances you're currently logged into
     List,
@@ -68,6 +73,29 @@ impl AuthCommand {
                     keys.hosts.insert(host.to_owned(), login);
                 } else {
                     println!("key for {host} already exists");
+                }
+            }
+            AuthCommand::UseSsh { use_ssh } => {
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
+                let host = crate::host_with_port(&repo_info.host_url());
+                if !keys.hosts.contains_key(host) {
+                    println!("not logged in to {host}");
+                } else {
+                    if use_ssh.unwrap_or(true) {
+                        let already_present = keys.default_ssh.insert(host.to_string());
+                        if already_present {
+                            println!("now will use SSH for {host} by default");
+                        } else {
+                            println!("already using SSH for {host} by default");
+                        }
+                    } else {
+                        let was_present = keys.default_ssh.remove(host);
+                        if was_present {
+                            println!("will no longer use SSH for {host} by default");
+                        } else {
+                            println!("already not using SSH for {host} by default");
+                        }
+                    }
                 }
             }
             AuthCommand::List => {

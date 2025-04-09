@@ -97,6 +97,9 @@ pub enum PrSubcommand {
         /// Defaults to naming after the host url, repo owner, and PR number.
         #[clap(long, id = "NAME")]
         branch_name: Option<String>,
+        /// Pull the commits using SSH instead of HTTP(S).
+        #[clap(long, short = 'S')]
+        ssh: Option<Option<bool>>,
     },
     /// Add a comment on a pull request
     Comment {
@@ -367,7 +370,17 @@ impl PrCommand {
                 let (repo, pr) = try_get_pr_number(repo, &api, pr.map(|pr| pr.number)).await?;
                 crate::issues::close_issue(&repo, &api, pr, with_msg).await?
             }
-            Checkout { pr, branch_name } => checkout_pr(repo, &api, pr, branch_name).await?,
+            Checkout {
+                pr,
+                branch_name,
+                ssh,
+            } => {
+                let url_host = crate::host_with_port(&repo_info.host_url());
+                let ssh = ssh
+                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or(true);
+                checkout_pr(repo, &api, pr, branch_name, ssh).await?
+            }
             Browse { id } => {
                 let (repo, id) = try_get_pr_number(repo, &api, id.map(|pr| pr.number)).await?;
                 browse_pr(&repo, &api, id).await?
@@ -1250,6 +1263,7 @@ async fn checkout_pr(
     api: &Forgejo,
     pr: PrNumber,
     branch_name: Option<String>,
+    ssh: bool,
 ) -> eyre::Result<()> {
     let local_repo = git2::Repository::discover(".").unwrap();
 
@@ -1279,10 +1293,7 @@ async fn checkout_pr(
         .repo_get_pull_request(repo_owner, repo_name, pr.number())
         .await?;
 
-    let url = remote_repo
-        .clone_url
-        .as_ref()
-        .ok_or_eyre("repo has no clone url")?;
+    let url = crate::repo::git_url(&remote_repo, ssh)?;
     let mut remote = local_repo.remote_anonymous(url.as_str())?;
     let branch_name = branch_name.unwrap_or_else(|| {
         format!(

@@ -1,6 +1,9 @@
 use eyre::eyre;
 use forgejo_api::{Auth, Forgejo};
-use std::{collections::BTreeMap, io::ErrorKind};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::ErrorKind,
+};
 use tokio::io::AsyncWriteExt;
 use url::Url;
 
@@ -9,6 +12,8 @@ pub struct KeyInfo {
     pub hosts: BTreeMap<String, LoginInfo>,
     #[serde(default)]
     pub aliases: BTreeMap<String, String>,
+    #[serde(default)]
+    pub default_ssh: BTreeSet<String>,
 }
 
 impl KeyInfo {
