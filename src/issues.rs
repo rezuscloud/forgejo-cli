@@ -22,11 +22,17 @@ pub struct IssueCommand {
 pub enum IssueSubcommand {
     /// Create a new issue on a repo
     Create {
+        /// Title of the issue
         title: Option<String>,
+        /// The text body of the issue
+        ///
+        /// Leaving this out will open your editor.
         #[clap(long)]
         body: Option<String>,
+        /// The repo to create this issue on
         #[clap(long, short)]
         repo: Option<RepoArg>,
+        /// Open the PR creation page in your web browser
         #[clap(long)]
         web: bool,
     },

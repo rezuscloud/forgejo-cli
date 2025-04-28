@@ -60,13 +60,13 @@ pub enum PrSubcommand {
         /// Leaving this out will open your editor.
         #[clap(long)]
         body: Option<String>,
-        /// The repo to create this issue on
+        /// The repo to create this pull request on
         #[clap(long, short)]
         repo: Option<RepoArg>,
-        /// Open the PR creation menu in your web browser
+        /// Open the PR creation page in your web browser
         #[clap(short, long, group = "web-or-cmd", group = "web-or-agit")]
         web: bool,
-        /// Open the PR creation menu in your web browser
+        /// Open the PR using AGit workflow
         #[clap(short, long, group = "source", group = "web-or-agit")]
         agit: bool,
     },
