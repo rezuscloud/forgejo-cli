@@ -5,8 +5,8 @@ steps:
     image: rust:latest
     environment:
       BUILD_TYPE: "release ci"
-      CLIENT_INFO_CODEBERG:
-        from_secret: client_info_codeberg
+      BUILTIN_CLIENT_IDS:
+        from_secret: builtin_client_ids 
     commands:
       - rustup target add x86_64-unknown-linux-gnu
       - cargo build --target=x86_64-unknown-linux-gnu --release --features update-check
@@ -15,8 +15,8 @@ steps:
     image: rust:latest
     environment:
       BUILD_TYPE: "release ci"
-      CLIENT_INFO_CODEBERG:
-        from_secret: client_info_codeberg
+      BUILTIN_CLIENT_IDS:
+        from_secret: builtin_client_ids 
     commands:
       - rustup target add x86_64-pc-windows-gnu
       - apt update
