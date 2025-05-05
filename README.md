@@ -66,8 +66,8 @@ with the `--host` flag set, to create shorthands for certain instances.
 ```bash
 # For example, a `cb` command for interacting with codeberg
 alias cb="fj --host codeberg.org"
-# Or disroot
-alias dr="fj --host git.disroot.org"
+# Or code.forgejo.org
+alias cfj="fj --host code.forgejo.org"
 # Or any other instance you want!
 # And the alias name can be whatever, as long as the `--host` flag is set.
 ```
@@ -94,8 +94,8 @@ forgejo/forgejo
 Primary language is Go
 # etc...
 
-# Notice the "dr", trying to access Disroot, still works when you specify Codeberg in the repository name!
-$ dr repo info codeberg.org/forgejo/forgejo
+# Notice the "cfj", trying to access code.forgejo.org, still works when you specify Codeberg in the repository name!
+$ cfj repo info codeberg.org/forgejo/forgejo
 forgejo/forgejo
 > Beyond coding. We forge.
 
