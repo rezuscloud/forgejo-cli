@@ -42,10 +42,15 @@ impl KeyInfo {
 
         tokio::fs::create_dir_all(path).await?;
 
-        tokio::fs::File::create(path.join("keys.json"))
-            .await?
-            .write_all(&json)
-            .await?;
+        let mut file = tokio::fs::File::create(path.join("keys.json")).await?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            // read+write for user, nothing for everyone else
+            file.set_permissions(std::fs::Permissions::from_mode(0o600))
+                .await?;
+        }
+        file.write_all(&json).await?;
 
         Ok(())
     }
