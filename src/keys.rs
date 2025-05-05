@@ -118,15 +118,17 @@ impl LoginInfo {
             } => {
                 if time::OffsetDateTime::now_utc() >= *expires_at {
                     let api = Forgejo::with_user_agent(Auth::None, url.clone(), crate::USER_AGENT)?;
-                    let (client_id, client_secret) = crate::auth::get_client_info_for(url)
-                        .ok_or_else(|| {
-                            eyre::eyre!("Can't refresh token; no client info for {url}. How did this happen?")
-                        })?;
+                    let client_id =
+                        crate::auth::get_client_info_for(url)
+                            .await?
+                            .ok_or_else(|| {
+                                eyre::eyre!("Can't refresh token: no client info for {url}.")
+                            })?;
                     let response = api
                         .oauth_get_access_token(forgejo_api::structs::OAuthTokenRequest::Refresh {
                             refresh_token,
-                            client_id,
-                            client_secret,
+                            client_id: &client_id,
+                            client_secret: "",
                         })
                         .await?;
                     *token = response.access_token;

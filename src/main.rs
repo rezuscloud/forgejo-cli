@@ -177,6 +177,10 @@ fn host_with_port(url: &url::Url) -> &str {
     &url[url::Position::BeforeHost..url::Position::AfterPort]
 }
 
+fn host_with_port_and_path(url: &url::Url) -> &str {
+    &url[url::Position::BeforeHost..url::Position::AfterPath]
+}
+
 use std::sync::OnceLock;
 static SPECIAL_RENDER: OnceLock<SpecialRender> = OnceLock::new();
 

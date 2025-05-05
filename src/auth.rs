@@ -1,6 +1,8 @@
 use clap::Subcommand;
 use eyre::OptionExt;
 
+use std::collections::BTreeMap;
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum AuthCommand {
     /// Log in to an instance.
@@ -33,8 +35,8 @@ impl AuthCommand {
             AuthCommand::Login => {
                 let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
                 let host_url = repo_info.host_url();
-                let client_info = get_client_info_for(host_url);
-                if let Some((client_id, _)) = client_info {
+                let client_info = get_client_info_for(host_url).await?;
+                if let Some(client_id) = &client_info {
                     oauth_login(keys, host_url, client_id).await?;
                 } else {
                     let host_domain = host_url.host_str().ok_or_eyre("invalid host")?;
@@ -42,7 +44,7 @@ impl AuthCommand {
                     let applications_url =
                         format!("https://{host_domain}{host_path}/user/settings/applications");
 
-                    println!("{host_domain}{host_path} doesn't support easy login");
+                    println!("Your installation of fj doesn't support `login` for {host_domain}{host_path}");
                     println!();
                     println!("Please visit {applications_url}");
                     println!("to create a token, and use it to log in with `fj auth add-key`");
@@ -111,18 +113,66 @@ impl AuthCommand {
     }
 }
 
-pub fn get_client_info_for(url: &url::Url) -> Option<(&'static str, &'static str)> {
-    let client_info = match (crate::host_with_port(url), url.path()) {
-        ("codeberg.org", "/") => option_env!("CLIENT_INFO_CODEBERG"),
-        _ => None,
-    };
-    client_info.and_then(|info| info.split_once(":"))
+pub async fn get_client_info_for(url: &url::Url) -> eyre::Result<Option<String>> {
+    let host = crate::host_with_port_and_path(url);
+    let host = host.strip_suffix("/").unwrap_or(host);
+    if let Some(dirs) = directories::ProjectDirs::from("", "Cyborus", "forgejo-cli") {
+        let client_info_path = dirs.config_dir().join("client_ids");
+        if let Ok(file) = tokio::fs::read_to_string(client_info_path).await {
+            let ids = parse_client_info_file(&file)?;
+            if let Some(id) = ids.get(host) {
+                return Ok(Some(id.to_string()));
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        let global_client_info_path = "/etc/fj/client_ids";
+        if let Ok(file) = tokio::fs::read_to_string(global_client_info_path).await {
+            let ids = parse_client_info_file(&file)?;
+            if let Some(id) = ids.get(host) {
+                return Ok(Some(id.to_string()));
+            }
+        }
+    }
+
+    if option_env!("BUILTIN_CLIENT_IDS").is_some() {
+        let id: Option<&'static str> = include!(concat!(env!("OUT_DIR"), "/oauth_client_info.rs"));
+        if let Some(id) = id {
+            return Ok(Some(id.into()));
+        }
+    }
+
+    Ok(None)
 }
+
+fn parse_client_info_file(file: &str) -> eyre::Result<BTreeMap<&str, &str>> {
+    file.lines()
+        .map(|s| s.split_once("#").map(|s| s.0).unwrap_or(s).trim())
+        .enumerate()
+        .filter(|(_, s)| !s.is_empty())
+        .map(|(line_num, s)| {
+            let mut iter = s.split_whitespace();
+            let host = iter.next().expect("can't fail, empty lines filtered");
+            let client_id = iter
+                .next()
+                .ok_or_else(|| eyre::eyre!("missing client id on line {}", line_num + 1))?;
+            Ok::<_, eyre::Error>((host, client_id))
+        })
+        .collect::<Result<BTreeMap<&str, &str>, _>>()
+}
+
+//pub fn get_client_info_for(url: &url::Url) -> Option<&'static str> {
+//    let host = crate::host_with_port_and_path(url);
+//    let host = host.strip_suffix("/").unwrap_or(host);
+//    include!(concat!(env!("OUT_DIR"), "/oauth_client_info.rs"))
+//}
 
 async fn oauth_login(
     keys: &mut crate::KeyInfo,
     host: &url::Url,
-    client_id: &'static str,
+    client_id: &str,
 ) -> eyre::Result<()> {
     use base64ct::Encoding;
     use rand::{distr::Alphanumeric, prelude::*};
