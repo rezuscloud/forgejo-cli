@@ -76,7 +76,7 @@ Now, when you reference a repository such as `forgejo/forgejo`, it will
 implicitly get it from whichever alias you used!
 
 ```
-$ cb repo info forgejo/forgejo
+$ cb repo view forgejo/forgejo
 forgejo/forgejo
 > Beyond coding. We forge.
 
@@ -87,7 +87,7 @@ Primary language is Go
 When using `fj` directly, you'd have to use a URL to access it.
 
 ```
-$ fj repo info codeberg.org/forgejo/forgejo
+$ fj repo view codeberg.org/forgejo/forgejo
 forgejo/forgejo
 > Beyond coding. We forge.
 
@@ -95,7 +95,7 @@ Primary language is Go
 # etc...
 
 # Notice the "cfj", trying to access code.forgejo.org, still works when you specify Codeberg in the repository name!
-$ cfj repo info codeberg.org/forgejo/forgejo
+$ cfj repo view codeberg.org/forgejo/forgejo
 forgejo/forgejo
 > Beyond coding. We forge.
 
