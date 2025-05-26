@@ -22,6 +22,13 @@ cargo install forgejo-cli
 cargo install --git https://codeberg.org/Cyborus/forgejo-cli.git --branch main
 ```
 
+### Debian and Ubuntu
+
+forgejo-cli is included in the official repositories as of Debian unstable and Ubuntu plucky.
+```sh
+sudo apt install forgejo-cli
+```
+
 ### Fedora
 
 An **unofficial** [COPR repository](https://copr.fedorainfracloud.org/coprs/lihaohong/forgejo-cli/) is available. Fedora users can install forgejo-cli with
