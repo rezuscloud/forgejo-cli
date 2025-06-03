@@ -39,6 +39,18 @@ sudo dnf install forgejo-cli
 
 If you see an error about copr not being an available command, run `sudo dnf install dnf-plugins-core`.
 
+### Guix
+
+If it's not already done, you need to update Guix (Guix is rolling release):
+```sh
+guix pull
+```
+
+One done you can then install forgejo-cli with the following command:
+```sh
+guix install forgejo-cli
+```
+
 ### Nix
 
 A Nix flake is included in this repository that you may use. You could install it into your Nix
