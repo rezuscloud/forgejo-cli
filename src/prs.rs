@@ -995,8 +995,7 @@ async fn create_pr(
                 .ok_or_eyre("remote branch does not have utf8 name")?;
             Some(
                 upstream_branch
-                    .rsplit_once("/")
-                    .map(|(_, b)| b)
+                    .strip_prefix("refs/heads/")
                     .unwrap_or(upstream_branch)
                     .to_owned(),
             )
@@ -1634,85 +1633,72 @@ async fn guess_pr(
         .strip_prefix("refs/for/")
         .and_then(|s| s.split_once("/"));
 
-    match maybe_agit {
-        Some((base, head)) => {
-            let username = api
-                .user_get_current()
-                .await?
-                .login
-                .ok_or_eyre("user does not have username")?
-                .to_lowercase();
-            let head = format!("{username}/{head}");
-            return Ok(api
-                .repo_get_pull_request_by_base_head(repo.owner(), repo.name(), base, &head)
-                .await?);
+    if let Some((base, head)) = maybe_agit {
+        let username = api
+            .user_get_current()
+            .await?
+            .login
+            .ok_or_eyre("user does not have username")?
+            .to_lowercase();
+        let head = format!("{username}/{head}");
+        return Ok(api
+            .repo_get_pull_request_by_base_head(repo.owner(), repo.name(), base, &head)
+            .await?);
+    } else if let Some(remote_head_short) = remote_head_name.strip_prefix("refs/heads/") {
+        let this_repo = api.repo_get(repo.owner(), repo.name()).await?;
+
+        // check for PRs on the main branch first
+        let base = this_repo
+            .default_branch
+            .as_deref()
+            .ok_or_eyre("repo does not have default branch")?;
+        if let Ok(pr) = api
+            .repo_get_pull_request_by_base_head(repo.owner(), repo.name(), base, remote_head_short)
+            .await
+        {
+            return Ok(pr);
         }
-        None => {
-            let remote_head_short = remote_head_name
-                .rsplit_once("/")
-                .map(|(_, b)| b)
-                .unwrap_or(&remote_head_name);
 
-            let this_repo = api.repo_get(repo.owner(), repo.name()).await?;
+        let this_full_name = this_repo
+            .full_name
+            .as_deref()
+            .ok_or_eyre("repo does not have full name")?;
+        let parent_remote_head_name = format!("{this_full_name}:{remote_head_short}");
 
-            // check for PRs on the main branch first
-            let base = this_repo
+        if let Some(parent) = this_repo.parent.as_deref() {
+            let (parent_owner, parent_name) = repo_name_from_repo(parent)?;
+            let parent_base = this_repo
                 .default_branch
                 .as_deref()
                 .ok_or_eyre("repo does not have default branch")?;
             if let Ok(pr) = api
                 .repo_get_pull_request_by_base_head(
-                    repo.owner(),
-                    repo.name(),
-                    base,
-                    remote_head_short,
+                    parent_owner,
+                    parent_name,
+                    parent_base,
+                    &parent_remote_head_name,
                 )
                 .await
             {
                 return Ok(pr);
             }
+        }
 
-            let this_full_name = this_repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
-            let parent_remote_head_name = format!("{this_full_name}:{remote_head_short}");
+        // then iterate all branches
+        if let Some(pr) =
+            find_pr_from_branch(repo.owner(), repo.name(), api, remote_head_short).await?
+        {
+            return Ok(pr);
+        }
 
-            if let Some(parent) = this_repo.parent.as_deref() {
-                let (parent_owner, parent_name) = repo_name_from_repo(parent)?;
-                let parent_base = this_repo
-                    .default_branch
-                    .as_deref()
-                    .ok_or_eyre("repo does not have default branch")?;
-                if let Ok(pr) = api
-                    .repo_get_pull_request_by_base_head(
-                        parent_owner,
-                        parent_name,
-                        parent_base,
-                        &parent_remote_head_name,
-                    )
-                    .await
-                {
-                    return Ok(pr);
-                }
-            }
+        if let Some(parent) = this_repo.parent.as_deref() {
+            let (parent_owner, parent_name) = repo_name_from_repo(parent)?;
 
-            // then iterate all branches
             if let Some(pr) =
-                find_pr_from_branch(repo.owner(), repo.name(), api, remote_head_short).await?
+                find_pr_from_branch(parent_owner, parent_name, api, &parent_remote_head_name)
+                    .await?
             {
                 return Ok(pr);
-            }
-
-            if let Some(parent) = this_repo.parent.as_deref() {
-                let (parent_owner, parent_name) = repo_name_from_repo(parent)?;
-
-                if let Some(pr) =
-                    find_pr_from_branch(parent_owner, parent_name, api, &parent_remote_head_name)
-                        .await?
-                {
-                    return Ok(pr);
-                }
             }
         }
     }

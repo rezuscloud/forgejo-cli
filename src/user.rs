@@ -736,10 +736,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
                 .as_deref()
                 .ok_or_eyre("repo does not have full name")?;
             let ref_name = ref_name?;
-            let branch = ref_name
-                .rsplit_once("/")
-                .map(|(_, b)| b)
-                .unwrap_or(ref_name);
+            let branch = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             if !content?.is_empty() {
                 println!("{bold}{actor_name}{reset} pushed to {bold}{bright_cyan}{branch}{reset} on {bold}{yellow}{full_name}{reset}");
             }
@@ -770,10 +767,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
                 .as_deref()
                 .ok_or_eyre("repo does not have full name")?;
             let ref_name = ref_name?;
-            let tag = ref_name
-                .rsplit_once("/")
-                .map(|(_, b)| b)
-                .unwrap_or(ref_name);
+            let tag = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             println!("{bold}{actor_name}{reset} pushed tag {bold}{bright_cyan}{tag}{reset} to {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::CommentIssue => {
@@ -815,10 +809,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
                 .as_deref()
                 .ok_or_eyre("repo does not have full name")?;
             let ref_name = ref_name?;
-            let tag = ref_name
-                .rsplit_once("/")
-                .map(|(_, b)| b)
-                .unwrap_or(ref_name);
+            let tag = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             println!("{bold}{actor_name}{reset} deleted tag {bold}{bright_cyan}{tag}{reset} from {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::DeleteBranch => {
@@ -828,10 +819,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
                 .as_deref()
                 .ok_or_eyre("repo does not have full name")?;
             let ref_name = ref_name?;
-            let branch = ref_name
-                .rsplit_once("/")
-                .map(|(_, b)| b)
-                .unwrap_or(ref_name);
+            let branch = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             println!("{bold}{actor_name}{reset} deleted branch {bold}{bright_cyan}{branch}{reset} from {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::MirrorSyncPush => {}
