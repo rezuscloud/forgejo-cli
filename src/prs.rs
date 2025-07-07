@@ -948,55 +948,46 @@ async fn create_pr(
         Some(head) => Some(head),
         None => {
             let local_repo = git2::Repository::discover(".")?;
+            let config = local_repo.config()?;
             let head = local_repo.head()?;
             eyre::ensure!(
                 head.is_branch(),
                 "HEAD is not on branch, can't guess head branch"
             );
 
-            let branch_ref = head
-                .name()
+            let branch_shorthand = head
+                .shorthand()
                 .ok_or_eyre("current branch does not have utf8 name")?;
-            let upstream_remote = local_repo.branch_upstream_remote(branch_ref)?;
 
-            let remote_name = if let Some(remote_name) = remote_name {
-                remote_name
-            } else {
-                let upstream_name = upstream_remote
-                    .as_str()
-                    .ok_or_eyre("remote does not have utf8 name")?;
-                upstream_name
-            };
+            let remote_name = config.get_string(&format!("branch.{branch_shorthand}.remote"))?;
+            let remote_url = local_repo
+                .find_remote(&remote_name)?
+                .url()
+                .ok_or_eyre("remote does not have utf8 url")?
+                .parse::<url::Url>()?;
+            let remote_host = remote_url
+                .host_str()
+                .ok_or_eyre("remote url does not have domain name")?;
 
-            let remote = local_repo.find_remote(remote_name)?;
-            let remote_url_s = remote.url().ok_or_eyre("remote does not have utf8 url")?;
-            let remote_url = url::Url::parse(remote_url_s)?;
-
-            let clone_url = repo_data
+            let repo_host = repo_data
                 .clone_url
                 .as_ref()
-                .ok_or_eyre("repo does not have git url")?;
-            let html_url = repo_data
-                .html_url
-                .as_ref()
-                .ok_or_eyre("repo does not have html url")?;
-            let ssh_url = repo_data
-                .ssh_url
-                .as_ref()
-                .ok_or_eyre("repo does not have ssh url")?;
+                .ok_or_eyre("repo does not have git url")?
+                .host_str()
+                .ok_or_eyre("repo url does not have domain name")?;
             eyre::ensure!(
-                &remote_url == clone_url || &remote_url == html_url || &remote_url == ssh_url,
-                "branch does not track that repo"
+                remote_host == repo_host,
+                "cannot create pull request across instances; base is on {}, while head is tracking {}",
+                repo_host,
+                remote_host,
             );
 
-            let upstream_branch = local_repo.branch_upstream_name(branch_ref)?;
-            let upstream_branch = upstream_branch
-                .as_str()
-                .ok_or_eyre("remote branch does not have utf8 name")?;
+            let remote_head_name =
+                config.get_string(&format!("branch.{branch_shorthand}.merge"))?;
             Some(
-                upstream_branch
+                remote_head_name
                     .strip_prefix("refs/heads/")
-                    .unwrap_or(upstream_branch)
+                    .unwrap_or(&remote_head_name)
                     .to_owned(),
             )
         }
