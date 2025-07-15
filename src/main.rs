@@ -59,6 +59,26 @@ pub enum Command {
     Completion(completion::CompletionCommand),
 }
 
+impl Command {
+    pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
+        match self {
+            Command::Repo(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Issue(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Pr(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Wiki(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Actions(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::WhoAmI(command) => command.run(keys, host_name).await?,
+            Command::Auth(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Release(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::User(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Org(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Version(command) => command.run().await?,
+            Command::Completion(subcommand) => subcommand.run(),
+        }
+        Ok(())
+    }
+}
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let args = App::parse();
@@ -66,25 +86,10 @@ async fn main() -> eyre::Result<()> {
     let _ = SPECIAL_RENDER.set(SpecialRender::new(args.style.unwrap_or_default()));
 
     let mut keys = KeyInfo::load().await?;
-
-    let host_name = args.host.as_deref();
-    // let remote = repo::RepoInfo::get_current(host_name, remote_name)?;
-    match args.command {
-        Command::Repo(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::Issue(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::Pr(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::Wiki(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::Actions(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::WhoAmI(command) => command.run(&mut keys, host_name).await?,
-        Command::Auth(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::Release(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::User(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::Org(subcommand) => subcommand.run(&mut keys, host_name).await?,
-        Command::Version(command) => command.run().await?,
-        Command::Completion(subcommand) => subcommand.run(),
-    }
-
+    let r = args.command.run(&mut keys, args.host.as_deref()).await;
     keys.save().await?;
+    r?;
+
     Ok(())
 }
 
