@@ -137,14 +137,16 @@ pub async fn get_client_info_for(url: &url::Url) -> eyre::Result<Option<String>>
         }
     }
 
-    if option_env!("BUILTIN_CLIENT_IDS").is_some() {
-        let id: Option<&'static str> = include!(concat!(env!("OUT_DIR"), "/oauth_client_info.rs"));
-        if let Some(id) = id {
-            return Ok(Some(id.into()));
-        }
-    }
+    let builtin = match host {
+        "codeberg.org" => "19ac3dd0-e101-445d-aa60-d8ea3876bc5d",
+        "code.forgejo.org" => "ab67d8a2-72bd-42e8-ae05-937eaba31e24",
+        "v7.next.forgejo.org" => "adf79db0-0e6c-41d8-93a9-3c13e797e880",
+        "v11.next.forgejo.org" => "0df6d672-fe05-4c9a-a5a9-e111e4905e14",
+        "v12.next.forgejo.org" => "df333c23-09a7-41ee-ad52-de673166dbb8",
+        _ => return Ok(None),
+    };
 
-    Ok(None)
+    Ok(Some(builtin.to_string()))
 }
 
 fn parse_client_info_file(file: &str) -> eyre::Result<BTreeMap<&str, &str>> {
