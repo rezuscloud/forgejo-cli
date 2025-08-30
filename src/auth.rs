@@ -143,6 +143,13 @@ pub async fn get_client_info_for(url: &url::Url) -> eyre::Result<Option<String>>
         "v7.next.forgejo.org" => "adf79db0-0e6c-41d8-93a9-3c13e797e880",
         "v11.next.forgejo.org" => "0df6d672-fe05-4c9a-a5a9-e111e4905e14",
         "v12.next.forgejo.org" => "df333c23-09a7-41ee-ad52-de673166dbb8",
+        "v13.next.forgejo.org" => "ef27a227-65f4-4bcb-be56-f8c9b44457b0",
+        "git.disroot.org" => "c6051ae0-6d21-4c17-92e6-41b957376d09",
+        "git.pub.solar" => "6c7fad2f-41c4-4c2d-90b2-5f7fd19c9be2",
+        "git.kaki87.net" => "951299e6-cf99-4a9e-8aaf-4b4b4ac36f04",
+        "git.gay" => "15233962-8f9d-4192-a7d7-129fb8c6bbff",
+        "git.auxolotl.org" => "09fb4377-1e98-4c94-a43f-2c9843388e11",
+        "git.lix.systems" => "71ec029f-b5a1-4079-8e06-5b957288b063",
         _ => return Ok(None),
     };
 
