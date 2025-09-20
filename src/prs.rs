@@ -960,11 +960,12 @@ async fn create_pr(
                 .ok_or_eyre("current branch does not have utf8 name")?;
 
             let remote_name = config.get_string(&format!("branch.{branch_shorthand}.remote"))?;
-            let remote_url = local_repo
-                .find_remote(&remote_name)?
-                .url()
-                .ok_or_eyre("remote does not have utf8 url")?
-                .parse::<url::Url>()?;
+            let remote_url = crate::ssh_url_parse(
+                local_repo
+                    .find_remote(&remote_name)?
+                    .url()
+                    .ok_or_eyre("remote does not have utf8 url")?,
+            )?;
             let remote_host = remote_url
                 .host_str()
                 .ok_or_eyre("remote url does not have domain name")?;
