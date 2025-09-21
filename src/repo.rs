@@ -160,13 +160,19 @@ impl RepoInfo {
             out
         };
 
+        let same_instance = |a: &Option<Url>, b: &Option<Url>| {
+            let a = a.as_ref().map(crate::host_with_port_and_path);
+            let b = b.as_ref().map(crate::host_with_port_and_path);
+            a == b
+        };
+
         let (url, name) = if repo_url.is_some() {
             (repo_url, repo_name)
         } else if repo_name.is_some() {
             (host_url.or(remote_url), repo_name)
         } else if remote.is_some() {
             (remote_url, remote_repo_name)
-        } else if host_url.is_none() || remote_url == host_url {
+        } else if host_url.is_none() || same_instance(&remote_url, &host_url) {
             (remote_url, remote_repo_name)
         } else {
             (host_url, None)
