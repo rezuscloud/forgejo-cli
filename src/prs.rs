@@ -60,6 +60,13 @@ pub enum PrSubcommand {
         /// Leaving this out will open your editor.
         #[clap(long)]
         body: Option<String>,
+        /// Automatically populate the PR's title and body from its commits.
+        ///
+        /// If there's a single commit, the PR will match its title and contents.
+        /// Otherwise the title will be the branch title, and the contents will
+        /// include a list of every commit's message.
+        #[clap(short = 'A', long)]
+        autofill: bool,
         /// The repo to create this pull request on
         #[clap(long, short)]
         repo: Option<RepoArg>,
@@ -280,6 +287,7 @@ impl PrCommand {
                 base,
                 head,
                 body,
+                autofill,
                 repo: _,
                 web,
                 agit,
@@ -291,6 +299,7 @@ impl PrCommand {
                     base,
                     head,
                     body,
+                    autofill,
                     web,
                     agit,
                     repo_info.remote_name(),
@@ -937,13 +946,14 @@ async fn create_pr(
     base: Option<String>,
     head: Option<String>,
     body: Option<String>,
+    autofill: bool,
     web: bool,
     agit: bool,
     remote_name: Option<&str>,
 ) -> eyre::Result<()> {
     let mut repo_data = api.repo_get(repo.owner(), repo.name()).await?;
 
-    let head = match head {
+    let head_branch_name = match head {
         _ if agit => None,
         Some(head) => Some(head),
         None => {
@@ -1026,14 +1036,16 @@ async fn create_pr(
             parent_owner,
             parent_name,
             parent_repo,
-            head.map(|head| format!("{}:{}", repo.owner(), head)),
+            head_branch_name
+                .as_ref()
+                .map(|head| format!("{}:{}", repo.owner(), head)),
         )
     } else {
         (
             repo.owner().to_owned(),
             repo.name().to_owned(),
             repo_data,
-            head,
+            head_branch_name.clone(),
         )
     };
 
@@ -1059,17 +1071,54 @@ async fn create_pr(
             .extend(["compare", &format!("{base}...{head}")]);
         open::that_detached(pr_create_url.as_str()).wrap_err("Failed to open URL")?;
     } else {
-        let title = title.ok_or_eyre("title is required")?;
-        let body = match body {
-            Some(body) => body,
-            None => {
-                let mut body = String::new();
-                crate::editor(&mut body, Some("md")).await?;
-                body
-            }
-        };
-        match head {
-            Some(head) => {
+        match head.zip(head_branch_name) {
+            Some((head, head_branch_name)) => {
+                let pr_compare = api
+                    .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
+                    .await?;
+                let pr_commits = pr_compare
+                    .commits
+                    .as_ref()
+                    .ok_or_eyre("failed to get branch comparison")?;
+
+                let (guessed_title, guessed_body) = {
+                    if pr_commits.len() == 1 {
+                        let (commit_title, commit_body) = get_commit_msg(&pr_commits[0])?;
+                        (commit_title.to_owned(), commit_body.to_owned())
+                    } else {
+                        let mut body = String::new();
+                        for pr_commit in pr_commits {
+                            let (commit_title, commit_body) = get_commit_msg(pr_commit)?;
+                            body.push_str(commit_title);
+                            body.push('\n');
+                            for (i, line) in commit_body.lines().enumerate() {
+                                if i == 0 {
+                                    body.push_str(": ");
+                                } else {
+                                    body.push_str("  ");
+                                }
+                                body.push_str(line);
+                                body.push('\n');
+                            }
+                            body.push('\n');
+                        }
+                        (head_branch_name, body)
+                    }
+                };
+                let title = match title {
+                    Some(title) => title,
+                    None if autofill => guessed_title,
+                    None => eyre::bail!("title is required"),
+                };
+                let body = match body {
+                    Some(body) => body,
+                    None if autofill => guessed_body,
+                    None => {
+                        let mut body = guessed_body;
+                        crate::editor(&mut body, Some("md")).await?;
+                        body
+                    }
+                };
                 let pr = api
                     .repo_create_pull_request(
                         &repo_owner,
@@ -1098,6 +1147,15 @@ async fn create_pr(
             }
             // no head means agit
             None => {
+                let title = title.ok_or_eyre("title is required")?;
+                let body = match body {
+                    Some(body) => body,
+                    None => {
+                        let mut body = String::new();
+                        crate::editor(&mut body, Some("md")).await?;
+                        body
+                    }
+                };
                 let local_repo = git2::Repository::open(".")?;
                 let mut git_config = local_repo.config()?;
                 let clone_url = base_repo
@@ -1176,6 +1234,18 @@ async fn create_pr(
     }
 
     Ok(())
+}
+
+fn get_commit_msg(commit: &forgejo_api::structs::Commit) -> eyre::Result<(&str, &str)> {
+    let commit = commit.commit.as_ref().ok_or_eyre("missing commit info")?;
+    let commit_message = commit
+        .message
+        .as_deref()
+        .ok_or_eyre("commit does not have message")?;
+    let (commit_title, commit_body) = commit_message
+        .split_once('\n')
+        .unwrap_or((commit_message, ""));
+    Ok((commit_title, commit_body.trim_start_matches(&['\n', '\r'])))
 }
 
 async fn merge_pr(
