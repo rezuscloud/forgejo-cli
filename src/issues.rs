@@ -455,6 +455,7 @@ pub async fn view_comments(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Res
         .await?;
     for comment in comments {
         print_comment(&comment)?;
+        println!();
     }
     Ok(())
 }
@@ -468,11 +469,24 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
         .user
         .as_ref()
         .ok_or_else(|| eyre::eyre!("comment does not have user"))?;
+    let name = user.full_name.as_deref().filter(|name| !name.is_empty());
     let username = user
         .login
         .as_ref()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
-    println!("{} said:", username);
+
+    let crate::SpecialRender {
+        bold,
+        bright_cyan,
+        dark_grey,
+        reset,
+        ..
+    } = crate::special_render();
+    if let Some(name) = name {
+        println!("{bold}{bright_cyan}{name}{reset} {dark_grey}({username}){reset} said:");
+    } else {
+        println!("{bold}{bright_cyan}{username}{reset} said:");
+    }
     println!("{}", crate::markdown(body));
     let assets = comment
         .assets
