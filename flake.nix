@@ -21,7 +21,7 @@
 
         meta = with pkgs.lib; {
           description = "CLI tool for Forgejo";
-          homepage = "https://codeberg.org/Cyborus/forgejo-cli/";
+          homepage = "https://codeberg.org/forgejo-contrib/forgejo-cli/";
           license = with licenses; [ asl20 /* or */ mit ];
         };
 
