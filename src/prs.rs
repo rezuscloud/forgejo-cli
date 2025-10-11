@@ -65,7 +65,7 @@ pub enum PrSubcommand {
         /// If there's a single commit, the PR will match its title and contents.
         /// Otherwise the title will be the branch title, and the contents will
         /// include a list of every commit's message.
-        #[clap(short = 'A', long)]
+        #[clap(short = 'A', long, alias = "fill")]
         autofill: bool,
         /// The repo to create this pull request on
         #[clap(long, short)]
