@@ -43,7 +43,7 @@ impl VersionCommand {
             )?;
 
             let latest = api
-                .repo_get_latest_release("Cyborus", "forgejo-cli")
+                .repo_get_latest_release("forgejo-contrib", "forgejo-cli")
                 .await?;
             let latest_tag = latest
                 .tag_name

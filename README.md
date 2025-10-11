@@ -9,7 +9,7 @@ CLI tool for interacting with Forgejo
 ### Pre-built
 
 Pre-built binaries are available for `x86_64` Windows and Linux (GNU) on the
-[releases tab](https://codeberg.org/Cyborus/forgejo-cli/releases/latest).
+[releases tab](https://codeberg.org/forgejo-contrib/forgejo-cli/releases/latest).
 
 ### From source
 
@@ -19,7 +19,7 @@ Install with `cargo install`
 # Latest version
 cargo install forgejo-cli
 # From `main`
-cargo install --git https://codeberg.org/Cyborus/forgejo-cli.git --branch main
+cargo install --git https://codeberg.org/forgejo-contrib/forgejo-cli.git --branch main
 ```
 
 ### Debian and Ubuntu
@@ -56,14 +56,14 @@ guix install forgejo-cli
 A Nix flake is included in this repository that you may use. You could install it into your Nix
 profile, for example:
 ```
-nix profile install git+https://codeberg.org/Cyborus/forgejo-cli
+nix profile install git+https://codeberg.org/forgejo-contrib/forgejo-cli
 ```
 ...or include it in the flake inputs of your NixOS system:
 ```nix
 {
   inputs = {
     # ...
-    forgejo-cli.url = "git+https://codeberg.org/Cyborus/forgejo-cli";
+    forgejo-cli.url = "git+https://codeberg.org/forgejo-contrib/forgejo-cli";
   };
   # ...
 }
