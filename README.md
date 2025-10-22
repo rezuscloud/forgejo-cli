@@ -13,13 +13,16 @@ Pre-built binaries are available for `x86_64` Windows and Linux (GNU) on the
 
 ### From source
 
-Install with `cargo install`
+Install with `cargo install` or `cargo binstall`
 
 ```
-# Latest version
+# Latest version compiled from source
 cargo install forgejo-cli
 # From `main`
 cargo install --git https://codeberg.org/forgejo-contrib/forgejo-cli.git --branch main
+
+# Using precompiled releases (requires cargo-binstall)
+cargo binstall forgejo-cli
 ```
 
 ### Debian and Ubuntu
