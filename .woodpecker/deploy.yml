@@ -27,16 +27,15 @@ steps:
       - cd ../../..
       - tar -czf forgejo-cli-linux.tar.gz -C target/x86_64-unknown-linux-gnu/release fj
   deploy-container:
-    image: gcr.io/kaniko-project/executor:debug
-    environment:
-      TOKEN:
+    image: code.cartoon-aa.xyz/ci/plugin-kaniko:2.1.0
+    settings:
+      repo: ${CI_REPO_OWNER,,}/${CI_REPO_NAME}
+      platforms: linux/amd64
+      auto_tag: true
+      registry: ${CI_FORGE_URL##https://}
+      username: ${CI_REPO_OWNER}
+      password:
         from_secret: token
-    commands:
-      - export FORGE_HOST=$(echo $CI_FORGE_URL | sed -E 's_^https?://__')
-      - export AUTH="$(echo -n $CI_REPO_OWNER:$TOKEN | base64)"
-      - echo "{\"auths\":{\"$FORGE_HOST\":{\"auth\":\"$AUTH\"}}}" > "/kaniko/.docker/config.json"
-      - export CONTAINER_OWNER=$(echo $CI_REPO_OWNER | awk '{print tolower($0)}')
-      - executor --context ./ --dockerfile ./Dockerfile --destination "$FORGE_HOST/$CONTAINER_OWNER/forgejo-cli:latest" 
   release:
     image: codeberg.org/cyborus/forgejo-cli:latest
     pull: true
