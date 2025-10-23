@@ -19,14 +19,14 @@ steps:
       - apt install gcc-mingw-w64-x86-64 -y
       - cargo build --target=x86_64-pc-windows-gnu --release --features update-check
       - strip target/x86_64-pc-windows-gnu/release/fj.exe
-  zip:
+  create-archives:
     image: code.cartoon-aa.xyz/ci/alpine-zip:3.22
     commands:
       - cd target/x86_64-pc-windows-gnu/release
       - zip ../../../forgejo-cli-windows.zip fj.exe
       - cd ../../..
       - tar -czf forgejo-cli-linux.tar.gz -C target/x86_64-unknown-linux-gnu/release fj
-  deploy-container:
+  publish-container:
     image: code.cartoon-aa.xyz/ci/plugin-kaniko:2.1.0
     settings:
       repo: ${CI_REPO_OWNER,,}/${CI_REPO_NAME}
@@ -36,7 +36,7 @@ steps:
       username: ${CI_REPO_OWNER}
       password:
         from_secret: token
-  release:
+  publish-builds:
     image: codeberg.org/cyborus/forgejo-cli:latest
     pull: true
     environment:
