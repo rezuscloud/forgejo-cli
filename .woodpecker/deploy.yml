@@ -27,7 +27,7 @@ steps:
       - cd target/x86_64-pc-windows-gnu/release
       - zip ../../../forgejo-cli-windows.zip fj.exe
       - cd ../../..
-      - gzip -c target/x86_64-unknown-linux-gnu/release/fj > forgejo-cli-linux.gz
+      - tar -czf forgejo-cli-linux.tar.gz -C target/x86_64-unknown-linux-gnu/release fj
   deploy-container:
     image: gcr.io/kaniko-project/executor:debug
     environment:
@@ -49,6 +49,6 @@ steps:
       - export FORGE_HOST=$(echo $CI_FORGE_URL | sed -E 's_^https?://__')
       - fj --host $CI_FORGE_URL auth add-key $CI_REPO_OWNER $TOKEN
       - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-windows.zip
-      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-linux.gz
+      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-linux.tar.gz
       - fj auth logout $FORGE_HOST
 
