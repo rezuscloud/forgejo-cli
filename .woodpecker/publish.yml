@@ -5,8 +5,6 @@ steps:
     image: rust:latest
     environment:
       BUILD_TYPE: "release ci"
-      BUILTIN_CLIENT_IDS:
-        from_secret: builtin_client_ids 
     commands:
       - rustup target add x86_64-unknown-linux-gnu
       - cargo build --target=x86_64-unknown-linux-gnu --release --features update-check
@@ -15,35 +13,30 @@ steps:
     image: rust:latest
     environment:
       BUILD_TYPE: "release ci"
-      BUILTIN_CLIENT_IDS:
-        from_secret: builtin_client_ids 
     commands:
       - rustup target add x86_64-pc-windows-gnu
       - apt update
       - apt install gcc-mingw-w64-x86-64 -y
       - cargo build --target=x86_64-pc-windows-gnu --release --features update-check
       - strip target/x86_64-pc-windows-gnu/release/fj.exe
-  zip:
-    image: debian:12
+  create-archives:
+    image: code.cartoon-aa.xyz/ci/alpine-zip:3.22
     commands:
-      - apt update
-      - apt install zip -y
       - cd target/x86_64-pc-windows-gnu/release
       - zip ../../../forgejo-cli-windows.zip fj.exe
       - cd ../../..
-      - gzip -c target/x86_64-unknown-linux-gnu/release/fj > forgejo-cli-linux.gz
-  deploy-container:
-    image: gcr.io/kaniko-project/executor:debug
-    environment:
-      TOKEN:
+      - tar -czf forgejo-cli-linux.tar.gz -C target/x86_64-unknown-linux-gnu/release fj
+  publish-container:
+    image: code.cartoon-aa.xyz/ci/plugin-kaniko:2.1.0
+    settings:
+      repo: ${CI_REPO_OWNER,,}/${CI_REPO_NAME}
+      platforms: linux/amd64
+      auto_tag: true
+      registry: ${CI_FORGE_URL##https://}
+      username: ${CI_REPO_OWNER}
+      password:
         from_secret: token
-    commands:
-      - export FORGE_HOST=$(echo $CI_FORGE_URL | sed -E 's_^https?://__')
-      - export AUTH="$(echo -n $CI_REPO_OWNER:$TOKEN | base64)"
-      - echo "{\"auths\":{\"$FORGE_HOST\":{\"auth\":\"$AUTH\"}}}" > "/kaniko/.docker/config.json"
-      - export CONTAINER_OWNER=$(echo $CI_REPO_OWNER | awk '{print tolower($0)}')
-      - executor --context ./ --dockerfile ./Dockerfile --destination "$FORGE_HOST/$CONTAINER_OWNER/forgejo-cli:latest" 
-  release:
+  publish-builds:
     image: codeberg.org/cyborus/forgejo-cli:latest
     pull: true
     environment:
@@ -53,6 +46,6 @@ steps:
       - export FORGE_HOST=$(echo $CI_FORGE_URL | sed -E 's_^https?://__')
       - fj --host $CI_FORGE_URL auth add-key $CI_REPO_OWNER $TOKEN
       - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-windows.zip
-      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-linux.gz
+      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-linux.tar.gz
       - fj auth logout $FORGE_HOST
 
