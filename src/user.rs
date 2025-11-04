@@ -82,6 +82,9 @@ pub enum UserSubcommand {
         /// Method by which to sort the list
         #[clap(long)]
         sort: Option<RepoSortOrder>,
+        /// Page of repos to get
+        #[clap(long)]
+        page: Option<u32>,
     },
     /// List the organizations a user is a member of
     Orgs {
@@ -191,7 +194,8 @@ impl UserCommand {
                 user,
                 starred,
                 sort,
-            } => list_repos(&api, user.as_deref(), starred, sort).await?,
+                page,
+            } => list_repos(&api, user.as_deref(), starred, sort, page).await?,
             UserSubcommand::Orgs { user } => list_orgs(&api, user.as_deref()).await?,
             UserSubcommand::Activity { user } => list_activity(&api, user.as_deref()).await?,
             UserSubcommand::Edit(cmd) => match cmd {
@@ -480,20 +484,21 @@ async fn list_repos(
     user: Option<&str>,
     starred: bool,
     sort: Option<RepoSortOrder>,
+    page: Option<u32>,
 ) -> eyre::Result<()> {
     let (_, mut repos) = if starred {
         match user {
             Some(user) => {
                 let query = forgejo_api::structs::UserListStarredQuery {
                     limit: Some(u32::MAX),
-                    ..Default::default()
+                    page,
                 };
                 api.user_list_starred(user, query).await?
             }
             None => {
                 let query = forgejo_api::structs::UserCurrentListStarredQuery {
                     limit: Some(u32::MAX),
-                    ..Default::default()
+                    page,
                 };
                 api.user_current_list_starred(query).await?
             }
@@ -503,13 +508,14 @@ async fn list_repos(
             Some(user) => {
                 let query = forgejo_api::structs::UserListReposQuery {
                     limit: Some(u32::MAX),
-                    ..Default::default()
+                    page,
                 };
                 api.user_list_repos(user, query).await?
             }
             None => {
                 let query = forgejo_api::structs::UserCurrentListReposQuery {
                     limit: Some(u32::MAX),
+                    page,
                     ..Default::default()
                 };
                 api.user_current_list_repos(query).await?
