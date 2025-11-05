@@ -486,7 +486,7 @@ async fn list_repos(
     sort: Option<RepoSortOrder>,
     page: Option<u32>,
 ) -> eyre::Result<()> {
-    let (_, mut repos) = if starred {
+    let (headers, mut repos) = if starred {
         match user {
             Some(user) => {
                 let query = forgejo_api::structs::UserListStarredQuery {
@@ -548,7 +548,13 @@ async fn list_repos(
         };
         repos.sort_unstable_by(sort_fn);
 
-        let SpecialRender { bullet, .. } = *crate::special_render();
+        let SpecialRender {
+            bullet,
+            bold,
+            dash,
+            reset,
+            ..
+        } = *crate::special_render();
         for repo in &repos {
             let name = repo
                 .full_name
@@ -556,10 +562,24 @@ async fn list_repos(
                 .ok_or_eyre("repo does not have name")?;
             println!("{bullet} {name}");
         }
+
+        let page = page.unwrap_or(1);
+        let page_start = (page - 1) * 50;
+        let total_items = match headers.x_total_count {
+            Some(t) => t as usize,
+            None => repos.len(),
+        };
+        let pages_total = total_items.div_ceil(50);
+
         if repos.len() == 1 {
             println!("1 repo");
         } else {
-            println!("{} repos", repos.len());
+            println!(
+                "Showing {bold}{}{dash}{}{reset} of {bold}{}{reset} results ({page}/{pages_total})",
+                page_start + 1,
+                page_start + repos.len() as u32,
+                total_items,
+            );
         }
     }
 
