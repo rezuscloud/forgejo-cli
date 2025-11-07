@@ -81,7 +81,7 @@ pub enum IssueSubcommand {
 #[derive(Clone, Debug)]
 pub struct IssueId {
     pub repo: Option<RepoArg>,
-    pub number: u64,
+    pub number: i64,
 }
 
 impl FromStr for IssueId {
@@ -94,7 +94,7 @@ impl FromStr for IssueId {
         };
         Ok(Self {
             repo,
-            number: number.parse()?,
+            number: number.parse::<u64>()? as i64,
         })
     }
 }
@@ -305,7 +305,7 @@ async fn create_issue(
     Ok(())
 }
 
-pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
     let crate::SpecialRender {
         dash,
 
@@ -379,7 +379,7 @@ async fn view_issues(
     let labels = labels
         .map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
         .unwrap_or_default();
-    let mut query = forgejo_api::structs::IssueListIssuesQuery {
+    let query = forgejo_api::structs::IssueListIssuesQuery {
         q: query_str,
         labels: Some(labels.join(",")),
         created_by: creator,
@@ -390,20 +390,12 @@ async fn view_issues(
         since: None,
         before: None,
         mentioned_by: None,
-        page: None,
-        limit: None,
+        sort: None,
     };
-    let mut issues = Vec::new();
-    for page_idx in 1.. {
-        query.page = Some(page_idx);
-        let (headers, page) = api
-            .issue_list_issues(repo.owner(), repo.name(), query.clone())
-            .await?;
-        issues.extend(page);
-        if issues.len() >= headers.x_total_count.unwrap_or_default() as usize {
-            break;
-        }
-    }
+    let issues = api
+        .issue_list_issues(repo.owner(), repo.name(), query)
+        .all()
+        .await?;
     if issues.len() == 1 {
         println!("1 issue");
     } else {
@@ -430,7 +422,7 @@ async fn view_issues(
     Ok(())
 }
 
-pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -> eyre::Result<()> {
+pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: i64, idx: usize) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -445,7 +437,7 @@ pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -
     Ok(())
 }
 
-pub async fn view_comments(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn view_comments(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -498,7 +490,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
     Ok(())
 }
 
-pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
     let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
     let html_url = issue
         .html_url
@@ -511,7 +503,7 @@ pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Resu
 pub async fn add_comment(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     body: Option<String>,
 ) -> eyre::Result<()> {
     let body = match body {
@@ -538,7 +530,7 @@ pub async fn add_comment(
 pub async fn edit_title(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     new_title: Option<String>,
 ) -> eyre::Result<()> {
     let new_title = match new_title {
@@ -585,7 +577,7 @@ pub async fn edit_title(
 pub async fn edit_body(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     new_body: Option<String>,
 ) -> eyre::Result<()> {
     let new_body = match new_body {
@@ -625,7 +617,7 @@ pub async fn edit_body(
 pub async fn edit_comment(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     idx: usize,
     new_body: Option<String>,
 ) -> eyre::Result<()> {
@@ -656,7 +648,7 @@ pub async fn edit_comment(
     };
     let id = comment
         .id
-        .ok_or_else(|| eyre::eyre!("comment does not have id"))? as u64;
+        .ok_or_else(|| eyre::eyre!("comment does not have id"))?;
     api.issue_edit_comment(
         repo.owner(),
         repo.name(),
@@ -673,7 +665,7 @@ pub async fn edit_comment(
 pub async fn close_issue(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     message: Option<Option<String>>,
 ) -> eyre::Result<()> {
     if let Some(message) = message {
