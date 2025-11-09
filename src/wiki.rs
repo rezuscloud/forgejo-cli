@@ -12,31 +12,29 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct WikiCommand {
-    /// The local git remote that points to the repo to operate on.
-    #[clap(long, short = 'R')]
+    /// The local git remote that points to the repo to operate on
+    #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
+
+    /// The repo to operate on
+    #[clap(long, short, global = true)]
+    repo: Option<RepoArg>,
+
     #[clap(subcommand)]
     command: WikiSubcommand,
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum WikiSubcommand {
-    Contents {
-        repo: Option<RepoArg>,
-    },
+    Contents,
     View {
-        #[clap(long, short)]
-        repo: Option<RepoArg>,
         page: String,
     },
     Clone {
-        repo: Option<RepoArg>,
         #[clap(long, short)]
         path: Option<PathBuf>,
     },
     Browse {
-        #[clap(long, short)]
-        repo: Option<RepoArg>,
         page: String,
     },
 }
@@ -45,28 +43,19 @@ impl WikiCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         use WikiSubcommand::*;
 
-        let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref(), &keys)?;
+        let repo = RepoInfo::get_current(host_name, self.repo.as_ref(), self.remote.as_deref(), &keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         let repo = repo
             .name()
             .ok_or_else(|| eyre::eyre!("couldn't guess repo"))?;
 
         match self.command {
-            Contents { repo: _ } => wiki_contents(repo, &api).await?,
-            View { repo: _, page } => view_wiki_page(repo, &api, &page).await?,
-            Clone { repo: _, path } => clone_wiki(repo, &api, path).await?,
-            Browse { repo: _, page } => browse_wiki_page(repo, &api, &page).await?,
+            Contents => wiki_contents(repo, &api).await?,
+            View { page } => view_wiki_page(repo, &api, &page).await?,
+            Clone { path } => clone_wiki(repo, &api, path).await?,
+            Browse { page } => browse_wiki_page(repo, &api, &page).await?,
         }
         Ok(())
-    }
-
-    fn repo(&self) -> Option<&RepoArg> {
-        use WikiSubcommand::*;
-        match &self.command {
-            Contents { repo } | View { repo, .. } | Clone { repo, .. } | Browse { repo, .. } => {
-                repo.as_ref()
-            }
-        }
     }
 }
 

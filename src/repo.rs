@@ -409,9 +409,17 @@ pub enum RepoCommand {
         ssh: Option<Option<bool>>,
     },
     /// Add a star to a repo
-    Star { repo: RepoArg },
+    Star {
+        repo: Option<RepoArg>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
     /// Take away a star from a repo
-    Unstar { repo: RepoArg },
+    Unstar {
+        repo: Option<RepoArg>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
     /// Delete a repository
     ///
     /// This cannot be undone!
@@ -525,17 +533,17 @@ impl RepoCommand {
                     .unwrap_or(true);
                 cmd_clone_repo(&api, name, path, ssh).await?;
             }
-            RepoCommand::Star { repo } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
+            RepoCommand::Star { repo, remote } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), remote.as_deref(), &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
-                let name = repo.name().unwrap();
+                let name = repo.name().ok_or_eyre("couldn't get repo name, please specify")?;
                 api.user_current_put_star(name.owner(), name.name()).await?;
                 println!("Starred {}/{}!", name.owner(), name.name());
             }
-            RepoCommand::Unstar { repo } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
+            RepoCommand::Unstar { repo, remote } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), remote.as_deref(), &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
-                let name = repo.name().unwrap();
+                let name = repo.name().ok_or_eyre("couldn't get repo name, please specify")?;
                 api.user_current_delete_star(name.owner(), name.name())
                     .await?;
                 println!("Removed star from {}/{}", name.owner(), name.name());

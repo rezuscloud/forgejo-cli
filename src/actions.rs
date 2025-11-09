@@ -19,11 +19,12 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct ActionsCommand {
-    /// The local git remote that points to the repo to operate on.
-    #[clap(long, short = 'R')]
+    /// The local git remote that points to the repo to operate on
+    #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
 
-    #[clap(long, short = 'r')]
+    /// The repo to operate on
+    #[clap(long, short, global = true)]
     repo: Option<RepoArg>,
 
     #[clap(subcommand)]
