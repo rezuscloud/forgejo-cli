@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use clap::{Args, Subcommand};
@@ -27,8 +28,18 @@ pub enum IssueSubcommand {
         /// The text body of the issue
         ///
         /// Leaving this out will open your editor.
-        #[clap(long)]
+        #[clap(long, conflicts_with = "template")]
         body: Option<String>,
+        /// The template to use when creating an issue
+        ///
+        /// If the repo has disabled blank issues, this flag is required.
+        #[clap(long)]
+        template: Option<String>,
+        /// Don't use a template for this issue.
+        ///
+        /// If the repo has disabled blank issues, this will fail.
+        #[clap(long, conflicts_with = "template")]
+        no_template: bool,
         /// The repo to create this issue on
         #[clap(long, short)]
         repo: Option<RepoArg>,
@@ -177,8 +188,10 @@ impl IssueCommand {
                 repo: _,
                 title,
                 body,
+                template,
+                no_template,
                 web,
-            } => create_issue(repo, &api, title, body, web).await?,
+            } => create_issue(repo, &api, title, body, template, no_template, web).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_issue(repo, &api, id.number).await?,
                 ViewCommand::Comment { idx } => view_comment(repo, &api, id.number, idx).await?,
@@ -240,39 +253,189 @@ impl IssueCommand {
     }
 }
 
+struct MarkdownTemplate {
+    labels: Option<Vec<String>>,
+    body: String,
+}
+
+impl MarkdownTemplate {
+    fn new(md: &str) -> eyre::Result<Self> {
+        let md_without_start = md
+            .strip_prefix("---\n")
+            .or_else(|| md.strip_prefix("---\r\n"));
+        let (front_matter, body) = md_without_start
+            .and_then(|md| md.split_once("\n---\n"))
+            .or_else(|| md_without_start.and_then(|md| md.split_once("\r\n---\r\n")))
+            .ok_or_eyre("no front matter")?;
+
+        #[derive(serde::Deserialize)]
+        struct TemplateMetadata {
+            labels: Option<Vec<String>>,
+        }
+
+        let metadata = serde_saphyr::from_str::<TemplateMetadata>(front_matter)?;
+
+        Ok(Self {
+            labels: metadata.labels,
+            body: body.to_owned(),
+        })
+    }
+}
+
+async fn get_template_file(
+    repo: &RepoName,
+    api: &Forgejo,
+    name: &str,
+) -> eyre::Result<(Vec<u8>, bool)> {
+    const DIRS: [&str; 8] = [
+        ".forgejo/issue_template",
+        ".forgejo/ISSUE_TEMPLATE",
+        ".gitea/issue_template",
+        ".gitea/ISSUE_TEMPLATE",
+        ".github/issue_template",
+        ".github/ISSUE_TEMPLATE",
+        "docs/issue_template",
+        "docs/ISSUE_TEMPLATE",
+    ];
+    const EXTS: [&str; 3] = ["md", "yml", "yaml"];
+    let query = forgejo_api::structs::RepoGetRawFileQuery { r#ref: None };
+    for dir in DIRS {
+        for ext in EXTS {
+            let path = format!("{dir}/{name}.{ext}");
+            let file = api
+                .repo_get_raw_file(repo.owner(), repo.name(), &path, query.clone())
+                .await;
+            match file {
+                Ok(file) => {
+                    let is_yaml = matches!(ext, "yml" | "yaml");
+                    return Ok((file, is_yaml));
+                }
+                Err(forgejo_api::ForgejoError::ApiError(status, ..))
+                    if status == hyper::http::StatusCode::NOT_FOUND =>
+                {
+                    ()
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+    }
+    eyre::bail!("Could not find template '{name}'");
+}
+
 async fn create_issue(
     repo: &RepoName,
     api: &Forgejo,
     title: Option<String>,
     body: Option<String>,
+    template: Option<String>,
+    no_template: bool,
     web: bool,
 ) -> eyre::Result<()> {
     match (title, web) {
         (Some(title), false) => {
-            let body = match body {
-                Some(body) => body,
-                None => {
-                    let mut body = String::new();
-                    crate::editor(&mut body, Some("md")).await?;
-                    body
-                }
-            };
-            let issue = api
-                .issue_create_issue(
+            let blank_issues_enabled = api
+                .repo_get_issue_config(repo.owner(), repo.name())
+                .await
+                .ok()
+                .and_then(|cfg| cfg.blank_issues_enabled);
+            let opts = if let Some(template_name) = template {
+                eyre::ensure!(
+                    blank_issues_enabled.is_some(),
+                    "{}/{} does not have any issue templates",
                     repo.owner(),
-                    repo.name(),
+                    repo.name()
+                );
+                let (template_file, is_yaml) = get_template_file(repo, api, &template_name).await?;
+                let template_file = std::str::from_utf8(&template_file)?;
+                if is_yaml {
+                    todo!()
+                } else {
+                    let mut tmpl = MarkdownTemplate::new(template_file)?;
+                    crate::editor(&mut tmpl.body, Some("md")).await?;
+                    let labels = if let Some(labels) = tmpl.labels {
+                        // convert from label names to label ids
+                        let mut all_labels = BTreeMap::new();
+                        for page_num in 1.. {
+                            let query = forgejo_api::structs::IssueListLabelsQuery {
+                                page: Some(page_num),
+                                limit: Some(50),
+                            };
+                            let (headers, page) = api
+                                .issue_list_labels(repo.owner(), repo.name(), query)
+                                .await?;
+                            let empty_page = page.is_empty();
+                            for label in page {
+                                let name = label.name.ok_or_eyre("label does not have name")?;
+                                let id = label.id.ok_or_eyre("label does not have name")?;
+                                all_labels.insert(name, id);
+                            }
+                            if empty_page
+                                || headers
+                                    .x_total_count
+                                    .is_none_or(|count| labels.len() >= count as usize)
+                            {
+                                break;
+                            }
+                        }
+                        Some(
+                            labels
+                                .into_iter()
+                                .filter_map(|name| all_labels.remove(&name))
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
                     CreateIssueOption {
-                        body: Some(body),
+                        body: Some(tmpl.body),
                         title,
                         assignee: None,
                         assignees: None,
                         closed: None,
                         due_date: None,
-                        labels: None,
+                        labels: labels,
                         milestone: None,
                         r#ref: None,
-                    },
-                )
+                    }
+                }
+            } else {
+                eyre::ensure!(
+                    blank_issues_enabled.unwrap_or(true),
+                    "{}/{} requires using a template. \
+                    Please choose one with `--template <NAME>`",
+                    repo.owner(),
+                    repo.name()
+                );
+                eyre::ensure!(
+                    blank_issues_enabled.is_none() || no_template,
+                    "{}/{} uses issue templates. \
+                    Please choose one with `--template <NAME>`, \
+                    or use `--no-template` to write one from scratch",
+                    repo.owner(),
+                    repo.name()
+                );
+                let body = match body {
+                    Some(body) => body,
+                    None => {
+                        let mut body = String::new();
+                        crate::editor(&mut body, Some("md")).await?;
+                        body
+                    }
+                };
+                CreateIssueOption {
+                    body: Some(body),
+                    title,
+                    assignee: None,
+                    assignees: None,
+                    closed: None,
+                    due_date: None,
+                    labels: None,
+                    milestone: None,
+                    r#ref: None,
+                }
+            };
+            let issue = api
+                .issue_create_issue(repo.owner(), repo.name(), opts)
                 .await?;
             let number = issue
                 .number
