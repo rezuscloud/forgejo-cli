@@ -12,7 +12,7 @@ use crate::repo::{RepoArg, RepoInfo, RepoName};
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
     /// The local git remote that points to the repo to operate on.
-    #[clap(long, short = 'R')]
+    #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
     #[clap(subcommand)]
     command: IssueSubcommand,
@@ -56,6 +56,7 @@ pub enum IssueSubcommand {
     },
     /// Search for an issue in a repo
     Search {
+        /// The repo to search in
         #[clap(long, short)]
         repo: Option<RepoArg>,
         query: Option<String>,
