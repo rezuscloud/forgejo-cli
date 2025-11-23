@@ -105,6 +105,30 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     .await?
 }
 
+async fn prompt_bool(msg: &str, default_answer: bool) -> eyre::Result<bool> {
+    let msg = if default_answer {
+        format!("{msg} [Y/n]: ")
+    } else {
+        format!("{msg} [y/N]: ")
+    };
+
+    loop {
+        let input = readline(&msg).await?;
+        let input = input.trim();
+
+        if input.is_empty() {
+            return Ok(default_answer);
+        }
+
+        if input.eq_ignore_ascii_case("y") {
+            return Ok(true);
+        }
+        if input.eq_ignore_ascii_case("n") {
+            return Ok(false);
+        }
+    }
+}
+
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     let editor = std::path::PathBuf::from(
         std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?,
@@ -798,5 +822,27 @@ impl<T: Display, F: Display> Display for DisplayOptional<T, F> {
         } else {
             write!(f, "{}", self.1)
         }
+    }
+}
+
+/// When formatted, show the boolean with coloring.
+struct DisplayBool(bool);
+
+impl Display for DisplayBool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let SpecialRender {
+            bright_red,
+            bright_green,
+            reset,
+            ..
+        } = *special_render();
+
+        if self.0 {
+            write!(f, "{bright_green}true{reset}")?;
+        } else {
+            write!(f, "{bright_red}false{reset}")?;
+        }
+
+        Ok(())
     }
 }
