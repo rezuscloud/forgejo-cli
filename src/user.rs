@@ -83,8 +83,8 @@ pub enum UserSubcommand {
         #[clap(long)]
         sort: Option<RepoSortOrder>,
         /// Page of repos to get
-        #[clap(long)]
-        page: Option<u32>,
+        #[clap(long, default_value_t = 1)]
+        page: u32,
     },
     /// List the organizations a user is a member of
     Orgs {
@@ -374,21 +374,9 @@ async fn unfollow_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
 }
 
 async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let (_, following) = match user {
-        Some(user) => {
-            let query = forgejo_api::structs::UserListFollowingQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_list_following(user, query).await?
-        }
-        None => {
-            let query = forgejo_api::structs::UserCurrentListFollowingQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_current_list_following(query).await?
-        }
+    let following = match user {
+        Some(user) => api.user_list_following(user).all().await?,
+        None => api.user_current_list_following().all().await?,
     };
 
     if following.is_empty() {
@@ -417,20 +405,8 @@ async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 
 async fn list_followers(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
     let (_, followers) = match user {
-        Some(user) => {
-            let query = forgejo_api::structs::UserListFollowersQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_list_followers(user, query).await?
-        }
-        None => {
-            let query = forgejo_api::structs::UserCurrentListFollowersQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_current_list_followers(query).await?
-        }
+        Some(user) => api.user_list_followers(user).await?,
+        None => api.user_current_list_followers().await?,
     };
 
     if followers.is_empty() {
@@ -484,41 +460,29 @@ async fn list_repos(
     user: Option<&str>,
     starred: bool,
     sort: Option<RepoSortOrder>,
-    page: Option<u32>,
+    page: u32,
 ) -> eyre::Result<()> {
     let (headers, mut repos) = if starred {
         match user {
-            Some(user) => {
-                let query = forgejo_api::structs::UserListStarredQuery {
-                    limit: Some(u32::MAX),
-                    page,
-                };
-                api.user_list_starred(user, query).await?
-            }
+            Some(user) => api.user_list_starred(user).page(page).page_size(50).await?,
             None => {
-                let query = forgejo_api::structs::UserCurrentListStarredQuery {
-                    limit: Some(u32::MAX),
-                    page,
-                };
-                api.user_current_list_starred(query).await?
+                api.user_current_list_starred()
+                    .page(page)
+                    .page_size(50)
+                    .await?
             }
         }
     } else {
         match user {
-            Some(user) => {
-                let query = forgejo_api::structs::UserListReposQuery {
-                    limit: Some(u32::MAX),
-                    page,
-                };
-                api.user_list_repos(user, query).await?
-            }
+            Some(user) => api.user_list_repos(user).page(page).page_size(50).await?,
             None => {
                 let query = forgejo_api::structs::UserCurrentListReposQuery {
-                    limit: Some(u32::MAX),
-                    page,
                     ..Default::default()
                 };
-                api.user_current_list_repos(query).await?
+                api.user_current_list_repos(query)
+                    .page(page)
+                    .page_size(50)
+                    .await?
             }
         }
     };
@@ -563,7 +527,6 @@ async fn list_repos(
             println!("{bullet} {name}");
         }
 
-        let page = page.unwrap_or(1);
         let page_start = (page - 1) * 50;
         let total_items = match headers.x_total_count {
             Some(t) => t as usize,
@@ -587,21 +550,9 @@ async fn list_repos(
 }
 
 async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let (_, mut orgs) = match user {
-        Some(user) => {
-            let query = forgejo_api::structs::OrgListUserOrgsQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.org_list_user_orgs(user, query).await?
-        }
-        None => {
-            let query = forgejo_api::structs::OrgListCurrentUserOrgsQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.org_list_current_user_orgs(query).await?
-        }
+    let mut orgs = match user {
+        Some(user) => api.org_list_user_orgs(user).all().await?,
+        None => api.org_list_current_user_orgs().all().await?,
     };
 
     if orgs.is_empty() {
@@ -892,6 +843,7 @@ fn default_settings_opt() -> forgejo_api::structs::UserSettingsOptions {
         language: None,
         location: None,
         pronouns: None,
+        hide_pronouns: None,
         theme: None,
         website: None,
     }

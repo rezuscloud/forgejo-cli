@@ -63,12 +63,9 @@ impl WikiCommand {
 async fn wiki_contents(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
     let SpecialRender { bullet, .. } = *crate::special_render();
 
-    let query = forgejo_api::structs::RepoGetWikiPagesQuery {
-        page: None,
-        limit: None,
-    };
-    let (_, pages) = api
-        .repo_get_wiki_pages(repo.owner(), repo.name(), query)
+    let pages = api
+        .repo_get_wiki_pages(repo.owner(), repo.name())
+        .all()
         .await?;
     for page in pages {
         let title = page

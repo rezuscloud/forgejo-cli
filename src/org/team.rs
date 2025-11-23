@@ -3,12 +3,10 @@ use std::collections::BTreeMap;
 use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
-    structs::{
-        CreateTeamOption, EditTeamOption, OrgListTeamMembersQuery, OrgListTeamReposQuery,
-        OrgListTeamsQuery,
-    },
+    structs::{CreateTeamOption, EditTeamOption},
     Forgejo,
 };
+use futures::{future, TryStreamExt};
 
 use crate::SpecialRender;
 
@@ -172,43 +170,22 @@ async fn find_team_by_name(
     org: &str,
     name: &str,
 ) -> eyre::Result<forgejo_api::structs::Team> {
-    let mut seen = 0;
-    for page in 1.. {
-        let query = OrgListTeamsQuery {
-            page: Some(page),
-            limit: None,
-        };
-        let (headers, teams) = api.org_list_teams(&org, query).await?;
-        seen += teams.len();
-        for team in teams {
-            if team
-                .name
-                .as_deref()
-                .is_some_and(|team_name| team_name == name)
-            {
-                return Ok(team);
-            }
-        }
-        if seen >= headers.x_total_count.unwrap_or_default() as usize {
-            break;
-        }
-    }
-    eyre::bail!("Unknown team {name}");
+    api.org_list_teams(&org)
+        .stream()
+        .try_filter(|team| {
+            future::ready(
+                team.name
+                    .as_deref()
+                    .is_some_and(|team_name| team_name == name),
+            )
+        })
+        .try_next()
+        .await?
+        .ok_or_else(|| eyre::eyre!("Unknown team {name}"))
 }
 
 async fn list_teams(api: &Forgejo, org: String) -> eyre::Result<()> {
-    let mut teams = Vec::new();
-    for page_idx in 1.. {
-        let query = OrgListTeamsQuery {
-            page: Some(page_idx),
-            limit: None,
-        };
-        let (headers, page) = api.org_list_teams(&org, query).await?;
-        teams.extend(page);
-        if teams.len() >= headers.x_total_count.unwrap_or_default() as usize {
-            break;
-        }
-    }
+    let mut teams = api.org_list_teams(&org).all().await?;
     teams.sort_unstable_by_key(permission_sort_id);
 
     let SpecialRender {
@@ -438,7 +415,7 @@ async fn edit_team(
         units: None,
         units_map: Some(units),
     };
-    api.org_edit_team(id as u32, options).await?;
+    api.org_edit_team(id, options).await?;
 
     Ok(())
 }
@@ -452,7 +429,7 @@ async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<(
             .await?
             .id
             .ok_or_eyre("team does not have id")?;
-        api.org_delete_team(id as u64).await?;
+        api.org_delete_team(id).await?;
         println!("Team deleted.");
     } else {
         println!("Team not deleted.");
@@ -469,8 +446,8 @@ pub enum TeamRepoSubcommand {
         /// The name of the team to view the repos of.
         team: String,
         /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
+        #[clap(long, short, default_value_t = 1)]
+        page: u32,
     },
     /// Add access to an existing repo to a team
     Add {
@@ -511,21 +488,12 @@ impl TeamRepoSubcommand {
     }
 }
 
-async fn list_team_repos(
-    api: &Forgejo,
-    org: String,
-    team: String,
-    page: Option<u32>,
-) -> eyre::Result<()> {
+async fn list_team_repos(api: &Forgejo, org: String, team: String, page: u32) -> eyre::Result<()> {
     let id = find_team_by_name(api, &org, &team)
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    let query = OrgListTeamReposQuery {
-        page,
-        limit: Some(20),
-    };
-    let (headers, repos) = api.org_list_team_repos(id as u64, query).await?;
+    let (headers, repos) = api.org_list_team_repos(id).page(page).page_size(20).await?;
 
     let SpecialRender { bullet, .. } = crate::special_render();
     if repos.is_empty() {
@@ -538,8 +506,8 @@ async fn list_team_repos(
                 .ok_or_eyre("repo does not have full name")?;
             println!("{bullet} {full_name}");
         }
-        let count = headers.x_total_count.unwrap_or_default() as u64;
-        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
+        let count = headers.x_total_count.unwrap_or_default();
+        println!("Page {} of {}", page, (count as u64).div_ceil(20));
     }
     Ok(())
 }
@@ -554,7 +522,7 @@ async fn add_repo_to_team(
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    api.org_add_team_repository(id as u64, &org, &repo).await?;
+    api.org_add_team_repository(id, &org, &repo).await?;
     let SpecialRender {
         bold,
         reset,
@@ -575,8 +543,7 @@ async fn remove_repo_from_team(
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    api.org_remove_team_repository(id as u64, &org, &repo)
-        .await?;
+    api.org_remove_team_repository(id, &org, &repo).await?;
     let SpecialRender {
         bold,
         reset,
@@ -596,8 +563,8 @@ pub enum TeamMemberSubcommand {
         /// The name of the team to view the members of.
         team: String,
         /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
+        #[clap(long, short, default_value_t = 1)]
+        page: u32,
     },
     /// Add someone to a team
     Add {
@@ -640,17 +607,17 @@ async fn list_team_members(
     api: &Forgejo,
     org: String,
     team: String,
-    page: Option<u32>,
+    page: u32,
 ) -> eyre::Result<()> {
     let id = find_team_by_name(api, &org, &team)
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    let query = OrgListTeamMembersQuery {
-        page,
-        limit: Some(20),
-    };
-    let (headers, users) = api.org_list_team_members(id as u64, query).await?;
+    let (headers, users) = api
+        .org_list_team_members(id)
+        .page(page)
+        .page_size(20)
+        .await?;
 
     let SpecialRender {
         bullet,
@@ -674,8 +641,8 @@ async fn list_team_members(
                 None => println!("{bullet} {bright_cyan}{username}{reset}"),
             }
         }
-        let count = headers.x_total_count.unwrap_or_default() as u64;
-        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
+        let count = headers.x_total_count.unwrap_or_default();
+        println!("Page {} of {}", page, (count as u64).div_ceil(20));
     }
     Ok(())
 }
@@ -690,7 +657,7 @@ async fn add_user_to_team(
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    api.org_add_team_member(id as u64, &user).await?;
+    api.org_add_team_member(id, &user).await?;
     let SpecialRender {
         bold,
         reset,
@@ -712,7 +679,7 @@ async fn remove_user_from_team(
         .await?
         .id
         .ok_or_eyre("team does not have id")?;
-    api.org_remove_team_member(id as u64, &user).await?;
+    api.org_remove_team_member(id, &user).await?;
     let SpecialRender {
         bold,
         reset,

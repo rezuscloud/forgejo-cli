@@ -4,11 +4,12 @@ use clap::{Args, Subcommand};
 use eyre::{Context, OptionExt};
 use forgejo_api::{
     structs::{
-        CreatePullRequestOption, MergePullRequestOption, RepoGetPullRequestCommitsQuery,
-        RepoGetPullRequestFilesQuery, StateType,
+        CreatePullRequestOption, IssueListLabelsQuery, MergePullRequestOption, OrgListLabelsQuery,
+        RepoGetPullRequestCommitsQuery, RepoGetPullRequestFilesQuery, StateType,
     },
     Forgejo,
 };
+use futures::stream::{StreamExt, TryStreamExt};
 
 use crate::{
     issues::IssueId,
@@ -169,12 +170,12 @@ pub enum MergeMethod {
 
 #[derive(Clone, Copy, Debug)]
 pub enum PrNumber {
-    This(u64),
-    Parent(u64),
+    This(i64),
+    Parent(i64),
 }
 
 impl PrNumber {
-    fn number(self) -> u64 {
+    fn number(self) -> i64 {
         match self {
             PrNumber::This(x) => x,
             PrNumber::Parent(x) => x,
@@ -187,9 +188,9 @@ impl FromStr for PrNumber {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(num) = s.strip_prefix("^") {
-            Ok(Self::Parent(num.parse()?))
+            Ok(Self::Parent(num.parse::<u64>()? as i64))
         } else {
-            Ok(Self::This(s.parse()?))
+            Ok(Self::This(s.parse::<u64>()? as i64))
         }
     }
 }
@@ -449,7 +450,7 @@ impl PrCommand {
     }
 }
 
-pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<()> {
+pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::Result<()> {
     let crate::SpecialRender {
         dash,
 
@@ -464,17 +465,17 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::R
         ..
     } = crate::special_render();
     let pr = try_get_pr(repo, api, id).await?;
-    let id = pr.number.ok_or_eyre("pr does not have number")? as u64;
+    let id = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
 
     let mut additions = 0;
     let mut deletions = 0;
     let query = RepoGetPullRequestFilesQuery {
-        limit: Some(u32::MAX),
         ..Default::default()
     };
-    let (_, files) = api
+    let files = api
         .repo_get_pull_request_files(repo.owner(), repo.name(), id, query)
+        .all()
         .await?;
     for file in files {
         additions += file.additions.unwrap_or_default();
@@ -564,7 +565,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::R
     Ok(())
 }
 
-async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre::Result<()> {
+async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<i64>) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
     let labels = pr.labels.as_deref().unwrap_or_default();
     render_label_list(&labels)?;
@@ -661,7 +662,7 @@ fn darken(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
 async fn view_pr_status(
     repo: &RepoName,
     api: &Forgejo,
-    id: Option<u64>,
+    id: Option<i64>,
     wait: bool,
 ) -> eyre::Result<()> {
     if wait {
@@ -687,7 +688,7 @@ async fn view_pr_status(
                     let all_finished = commit_statuses
                         .iter()
                         .flat_map(|x| x.status.as_ref())
-                        .all(|state| state != "pending");
+                        .all(|state| *state != forgejo_api::structs::CommitStatusState::Pending);
                     if all_finished {
                         break pr_status;
                     }
@@ -717,20 +718,19 @@ enum PrStatus {
     },
 }
 
-async fn get_pr_status(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre::Result<PrStatus> {
+async fn get_pr_status(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::Result<PrStatus> {
     let pr = try_get_pr(repo, api, id).await?;
     if pr.merged.ok_or_eyre("pr merge status unknown")? {
         Ok(PrStatus::Merged { pr })
     } else {
-        let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
+        let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
         let query = forgejo_api::structs::RepoGetPullRequestCommitsQuery {
-            page: None,
-            limit: Some(u32::MAX),
             verification: Some(false),
             files: Some(false),
         };
-        let (_commit_headers, commits) = api
+        let commits = api
             .repo_get_pull_request_commits(repo.owner(), repo.name(), pr_number, query)
+            .all()
             .await?;
         let latest_commit = commits
             .iter()
@@ -740,16 +740,20 @@ async fn get_pr_status(repo: &RepoName, api: &Forgejo, id: Option<u64>) -> eyre:
             .sha
             .as_deref()
             .ok_or_eyre("commit does not have sha")?;
-        let query = forgejo_api::structs::RepoGetCombinedStatusByRefQuery {
-            page: None,
-            limit: Some(u32::MAX),
-        };
-        let combined_status = api
-            .repo_get_combined_status_by_ref(repo.owner(), repo.name(), sha, query)
+        let commit_statuses = api
+            .repo_get_combined_status_by_ref(repo.owner(), repo.name(), sha)
+            .stream_pages()
+            .map_ok(|page| {
+                futures::stream::iter(
+                    page.statuses
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(Result::<_, forgejo_api::ForgejoError>::Ok),
+                )
+            })
+            .try_flatten()
+            .try_collect::<Vec<_>>()
             .await?;
-        let commit_statuses = combined_status
-            .statuses
-            .ok_or_eyre("combined status does not have status list")?;
 
         Ok(PrStatus::Open {
             pr,
@@ -826,10 +830,12 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                 StateType::Closed => println!("{bright_red}Closed{reset} {dash} Reopen to merge"),
             }
 
+            use forgejo_api::structs::CommitStatusState;
+
             for status in commit_statuses {
                 let state = status
                     .status
-                    .as_deref()
+                    .as_ref()
                     .ok_or_eyre("status does not have status")?;
                 let context = status
                     .context
@@ -837,10 +843,10 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                     .ok_or_eyre("status does not have context")?;
                 print!("{bullet} ");
                 match state {
-                    "success" => print!("{bright_green}Success{reset}"),
-                    "pending" => print!("{yellow}Pending{reset}"),
-                    "failure" => print!("{bright_red}Failure{reset}"),
-                    _ => eyre::bail!("invalid status"),
+                    CommitStatusState::Success => print!("{bright_green}Success{reset}"),
+                    CommitStatusState::Pending => print!("{yellow}Pending{reset}"),
+                    CommitStatusState::Failure => print!("{bright_red}Failure{reset}"),
+                    CommitStatusState::Error => print!("{bright_red}Error{reset}"),
                 };
                 println!(" {dash} {context}");
             }
@@ -852,29 +858,22 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
 async fn edit_pr_labels(
     repo: &RepoName,
     api: &Forgejo,
-    pr: Option<u64>,
+    pr: Option<i64>,
     add: Vec<String>,
     rm: Vec<String>,
 ) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
 
-    let query = forgejo_api::structs::IssueListLabelsQuery {
-        limit: Some(u32::MAX),
-        ..Default::default()
-    };
-    let (_, mut labels) = api
-        .issue_list_labels(repo.owner(), repo.name(), query)
+    let mut labels = api
+        .issue_list_labels(repo.owner(), repo.name(), IssueListLabelsQuery::default())
+        .all()
         .await?;
-    let query = forgejo_api::structs::OrgListLabelsQuery {
-        limit: Some(u32::MAX),
-        ..Default::default()
-    };
     let org_labels = api
-        .org_list_labels(repo.owner(), query)
+        .org_list_labels(repo.owner(), OrgListLabelsQuery::default())
+        .all()
         .await
-        .map(|(_, x)| x)
         .unwrap_or_default();
     labels.extend(org_labels);
 
@@ -894,18 +893,6 @@ async fn edit_pr_labels(
         }
     }
 
-    let mut rm_ids = Vec::with_capacity(add.len());
-    for label_name in &rm {
-        let maybe_label = labels
-            .iter()
-            .find(|label| label.name.as_ref() == Some(label_name));
-        if let Some(label) = maybe_label {
-            rm_ids.push(label.id.ok_or_eyre("label does not have id")?);
-        } else {
-            unknown_labels.push(label_name);
-        }
-    }
-
     let opts = forgejo_api::structs::IssueLabelsOption {
         labels: Some(add_ids),
         updated_at: None,
@@ -913,12 +900,12 @@ async fn edit_pr_labels(
     api.issue_add_label(repo.owner(), repo.name(), pr_number, opts)
         .await?;
     let opts = forgejo_api::structs::DeleteLabelsOption { updated_at: None };
-    for id in rm_ids {
+    for label_name in &rm {
         api.issue_remove_label(
             repo.owner(),
             repo.name(),
             pr_number,
-            id as u64,
+            label_name,
             opts.clone(),
         )
         .await?;
@@ -1251,7 +1238,7 @@ fn get_commit_msg(commit: &forgejo_api::structs::Commit) -> eyre::Result<(&str, 
 async fn merge_pr(
     repo: &RepoName,
     api: &Forgejo,
-    pr: Option<u64>,
+    pr: Option<i64>,
     method: Option<MergeMethod>,
     delete: bool,
     title: Option<String>,
@@ -1302,7 +1289,7 @@ async fn merge_pr(
         head_commit_id: None,
         merge_when_checks_succeed: None,
     };
-    let pr_number = pr_info.number.ok_or_eyre("pr does not have number")? as u64;
+    let pr_number = pr_info.number.ok_or_eyre("pr does not have number")?;
     api.repo_merge_pull_request(repo.owner(), repo.name(), pr_number, request)
         .await?;
 
@@ -1433,8 +1420,7 @@ async fn view_prs(
         since: None,
         before: None,
         mentioned_by: None,
-        page: None,
-        limit: None,
+        sort: None,
     };
     let (_, prs) = api
         .issue_list_issues(repo.owner(), repo.name(), query)
@@ -1468,12 +1454,12 @@ async fn view_prs(
 async fn view_diff(
     repo: &RepoName,
     api: &Forgejo,
-    pr: Option<u64>,
+    pr: Option<i64>,
     patch: bool,
     editor: bool,
 ) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
     let diff_type = if patch { "patch" } else { "diff" };
     let diff = api
@@ -1497,9 +1483,9 @@ async fn view_diff(
     Ok(())
 }
 
-async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre::Result<()> {
+async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<i64>) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
     let crate::SpecialRender {
         bright_red,
@@ -1508,12 +1494,14 @@ async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre:
         ..
     } = crate::special_render();
 
-    let query = RepoGetPullRequestFilesQuery {
-        limit: Some(u32::MAX),
-        ..Default::default()
-    };
-    let (_, files) = api
-        .repo_get_pull_request_files(repo.owner(), repo.name(), pr_number, query)
+    let files = api
+        .repo_get_pull_request_files(
+            repo.owner(),
+            repo.name(),
+            pr_number,
+            RepoGetPullRequestFilesQuery::default(),
+        )
+        .all()
         .await?;
     let max_additions = files
         .iter()
@@ -1541,19 +1529,19 @@ async fn view_pr_files(repo: &RepoName, api: &Forgejo, pr: Option<u64>) -> eyre:
 async fn view_pr_commits(
     repo: &RepoName,
     api: &Forgejo,
-    pr: Option<u64>,
+    pr: Option<i64>,
     oneline: bool,
 ) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
-    let pr_number = pr.number.ok_or_eyre("pr does not have number")? as u64;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
     let query = RepoGetPullRequestCommitsQuery {
-        limit: Some(u32::MAX),
         files: Some(false),
         ..Default::default()
     };
-    let (_headers, commits) = api
+    let commits = api
         .repo_get_pull_request_commits(repo.owner(), repo.name(), pr_number, query)
+        .all()
         .await?;
 
     let max_additions = commits
@@ -1631,7 +1619,7 @@ async fn view_pr_commits(
     Ok(())
 }
 
-pub async fn browse_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn browse_pr(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
     let pr = api
         .repo_get_pull_request(repo.owner(), repo.name(), id)
         .await?;
@@ -1646,15 +1634,15 @@ pub async fn browse_pr(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<
 async fn try_get_pr_number(
     repo: &RepoName,
     api: &Forgejo,
-    number: Option<u64>,
-) -> eyre::Result<(RepoName, u64)> {
+    number: Option<i64>,
+) -> eyre::Result<(RepoName, i64)> {
     let pr = match number {
         Some(number) => (repo.clone(), number),
         None => {
             let pr = guess_pr(repo, api)
                 .await
                 .wrap_err("could not guess pull request number, please specify")?;
-            let number = pr.number.ok_or_eyre("pr does not have number")? as u64;
+            let number = pr.number.ok_or_eyre("pr does not have number")?;
             let repo = repo_name_from_pr(&pr)?;
             (repo, number)
         }
@@ -1665,7 +1653,7 @@ async fn try_get_pr_number(
 async fn try_get_pr(
     repo: &RepoName,
     api: &Forgejo,
-    number: Option<u64>,
+    number: Option<i64>,
 ) -> eyre::Result<forgejo_api::structs::PullRequest> {
     let pr = match number {
         Some(number) => {
@@ -1774,32 +1762,14 @@ async fn find_pr_from_branch(
     api: &Forgejo,
     head: &str,
 ) -> eyre::Result<Option<forgejo_api::structs::PullRequest>> {
-    let mut seen = 0;
-    for page in 1.. {
-        let branch_query = forgejo_api::structs::RepoListBranchesQuery {
-            page: Some(page),
-            limit: Some(30),
-        };
-        let (headers, remote_branches) = api
-            .repo_list_branches(repo_owner, repo_name, branch_query)
-            .await?;
-        let prs = futures::future::try_join_all(
-            remote_branches
-                .into_iter()
-                .map(|branch| check_branch_pair(repo_owner, repo_name, api, branch, head)),
-        )
-        .await?;
-        seen += prs.len();
-        for pr in prs {
-            if pr.is_some() {
-                return Ok(pr);
-            }
-        }
-        if seen >= headers.x_total_count.unwrap_or_default() as usize {
-            break;
-        }
-    }
-    Ok(None)
+    Ok(api
+        .repo_list_branches(repo_owner, repo_name)
+        .stream()
+        .map_err(|e| e.into())
+        .try_filter_map(|branch| check_branch_pair(repo_owner, repo_name, api, branch, head))
+        .boxed_local()
+        .try_next()
+        .await?)
 }
 
 async fn check_branch_pair(
