@@ -967,16 +967,23 @@ async fn create_pr(
                 .host_str()
                 .ok_or_eyre("remote url does not have domain name")?;
 
-            let repo_host = repo_data
+            let repo_http_host = repo_data
                 .clone_url
                 .as_ref()
-                .ok_or_eyre("repo does not have git url")?
+                .ok_or_eyre("repo does not have clone url")?
                 .host_str()
-                .ok_or_eyre("repo url does not have domain name")?;
+                .ok_or_eyre("repo clone url does not have domain name")?;
+            let repo_ssh_host = repo_data
+                .ssh_url
+                .as_ref()
+                .ok_or_eyre("repo does not have ssh url")?
+                .host_str()
+                .ok_or_eyre("repo ssh url does not have domain name")?;
+
             eyre::ensure!(
-                remote_host == repo_host,
+                remote_host == repo_http_host || remote_host == repo_ssh_host,
                 "cannot create pull request across instances; base is on {}, while head is tracking {}",
-                repo_host,
+                repo_http_host,
                 remote_host,
             );
 
