@@ -740,7 +740,7 @@ async fn get_pr_status(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre:
             .sha
             .as_deref()
             .ok_or_eyre("commit does not have sha")?;
-        let commit_statuses = api
+        let mut commit_statuses = api
             .repo_get_combined_status_by_ref(repo.owner(), repo.name(), sha)
             .stream_pages()
             .map_ok(|page| {
@@ -754,6 +754,7 @@ async fn get_pr_status(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre:
             .try_flatten()
             .try_collect::<Vec<_>>()
             .await?;
+        commit_statuses.sort_by(|a, b| a.context.cmp(&b.context));
 
         Ok(PrStatus::Open {
             pr,
