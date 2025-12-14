@@ -106,7 +106,7 @@ impl RepoInfo {
                             let url_s = std::str::from_utf8(remote.url_bytes())?;
                             let url = keys.deref_alias(crate::ssh_url_parse(url_s)?);
 
-                            if crate::host_with_port(&url) == crate::host_with_port(host_url) {
+                            if crate::host_name(&url) == crate::host_name(host_url) {
                                 name = Some(remote_name_s.to_owned());
                             }
                         } else {
@@ -132,7 +132,7 @@ impl RepoInfo {
                             if let Some(url) = remote.url() {
                                 let url = keys.deref_alias(crate::ssh_url_parse(url)?);
                                 let (url, _) = url_strip_repo_name(url)?;
-                                if crate::host_with_port(&url) == crate::host_with_port(&url)
+                                if crate::host_name(&url) == crate::host_name(&url)
                                     && url.path() == host_url.path()
                                 {
                                     name = Some(remote_name.to_owned());
@@ -161,8 +161,8 @@ impl RepoInfo {
         };
 
         let same_instance = |a: &Option<Url>, b: &Option<Url>| {
-            let a = a.as_ref().map(crate::host_with_port_and_path);
-            let b = b.as_ref().map(crate::host_with_port_and_path);
+            let a = a.as_ref().map(crate::host_name);
+            let b = b.as_ref().map(crate::host_name);
             a == b
         };
 
@@ -449,7 +449,7 @@ impl RepoCommand {
             } => {
                 let host = RepoInfo::get_current(host_name, None, None, &keys)?;
                 let api = keys.get_api(host.host_url()).await?;
-                let url_host = crate::host_with_port(&host.host_url());
+                let url_host = crate::host_name(&host.host_url());
                 let ssh = ssh
                     .unwrap_or(Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
@@ -527,7 +527,7 @@ impl RepoCommand {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
-                let url_host = crate::host_with_port(&repo.host_url());
+                let url_host = crate::host_name(&repo.host_url());
                 let ssh = ssh
                     .unwrap_or(Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);

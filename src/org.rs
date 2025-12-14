@@ -697,7 +697,7 @@ impl RepoSubcommand {
                         ssh,
                     },
             } => {
-                let url_host = crate::host_with_port(&repo_info.host_url());
+                let url_host = crate::host_name(&repo_info.host_url());
                 let ssh = ssh
                     .unwrap_or(Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);

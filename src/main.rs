@@ -202,12 +202,9 @@ fn ssh_url_parse(s: &str) -> Result<url::Url, url::ParseError> {
     })
 }
 
-fn host_with_port(url: &url::Url) -> &str {
-    &url[url::Position::BeforeHost..url::Position::AfterPort]
-}
-
-fn host_with_port_and_path(url: &url::Url) -> &str {
-    &url[url::Position::BeforeHost..url::Position::AfterPath]
+fn host_name(url: &url::Url) -> &str {
+    let name = &url[url::Position::BeforeHost..url::Position::AfterPath];
+    name.strip_suffix("/").unwrap_or(name)
 }
 
 use std::sync::OnceLock;
