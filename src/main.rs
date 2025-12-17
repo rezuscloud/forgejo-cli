@@ -207,6 +207,11 @@ fn host_name(url: &url::Url) -> &str {
     name.strip_suffix("/").unwrap_or(name)
 }
 
+fn repo_url_host_name(url: &url::Url) -> &str {
+    let host = host_name(url);
+    host.rsplitn(2, '/').last().unwrap_or(host)
+}
+
 use std::sync::OnceLock;
 static SPECIAL_RENDER: OnceLock<SpecialRender> = OnceLock::new();
 

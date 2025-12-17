@@ -16,9 +16,7 @@ impl WhoAmICommand {
             .host_url()
             .clone();
         let name = keys.get_login(&url).ok_or_eyre("not logged in")?.username();
-        let host = url
-            .host_str()
-            .ok_or_eyre("instance url does not have host")?;
+        let host = crate::host_name(&url);
         if url.path() == "/" || url.path().is_empty() {
             println!("currently signed in to {name}@{host}");
         } else {
