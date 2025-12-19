@@ -119,8 +119,11 @@ pub enum PrSubcommand {
         pr: Option<IssueId>,
         /// The text content of the comment.
         ///
-        /// Not including this in the command will open your editor.
+        /// Leaving this out will open your editor, unless --body-file is specified.
         body: Option<String>,
+        /// The text content of the comment, to read from a file
+        #[clap(long, conflicts_with = "body")]
+        body_file: Option<PathBuf>,
     },
     /// Edit the contents of a pull request
     Edit {
@@ -401,9 +404,13 @@ impl PrCommand {
                 let (repo, id) = try_get_pr_number(repo, &api, id.map(|pr| pr.number)).await?;
                 browse_pr(&repo, &api, id).await?
             }
-            Comment { pr, body } => {
+            Comment {
+                pr,
+                body,
+                body_file,
+            } => {
                 let (repo, pr) = try_get_pr_number(repo, &api, pr.map(|pr| pr.number)).await?;
-                crate::issues::add_comment(&repo, &api, pr, body).await?
+                crate::issues::add_comment(&repo, &api, pr, body, body_file).await?
             }
         }
         Ok(())
