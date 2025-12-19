@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::{io::Write, str::FromStr};
 
 use clap::{Args, Subcommand};
@@ -58,9 +59,12 @@ pub enum PrSubcommand {
         title: Option<String>,
         /// The text body of the pull request.
         ///
-        /// Leaving this out will open your editor.
+        /// Leaving this out will open your editor, unless --body-file is specified.
         #[clap(long)]
         body: Option<String>,
+        /// The text body of the issue, to read from a file
+        #[clap(long, conflicts_with = "body")]
+        body_file: Option<PathBuf>,
         /// Automatically populate the PR's title and body from its commits.
         ///
         /// If there's a single commit, the PR will match its title and contents.
@@ -288,6 +292,7 @@ impl PrCommand {
                 base,
                 head,
                 body,
+                body_file,
                 autofill,
                 repo: _,
                 web,
@@ -300,6 +305,7 @@ impl PrCommand {
                     base,
                     head,
                     body,
+                    body_file,
                     autofill,
                     web,
                     agit,
@@ -934,6 +940,7 @@ async fn create_pr(
     base: Option<String>,
     head: Option<String>,
     body: Option<String>,
+    body_file: Option<PathBuf>,
     autofill: bool,
     web: bool,
     agit: bool,
@@ -1066,6 +1073,10 @@ async fn create_pr(
             .extend(["compare", &format!("{base}...{head}")]);
         open::that_detached(pr_create_url.as_str()).wrap_err("Failed to open URL")?;
     } else {
+        let body_from_file = match body_file {
+            None => None,
+            Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
+        };
         match head.zip(head_branch_name) {
             Some((head, head_branch_name)) => {
                 let pr_compare = api
@@ -1105,7 +1116,7 @@ async fn create_pr(
                     None if autofill => guessed_title,
                     None => eyre::bail!("title is required"),
                 };
-                let body = match body {
+                let body = match body.or(body_from_file) {
                     Some(body) => body,
                     None if autofill => guessed_body,
                     None => {
@@ -1143,7 +1154,7 @@ async fn create_pr(
             // no head means agit
             None => {
                 let title = title.ok_or_eyre("title is required")?;
-                let body = match body {
+                let body = match body.or(body_from_file) {
                     Some(body) => body,
                     None => {
                         let mut body = String::new();

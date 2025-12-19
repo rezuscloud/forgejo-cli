@@ -1,9 +1,10 @@
 use std::fmt::Display;
 use std::io::IsTerminal;
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use eyre::eyre;
-use tokio::io::AsyncWriteExt;
+use eyre::{eyre, Context};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 mod keys;
 use keys::*;
@@ -162,6 +163,21 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     tokio::fs::remove_file(path).await?;
     res?;
     Ok(())
+}
+
+// Read a filename, unless “-” is given, in which case, stdin is read and returned
+async fn read_file_or_stdin(path: &PathBuf) -> eyre::Result<String> {
+    if *path == PathBuf::from("-") {
+        // Typical use should be not interactive, so it's fine to call stdin() (see docs)
+        let mut stdin = tokio::io::stdin();
+        let mut body = String::new();
+        stdin.read_to_string(&mut body).await?;
+        Ok(body)
+    } else {
+        tokio::fs::read_to_string(&path)
+            .await
+            .wrap_err_with(|| eyre::eyre!("Error reading file `{}`", path.to_string_lossy()))
+    }
 }
 
 fn get_editor_flags(editor_path: &std::path::Path) -> &'static [&'static str] {

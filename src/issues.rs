@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Args, Subcommand};
@@ -26,9 +27,12 @@ pub enum IssueSubcommand {
         title: Option<String>,
         /// The text body of the issue
         ///
-        /// Leaving this out will open your editor.
+        /// Leaving this out will open your editor, unless --body-file is specified.
         #[clap(long)]
         body: Option<String>,
+        /// The text body of the issue, to read from a file
+        #[clap(long, conflicts_with = "body")]
+        body_file: Option<PathBuf>,
         /// The repo to create this issue on
         #[clap(long, short)]
         repo: Option<RepoArg>,
@@ -178,8 +182,9 @@ impl IssueCommand {
                 repo: _,
                 title,
                 body,
+                body_file,
                 web,
-            } => create_issue(repo, &api, title, body, web).await?,
+            } => create_issue(repo, &api, title, body, body_file, web).await?,
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_issue(repo, &api, id.number).await?,
                 ViewCommand::Comment { idx } => view_comment(repo, &api, id.number, idx).await?,
@@ -246,11 +251,16 @@ async fn create_issue(
     api: &Forgejo,
     title: Option<String>,
     body: Option<String>,
+    body_file: Option<PathBuf>,
     web: bool,
 ) -> eyre::Result<()> {
     match (title, web) {
         (Some(title), false) => {
-            let body = match body {
+            let body_from_file = match body_file {
+                None => None,
+                Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
+            };
+            let body = match body.or(body_from_file) {
                 Some(body) => body,
                 None => {
                     let mut body = String::new();
@@ -258,6 +268,7 @@ async fn create_issue(
                     body
                 }
             };
+
             let issue = api
                 .issue_create_issue(
                     repo.owner(),
