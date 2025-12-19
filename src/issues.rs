@@ -256,11 +256,9 @@ async fn create_issue(
 ) -> eyre::Result<()> {
     match (title, web) {
         (Some(title), false) => {
-            let body_from_file: Option<String> = match body_file {
+            let body_from_file = match body_file {
                 None => None,
-                Some(path) => Some(tokio::fs::read_to_string(&path).await.wrap_err_with(|| {
-                    eyre::eyre!("Error reading file `{}`", path.to_string_lossy())
-                })?),
+                Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
             };
             let body = match body.or(body_from_file) {
                 Some(body) => body,
