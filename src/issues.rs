@@ -49,7 +49,13 @@ pub enum IssueSubcommand {
     /// Add a comment on an issue
     Comment {
         issue: IssueId,
+        /// The text content of the comment.
+        ///
+        /// Leaving this out will open your editor, unless --body-file is specified.
         body: Option<String>,
+        /// The text content of the comment, to read from a file
+        #[clap(long, conflicts_with = "body")]
+        body_file: Option<PathBuf>,
     },
     /// Close an issue
     Close {
@@ -211,7 +217,11 @@ impl IssueCommand {
             },
             Close { issue, with_msg } => close_issue(repo, &api, issue.number, with_msg).await?,
             Browse { id } => browse_issue(repo, &api, id.number).await?,
-            Comment { issue, body } => add_comment(repo, &api, issue.number, body).await?,
+            Comment {
+                issue,
+                body,
+                body_file,
+            } => add_comment(repo, &api, issue.number, body, body_file).await?,
         }
         Ok(())
     }
@@ -517,8 +527,13 @@ pub async fn add_comment(
     api: &Forgejo,
     issue: i64,
     body: Option<String>,
+    body_file: Option<PathBuf>,
 ) -> eyre::Result<()> {
-    let body = match body {
+    let body_from_file = match body_file {
+        None => None,
+        Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
+    };
+    let body = match body.or(body_from_file) {
         Some(body) => body,
         None => {
             let mut body = String::new();
