@@ -168,7 +168,7 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
 // Read a filename, unless “-” is given, in which case, stdin is read and returned
 async fn read_file_or_stdin(path: &PathBuf) -> eyre::Result<String> {
     if *path == PathBuf::from("-") {
-        // Typical use should be not interactive, so it’s fine to call stdin() (see docs)
+        // Typical use should be not interactive, so it's fine to call stdin() (see docs)
         let mut stdin = tokio::io::stdin();
         let mut body = String::new();
         stdin.read_to_string(&mut body).await?;

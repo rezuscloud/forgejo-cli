@@ -27,7 +27,7 @@ pub enum IssueSubcommand {
         title: Option<String>,
         /// The text body of the issue
         ///
-        /// Leaving this out will open your editor, unless body-file is specified.
+        /// Leaving this out will open your editor, unless --body-file is specified.
         #[clap(long)]
         body: Option<String>,
         /// The text body of the issue, to read from a file
