@@ -259,7 +259,7 @@ async fn create_issue(
             let body_from_file: Option<String> = match body_file {
                 None => None,
                 Some(path) => Some(tokio::fs::read_to_string(&path).await.wrap_err_with(|| {
-                    format!("Error reading file `{}`", path.to_string_lossy())
+                    eyre::eyre!("Error reading file `{}`", path.to_string_lossy())
                 })?),
             };
             let body = match body.or(body_from_file) {
