@@ -394,7 +394,7 @@ impl PrCommand {
                 branch_name,
                 ssh,
             } => {
-                let url_host = crate::host_with_port(&repo_info.host_url());
+                let url_host = crate::host_name(&repo_info.host_url());
                 let ssh = ssh
                     .unwrap_or(Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
@@ -978,22 +978,20 @@ async fn create_pr(
                     .url()
                     .ok_or_eyre("remote does not have utf8 url")?,
             )?;
-            let remote_host = remote_url
-                .host_str()
-                .ok_or_eyre("remote url does not have domain name")?;
+            let remote_host = crate::repo_url_host_name(&remote_url);
 
-            let repo_http_host = repo_data
-                .clone_url
-                .as_ref()
-                .ok_or_eyre("repo does not have clone url")?
-                .host_str()
-                .ok_or_eyre("repo clone url does not have domain name")?;
-            let repo_ssh_host = repo_data
-                .ssh_url
-                .as_ref()
-                .ok_or_eyre("repo does not have ssh url")?
-                .host_str()
-                .ok_or_eyre("repo ssh url does not have domain name")?;
+            let repo_http_host = crate::repo_url_host_name(
+                repo_data
+                    .clone_url
+                    .as_ref()
+                    .ok_or_eyre("repo does not have clone url")?,
+            );
+            let repo_ssh_host = crate::repo_url_host_name(
+                repo_data
+                    .ssh_url
+                    .as_ref()
+                    .ok_or_eyre("repo does not have ssh url")?,
+            );
 
             eyre::ensure!(
                 remote_host == repo_http_host || remote_host == repo_ssh_host,
@@ -1372,7 +1370,7 @@ async fn checkout_pr(
     let branch_name = branch_name.unwrap_or_else(|| {
         format!(
             "pr-{}-{}-{}",
-            url.host_str().unwrap_or("unknown"),
+            crate::repo_url_host_name(url),
             repo_owner,
             pr.number(),
         )

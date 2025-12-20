@@ -56,7 +56,7 @@ impl KeyInfo {
     }
 
     pub fn get_login(&mut self, url: &Url) -> Option<&mut LoginInfo> {
-        let host = crate::host_with_port(url);
+        let host = crate::host_name(url);
         let login_info = self.hosts.get_mut(host)?;
         Some(login_info)
     }
@@ -70,7 +70,7 @@ impl KeyInfo {
     }
 
     pub fn deref_alias(&self, url: url::Url) -> url::Url {
-        match self.aliases.get(crate::host_with_port(&url)) {
+        match self.aliases.get(crate::host_name(&url)) {
             Some(replacement) => {
                 let s = format!(
                     "{}{}{}",

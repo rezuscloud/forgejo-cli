@@ -218,12 +218,14 @@ fn ssh_url_parse(s: &str) -> Result<url::Url, url::ParseError> {
     })
 }
 
-fn host_with_port(url: &url::Url) -> &str {
-    &url[url::Position::BeforeHost..url::Position::AfterPort]
+fn host_name(url: &url::Url) -> &str {
+    let name = &url[url::Position::BeforeHost..url::Position::AfterPath];
+    name.strip_suffix("/").unwrap_or(name)
 }
 
-fn host_with_port_and_path(url: &url::Url) -> &str {
-    &url[url::Position::BeforeHost..url::Position::AfterPath]
+fn repo_url_host_name(url: &url::Url) -> &str {
+    let host = host_name(url);
+    host.rsplitn(2, '/').last().unwrap_or(host)
 }
 
 use std::sync::OnceLock;

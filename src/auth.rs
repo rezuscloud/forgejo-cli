@@ -39,12 +39,11 @@ impl AuthCommand {
                 if let Some(client_id) = &client_info {
                     oauth_login(keys, host_url, client_id).await?;
                 } else {
-                    let host_domain = host_url.host_str().ok_or_eyre("invalid host")?;
-                    let host_path = host_url.path().strip_suffix("/").unwrap_or(host_url.path());
+                    let host_domain = crate::host_name(&host_url);
                     let applications_url =
-                        format!("https://{host_domain}{host_path}/user/settings/applications");
+                        format!("https://{host_domain}/user/settings/applications");
 
-                    println!("Your installation of fj doesn't support `login` for {host_domain}{host_path}");
+                    println!("Your installation of fj doesn't support `login` for {host_domain}");
                     println!();
                     println!("Please visit {applications_url}");
                     println!("to create a token, and use it to log in with `fj auth add-key`");
@@ -65,7 +64,7 @@ impl AuthCommand {
                     Some(key) => key,
                     None => crate::readline("new key: ").await?.trim().to_string(),
                 };
-                let host = crate::host_with_port(&host_url);
+                let host = crate::host_name(&host_url);
                 if !keys.hosts.contains_key(host) {
                     let mut login = crate::keys::LoginInfo::Application {
                         name: user,
@@ -79,7 +78,7 @@ impl AuthCommand {
             }
             AuthCommand::UseSsh { use_ssh } => {
                 let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
-                let host = crate::host_with_port(&repo_info.host_url());
+                let host = crate::host_name(&repo_info.host_url());
                 if !keys.hosts.contains_key(host) {
                     println!("not logged in to {host}");
                 } else {
@@ -114,7 +113,7 @@ impl AuthCommand {
 }
 
 pub async fn get_client_info_for(url: &url::Url) -> eyre::Result<Option<String>> {
-    let host = crate::host_with_port_and_path(url);
+    let host = crate::host_name(url);
     let host = host.strip_suffix("/").unwrap_or(host);
     if let Some(dirs) = directories::ProjectDirs::from("", "Cyborus", "forgejo-cli") {
         let client_info_path = dirs.config_dir().join("client_ids");
@@ -268,7 +267,7 @@ async fn oauth_login(
         expires_at,
     };
     add_ssh_alias(&mut login_info, host, keys).await;
-    let domain = crate::host_with_port(&host);
+    let domain = crate::host_name(&host);
     keys.hosts.insert(domain.to_owned(), login_info);
 
     Ok(())
@@ -337,8 +336,8 @@ async fn add_ssh_alias(
         Err(_) => return,
     };
     if let Some(ssh_url) = get_instance_ssh_url(api).await {
-        let http_host = crate::host_with_port(&host_url);
-        let ssh_host = crate::host_with_port(&ssh_url);
+        let http_host = crate::host_name(&host_url);
+        let ssh_host = crate::host_name(&ssh_url);
         if http_host != ssh_host {
             keys.aliases
                 .insert(ssh_host.to_string(), http_host.to_string());
