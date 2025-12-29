@@ -1064,12 +1064,14 @@ pub fn clone_repo(
     // I find it surprising that auth_git2 just hardcodes what key files to look for instead of
     // looking in .ssh/config
     if url.scheme() == "ssh" {
-        let ssh_config =
-            ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)?;
-        let params = ssh_config.query(url.host_str().ok_or_eyre("url does not have host")?);
-        if let Some(identity_file) = params.identity_file.as_deref() {
-            for path in identity_file {
-                auth = auth.add_ssh_key_from_file(path, None);
+        if let Ok(ssh_config) =
+            ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)
+        {
+            let params = ssh_config.query(url.host_str().ok_or_eyre("url does not have host")?);
+            if let Some(identity_file) = params.identity_file.as_deref() {
+                for path in identity_file {
+                    auth = auth.add_ssh_key_from_file(path, None);
+                }
             }
         }
     }
