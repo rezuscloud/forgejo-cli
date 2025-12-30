@@ -112,6 +112,9 @@ pub enum PrSubcommand {
         /// Pull the commits using SSH instead of HTTP(S).
         #[clap(long, short = 'S')]
         ssh: Option<Option<bool>>,
+        /// An SSH key file to use when cloning over SSH.
+        #[clap(long, short = 'I')]
+        identity_file: Option<PathBuf>,
     },
     /// Add a comment on a pull request
     Comment {
@@ -393,12 +396,13 @@ impl PrCommand {
                 pr,
                 branch_name,
                 ssh,
+                identity_file: identity,
             } => {
                 let url_host = crate::host_name(&repo_info.host_url());
                 let ssh = ssh
-                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
-                checkout_pr(repo, &api, pr, branch_name, ssh).await?
+                checkout_pr(repo, &api, pr, branch_name, ssh, identity).await?
             }
             Browse { id } => {
                 let (repo, id) = try_get_pr_number(repo, &api, id.map(|pr| pr.number)).await?;
@@ -1336,6 +1340,7 @@ async fn checkout_pr(
     pr: PrNumber,
     branch_name: Option<String>,
     ssh: bool,
+    identity_file: Option<PathBuf>,
 ) -> eyre::Result<()> {
     let local_repo = git2::Repository::discover(".").unwrap();
 
@@ -1376,7 +1381,15 @@ async fn checkout_pr(
         )
     });
 
-    auth_git2::GitAuthenticator::new().fetch(
+    let mut auth = auth_git2::GitAuthenticator::new();
+    if let Some(id) = identity_file {
+        auth = auth.add_ssh_key_from_file(id, None);
+    } else if url.scheme() == "ssh" {
+        auth =
+            crate::repo::load_ssh_keys(auth, url.host_str().ok_or_eyre("url does not have host")?);
+    }
+
+    auth.fetch(
         &local_repo,
         &mut remote,
         &[&format!("pull/{}/head", pr.number())],

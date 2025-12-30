@@ -33,6 +33,14 @@ pub enum WikiSubcommand {
     Clone {
         #[clap(long, short)]
         path: Option<PathBuf>,
+
+        /// Clone the repo over SSH instead of HTTP(S)
+        #[clap(long, short = 'S')]
+        ssh: Option<Option<bool>>,
+
+        /// An SSH key file to use when cloning over SSH.
+        #[clap(long, short = 'I')]
+        identity_file: Option<PathBuf>,
     },
     Browse {
         page: String,
@@ -46,15 +54,25 @@ impl WikiCommand {
         let repo =
             RepoInfo::get_current(host_name, self.repo.as_ref(), self.remote.as_deref(), &keys)?;
         let api = keys.get_api(repo.host_url()).await?;
-        let repo = repo
+        let repo_name = repo
             .name()
             .ok_or_else(|| eyre::eyre!("couldn't guess repo"))?;
 
         match self.command {
-            Contents => wiki_contents(repo, &api).await?,
-            View { page } => view_wiki_page(repo, &api, &page).await?,
-            Clone { path } => clone_wiki(repo, &api, path).await?,
-            Browse { page } => browse_wiki_page(repo, &api, &page).await?,
+            Contents => wiki_contents(repo_name, &api).await?,
+            View { page } => view_wiki_page(repo_name, &api, &page).await?,
+            Clone {
+                path,
+                ssh,
+                identity_file: identity,
+            } => {
+                let url_host = crate::host_name(&repo.host_url());
+                let ssh = ssh
+                    .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or(true);
+                clone_wiki(repo_name, &api, path, ssh, identity).await?;
+            }
+            Browse { page } => browse_wiki_page(repo_name, &api, &page).await?,
         }
         Ok(())
     }
@@ -115,12 +133,26 @@ async fn browse_wiki_page(repo: &RepoName, api: &Forgejo, page: &str) -> eyre::R
     Ok(())
 }
 
-async fn clone_wiki(repo: &RepoName, api: &Forgejo, path: Option<PathBuf>) -> eyre::Result<()> {
+async fn clone_wiki(
+    repo: &RepoName,
+    api: &Forgejo,
+    path: Option<PathBuf>,
+    ssh: bool,
+    identity_file: Option<PathBuf>,
+) -> eyre::Result<()> {
     let repo_data = api.repo_get(repo.owner(), repo.name()).await?;
-    let clone_url = repo_data
-        .clone_url
-        .as_ref()
-        .ok_or_eyre("repo does not have clone url")?;
+    let clone_url = if ssh {
+        repo_data
+            .ssh_url
+            .as_ref()
+            .ok_or_eyre("repo does not have ssh url")?
+    } else {
+        repo_data
+            .clone_url
+            .as_ref()
+            .ok_or_eyre("repo does not have clone url")?
+    };
+
     let git_stripped = clone_url
         .as_str()
         .strip_suffix(".git")
@@ -139,7 +171,7 @@ async fn clone_wiki(repo: &RepoName, api: &Forgejo, path: Option<PathBuf>) -> ey
 
     let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}-wiki")));
 
-    crate::repo::clone_repo(&name, &clone_url, &path)?;
+    crate::repo::clone_repo(&name, &clone_url, &path, identity_file.as_deref())?;
 
     Ok(())
 }
