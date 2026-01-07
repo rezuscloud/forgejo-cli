@@ -407,6 +407,10 @@ pub enum RepoCommand {
         /// Clone the repo over SSH instead of HTTP(S)
         #[clap(long, short = 'S')]
         ssh: Option<Option<bool>>,
+
+        /// An SSH key file to use when cloning over SSH.
+        #[clap(long, short = 'I')]
+        identity_file: Option<PathBuf>,
     },
     /// Add a star to a repo
     Star {
@@ -451,7 +455,7 @@ impl RepoCommand {
                 let api = keys.get_api(host.host_url()).await?;
                 let url_host = crate::host_name(&host.host_url());
                 let ssh = ssh
-                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
                 create_repo(&api, None, repo, description, private, remote, push, ssh).await?;
             }
@@ -523,15 +527,20 @@ impl RepoCommand {
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 view_repo_readme(&api, repo).await?
             }
-            RepoCommand::Clone { repo, path, ssh } => {
+            RepoCommand::Clone {
+                repo,
+                path,
+                ssh,
+                identity_file: identity,
+            } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
                 let url_host = crate::host_name(&repo.host_url());
                 let ssh = ssh
-                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
-                cmd_clone_repo(&api, name, path, ssh).await?;
+                cmd_clone_repo(&api, name, path, ssh, identity).await?;
             }
             RepoCommand::Star { repo, remote } => {
                 let repo =
@@ -1011,6 +1020,7 @@ async fn cmd_clone_repo(
     name: &RepoName,
     path: Option<std::path::PathBuf>,
     ssh: bool,
+    identity_file: Option<std::path::PathBuf>,
 ) -> eyre::Result<()> {
     let repo_data = api.repo_get(name.owner(), name.name()).await?;
     let clone_url = git_url(&repo_data, ssh)?;
@@ -1026,7 +1036,7 @@ async fn cmd_clone_repo(
 
     let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
 
-    let local_repo = clone_repo(repo_full_name, clone_url, &path)?;
+    let local_repo = clone_repo(repo_full_name, clone_url, &path, identity_file.as_deref())?;
 
     if let Some(parent) = repo_data.parent.as_deref() {
         local_repo.remote("upstream", git_url(&parent, ssh)?.as_str())?;
@@ -1051,6 +1061,7 @@ pub fn clone_repo(
     repo_name: &str,
     url: &url::Url,
     path: &std::path::Path,
+    identity_file: Option<&std::path::Path>,
 ) -> eyre::Result<git2::Repository> {
     let SpecialRender {
         fancy,
@@ -1061,19 +1072,12 @@ pub fn clone_repo(
     } = *crate::special_render();
 
     let mut auth = auth_git2::GitAuthenticator::new();
-    // I find it surprising that auth_git2 just hardcodes what key files to look for instead of
-    // looking in .ssh/config
-    if url.scheme() == "ssh" {
-        if let Ok(ssh_config) =
-            ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)
-        {
-            let params = ssh_config.query(url.host_str().ok_or_eyre("url does not have host")?);
-            if let Some(identity_file) = params.identity_file.as_deref() {
-                for path in identity_file {
-                    auth = auth.add_ssh_key_from_file(path, None);
-                }
-            }
-        }
+    if let Some(id) = identity_file {
+        auth = auth.add_ssh_key_from_file(id, None);
+    } else if url.scheme() == "ssh" {
+        // I find it surprising that auth_git2 just hardcodes what key files to look for instead of
+        // looking in .ssh/config
+        auth = load_ssh_keys(auth, url.host_str().ok_or_eyre("url does not have host")?);
     }
 
     let git_config = git2::Config::open_default()?;
@@ -1127,6 +1131,24 @@ pub fn clone_repo(
     }
     println!("Cloned {} into {}", repo_name, path.display());
     Ok(local_repo)
+}
+
+pub fn load_ssh_keys(
+    mut auth: auth_git2::GitAuthenticator,
+    host: &str,
+) -> auth_git2::GitAuthenticator {
+    if let Ok(ssh_config) =
+        ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)
+    {
+        let params = ssh_config.query(host);
+        if let Some(identity_file) = params.identity_file.as_deref() {
+            for path in identity_file {
+                auth = auth.add_ssh_key_from_file(path, None);
+            }
+        }
+    }
+
+    auth
 }
 
 async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
