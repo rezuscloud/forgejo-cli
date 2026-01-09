@@ -282,18 +282,50 @@ impl MarkdownTemplate {
     }
 }
 
-macro_rules! require_node {
-    ($iter:ident, $expected:expr, $($fmt:tt),*) => {
-        {
-            let node = $iter.next().ok_or_eyre("unexpected EOF")?;
-            eyre::ensure!(node.data.borrow().value == $expected, $($fmt)*);
-            node
+macro_rules! bail_at {
+    ($node:expr, $fmt_str:literal) => {
+        bail_at!($node, $fmt_str, )
+    };
+    ($node:expr, $fmt_str:literal, $($fmt:tt),*) => {
+        bail_at!(@$node.data.borrow(), $fmt_str, )
+    };
+    (@$node:expr, $fmt_str:literal) => {
+        bail_at!(@$node, $fmt_str, )
+    };
+    (@$node:expr, $fmt_str:literal, $($fmt:tt),*) => {
+        return Err(eyre::eyre!($fmt_str, $($fmt)*)).wrap_err_with(
+            || eyre::eyre!("unexpected content on line {}", $node.sourcepos.start.line),
+        )
+    }
+}
+
+macro_rules! ensure_at {
+    ($node:expr, $e:expr, $fmt_str:literal) => {
+        ensure_at!($node, $e, $fmt_str, )
+    };
+    ($node:expr, $e:expr, $fmt_str:literal, $($fmt:tt),*) => {
+        if !($e) {
+            bail_at!($node, $fmt_str);
         }
     };
-    ($iter:ident, $expected:pat, $($fmt:tt),*) => {
+    (@$node:expr, $e:expr, $fmt_str:literal) => {
+        ensure_at!(@$node, $e, $fmt_str, )
+    };
+    (@$node:expr, $e:expr, $fmt_str:literal, $($fmt:tt),*) => {
+        if !($e) {
+            bail_at!(@$node, $fmt_str);
+        }
+    }
+}
+
+macro_rules! require_node {
+    ($iter:ident, $expected:expr, $fmt_str:literal) => {
+        require_node!($iter, $expected, $fmt_str, )
+    };
+    ($iter:ident, $expected:expr, $fmt_str:literal, $($fmt:tt),*) => {
         {
             let node = $iter.next().ok_or_eyre("unexpected EOF")?;
-            eyre::ensure!(matches!(node.data.borrow().value, $expected), $($fmt)*);
+            ensure_at!(node, node.data.borrow().value == $expected, $fmt_str, $($fmt,)*);
             node
         }
     };
@@ -501,7 +533,8 @@ impl YamlTemplate {
 
                     let render = attributes.render.as_deref().unwrap_or("markdown");
 
-                    match &node.data.borrow().value {
+                    let node_data = node.data.borrow();
+                    match &node_data.value {
                         NodeValue::CodeBlock(NodeCodeBlock {
                             fenced: true,
                             fence_char: b'~',
@@ -511,14 +544,15 @@ impl YamlTemplate {
                             literal,
                             ..
                         }) if info == render => {
-                            eyre::ensure!(
+                            ensure_at!(
+                                @node_data,
                                 !(validations.required && literal.is_empty()),
-                                "missing required field"
+                                "missing required field",
                             );
                             output.push(Some(FieldValue::Input(literal.to_owned())));
                         }
 
-                        _ => eyre::bail!("expected `{render}` codeblock",),
+                        _ => bail_at!(@node_data, "expected `{render}` codeblock"),
                     }
                 }
 
@@ -540,16 +574,18 @@ impl YamlTemplate {
 
                     let field =
                         require_node!(form_iter, NodeValue::BlockQuote, "expected block quote");
-                    eyre::ensure!(
+                    ensure_at!(
+                        field,
                         !(validations.required && field.children().next().is_none()),
-                        "missing required field"
+                        "missing required field",
                     );
-                    eyre::ensure!(
+                    ensure_at!(
+                        field,
                         field
                             .first_child()
                             .zip(field.last_child())
                             .is_none_or(|(a, b)| a.same_node(b)),
-                        "must be single line"
+                        "cannot submit multiline value",
                     );
 
                     let new_doc = arena.alloc(NodeValue::Document.into());
@@ -567,15 +603,20 @@ impl YamlTemplate {
                         body.pop();
                     }
                     if validations.is_number {
-                        eyre::ensure!(
+                        ensure_at!(
+                            field,
                             body.trim().parse::<i64>().is_ok()
                                 || body.trim().parse::<f64>().is_ok(),
-                            "must be a number"
+                            "submitted value must be a number",
                         );
                     }
                     if let Some(regex_str) = &validations.regex {
                         let regex = regex::Regex::new(regex_str).wrap_err("invalid regex")?;
-                        eyre::ensure!(regex.is_match(&body), "must match regex \"{regex_str}\"");
+                        ensure_at!(
+                            field,
+                            regex.is_match(&body),
+                            "must match regex \"{regex_str}\""
+                        );
                     }
                     output.push(Some(FieldValue::Input(body)));
                 }
@@ -611,9 +652,10 @@ impl YamlTemplate {
                     let mut is_first_ticked = true;
                     for option in &attributes.options {
                         let child = children.next().ok_or_eyre("unexpected end of list")?;
-                        let is_ticked = match &child.data.borrow().value {
+                        let child_data = child.data.borrow();
+                        let is_ticked = match child_data.value {
                             NodeValue::TaskItem(fill_char) => fill_char.is_some(),
-                            _ => eyre::bail!("expected task list"),
+                            _ => bail_at!(@child_data, "expected task list"),
                         };
                         validate_contents(arena, child, option, options).wrap_err("dropdown")?;
 
@@ -627,8 +669,11 @@ impl YamlTemplate {
 
                         ticked.push(is_ticked);
                     }
-                    eyre::ensure!(children.next().is_none(), "unexpected extra item");
-                    eyre::ensure!(
+                    if let Some(extra_child) = children.next() {
+                        bail_at!(extra_child, "unexpected extra item");
+                    }
+                    ensure_at!(
+                        list,
                         !(validations.required && is_first_ticked),
                         "at least one item must be checked"
                     );
@@ -652,9 +697,10 @@ impl YamlTemplate {
                     for option in &attributes.options {
                         if option.visible.form {
                             let child = children.next().ok_or_eyre("unexpected end of list")?;
-                            let is_ticked = match &child.data.borrow().value {
+                            let child_data = child.data.borrow();
+                            let is_ticked = match child_data.value {
                                 NodeValue::TaskItem(fill_char) => fill_char.is_some(),
-                                _ => eyre::bail!("expected task list"),
+                                _ => bail_at!(@child_data, "expected task list"),
                             };
                             let label = if option.required {
                                 &format!("{FIELD_CHECKBOX_REQUIRED}{}", option.label)
@@ -662,14 +708,16 @@ impl YamlTemplate {
                                 &option.label
                             };
                             validate_contents(arena, child, label, options).wrap_err("checkbox")?;
-                            eyre::ensure!(is_ticked || !option.required, "option is required");
+                            ensure_at!(@child_data, is_ticked || !option.required, "option is required");
 
                             ticked.push(is_ticked);
                         } else {
                             ticked.push(false);
                         }
                     }
-                    eyre::ensure!(children.next().is_none(), "unexpected extra item");
+                    if let Some(extra_child) = children.next() {
+                        bail_at!(extra_child, "unexpected extra item");
+                    }
                     output.push(Some(FieldValue::Checkboxes(ticked)));
                 }
             }
@@ -824,11 +872,7 @@ fn validate_contents<'a>(
     options: &comrak::Options<'_>,
 ) -> eyre::Result<()> {
     let parsed = comrak::parse_document(arena, md, options);
-    eyre::ensure!(
-        children_eq(parent, parsed),
-        "modified content at line {}",
-        parent.data.borrow().sourcepos.start.line
-    );
+    ensure_at!(parent, children_eq(parent, parsed), "modified content",);
     Ok(())
 }
 
@@ -841,11 +885,7 @@ fn validate_description<'a>(
     let parsed = comrak::parse_document(arena, md, options);
     for a in parsed.children() {
         let b = form.next().ok_or_eyre("unexpected EOF")?;
-        eyre::ensure!(
-            nodes_eq(a, b),
-            "modified content at line {}",
-            b.data.borrow().sourcepos.start.line
-        );
+        ensure_at!(b, nodes_eq(a, b), "modified content",);
     }
     Ok(())
 }
@@ -887,7 +927,11 @@ fn validate_header<'a>(
     );
     let parsed = comrak::parse_document(arena, content, options);
     let parsed_inline = parsed.first_child().ok_or_eyre("invalid label")?;
-    eyre::ensure!(children_eq(form_heading, parsed_inline), "expected header");
+    ensure_at!(
+        form_heading,
+        children_eq(form_heading, parsed_inline),
+        "expected header"
+    );
     Ok(())
 }
 
