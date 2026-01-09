@@ -10,7 +10,7 @@ use forgejo_api::Forgejo;
 
 use crate::repo::{RepoArg, RepoInfo, RepoName};
 
-mod template;
+pub mod template;
 
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
@@ -255,7 +255,7 @@ impl IssueCommand {
     }
 }
 
-async fn label_names_to_ids(
+pub async fn label_names_to_ids(
     repo: &RepoName,
     api: &Forgejo,
     names: Vec<String>,

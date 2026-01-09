@@ -939,6 +939,91 @@ async fn edit_pr_labels(
     Ok(())
 }
 
+pub async fn get_template_file(
+    repo: &RepoName,
+    api: &Forgejo,
+) -> eyre::Result<Option<(Vec<u8>, bool)>> {
+    const FILES: [&str; 8] = [
+        ".forgejo/pull_request_template",
+        ".forgejo/PULL_REQUEST_TEMPLATE",
+        ".gitea/pull_request_template",
+        ".gitea/PULL_REQUEST_TEMPLATE",
+        ".github/pull_request_template",
+        ".github/PULL_REQUEST_TEMPLATE",
+        "docs/pull_request_template",
+        "docs/PULL_REQUEST_TEMPLATE",
+    ];
+    const EXTS: [&str; 3] = ["md", "yml", "yaml"];
+    let query = forgejo_api::structs::RepoGetRawFileQuery { r#ref: None };
+    for file in FILES {
+        for ext in EXTS {
+            let path = format!("{file}.{ext}");
+            let file = api
+                .repo_get_raw_file(repo.owner(), repo.name(), &path, query.clone())
+                .await;
+            match file {
+                Ok(file) => {
+                    let is_yaml = matches!(ext, "yml" | "yaml");
+                    return Ok(Some((file, is_yaml)));
+                }
+                Err(forgejo_api::ForgejoError::ApiError(status, ..))
+                    if status == hyper::http::StatusCode::NOT_FOUND =>
+                {
+                    ()
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+    }
+    Ok(None)
+}
+
+async fn metadata_from_template(
+    repo: &RepoName,
+    api: &Forgejo,
+    body: Option<String>,
+    template_file: Vec<u8>,
+    is_yaml: bool,
+) -> eyre::Result<(String, Option<Vec<i64>>)> {
+    let template_file = std::str::from_utf8(&template_file)?;
+    let (body, labels) = if is_yaml {
+        let tmpl =
+            serde_saphyr::from_str::<crate::issues::template::yaml::YamlTemplate>(template_file)?;
+
+        let form = match body {
+            Some(body) => body,
+            None => {
+                let mut form = tmpl.generate_form()?;
+                crate::editor(&mut form, Some("md")).await?;
+                form
+            }
+        };
+        let body = tmpl.generate_content(tmpl.parse_form(&form)?)?;
+
+        (body, tmpl.labels)
+    } else {
+        let mut tmpl = crate::issues::template::MarkdownTemplate::new(template_file)?;
+
+        let body = match body {
+            Some(body) => body,
+            None => {
+                crate::editor(&mut tmpl.body, Some("md")).await?;
+                tmpl.body
+            }
+        };
+
+        (body, tmpl.labels)
+    };
+
+    let labels = if let Some(labels) = labels {
+        Some(crate::issues::label_names_to_ids(repo, api, labels).await?)
+    } else {
+        None
+    };
+
+    Ok((body, labels))
+}
+
 async fn create_pr(
     repo: &RepoName,
     api: &Forgejo,
@@ -1073,52 +1158,61 @@ async fn create_pr(
     } else {
         match head.zip(head_branch_name) {
             Some((head, head_branch_name)) => {
-                let pr_compare = api
-                    .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
-                    .await?;
-                let pr_commits = pr_compare
-                    .commits
-                    .as_ref()
-                    .ok_or_eyre("failed to get branch comparison")?;
-
-                let (guessed_title, guessed_body) = {
-                    if pr_commits.len() == 1 {
-                        let (commit_title, commit_body) = get_commit_msg(&pr_commits[0])?;
-                        (commit_title.to_owned(), commit_body.to_owned())
+                let (title, body, labels) =
+                    if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
+                        let title = title.ok_or_eyre("title is required")?;
+                        let (body, labels) =
+                            metadata_from_template(repo, api, body, template_file, is_yaml).await?;
+                        (title, body, labels)
                     } else {
-                        let mut body = String::new();
-                        for pr_commit in pr_commits {
-                            let (commit_title, commit_body) = get_commit_msg(pr_commit)?;
-                            body.push_str(commit_title);
-                            body.push('\n');
-                            for (i, line) in commit_body.lines().enumerate() {
-                                if i == 0 {
-                                    body.push_str(": ");
-                                } else {
-                                    body.push_str("  ");
+                        let pr_compare = api
+                            .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
+                            .await?;
+                        let pr_commits = pr_compare
+                            .commits
+                            .as_ref()
+                            .ok_or_eyre("failed to get branch comparison")?;
+
+                        let (guessed_title, guessed_body) = {
+                            if pr_commits.len() == 1 {
+                                let (commit_title, commit_body) = get_commit_msg(&pr_commits[0])?;
+                                (commit_title.to_owned(), commit_body.to_owned())
+                            } else {
+                                let mut body = String::new();
+                                for pr_commit in pr_commits {
+                                    let (commit_title, commit_body) = get_commit_msg(pr_commit)?;
+                                    body.push_str(commit_title);
+                                    body.push('\n');
+                                    for (i, line) in commit_body.lines().enumerate() {
+                                        if i == 0 {
+                                            body.push_str(": ");
+                                        } else {
+                                            body.push_str("  ");
+                                        }
+                                        body.push_str(line);
+                                        body.push('\n');
+                                    }
+                                    body.push('\n');
                                 }
-                                body.push_str(line);
-                                body.push('\n');
+                                (head_branch_name, body)
                             }
-                            body.push('\n');
-                        }
-                        (head_branch_name, body)
-                    }
-                };
-                let title = match title {
-                    Some(title) => title,
-                    None if autofill => guessed_title,
-                    None => eyre::bail!("title is required"),
-                };
-                let body = match body {
-                    Some(body) => body,
-                    None if autofill => guessed_body,
-                    None => {
-                        let mut body = guessed_body;
-                        crate::editor(&mut body, Some("md")).await?;
-                        body
-                    }
-                };
+                        };
+                        let title = match title {
+                            Some(title) => title,
+                            None if autofill => guessed_title,
+                            None => eyre::bail!("title is required"),
+                        };
+                        let body = match body {
+                            Some(body) => body,
+                            None if autofill => guessed_body,
+                            None => {
+                                let mut body = guessed_body;
+                                crate::editor(&mut body, Some("md")).await?;
+                                body
+                            }
+                        };
+                        (title, body, None)
+                    };
                 let pr = api
                     .repo_create_pull_request(
                         &repo_owner,
@@ -1130,7 +1224,7 @@ async fn create_pr(
                             body: Some(body),
                             due_date: None,
                             head: Some(head),
-                            labels: None,
+                            labels,
                             milestone: None,
                             title: Some(title),
                         },
@@ -1147,15 +1241,24 @@ async fn create_pr(
             }
             // no head means agit
             None => {
-                let title = title.ok_or_eyre("title is required")?;
-                let body = match body {
-                    Some(body) => body,
-                    None => {
-                        let mut body = String::new();
-                        crate::editor(&mut body, Some("md")).await?;
-                        body
-                    }
-                };
+                let (title, body) =
+                    if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
+                        let title = title.ok_or_eyre("title is required")?;
+                        let (body, _) =
+                            metadata_from_template(repo, api, body, template_file, is_yaml).await?;
+                        (title, body)
+                    } else {
+                        let title = title.ok_or_eyre("title is required")?;
+                        let body = match body {
+                            Some(body) => body,
+                            None => {
+                                let mut body = String::new();
+                                crate::editor(&mut body, Some("md")).await?;
+                                body
+                            }
+                        };
+                        (title, body)
+                    };
                 let local_repo = git2::Repository::open(".")?;
                 let mut git_config = local_repo.config()?;
                 let clone_url = base_repo
