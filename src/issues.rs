@@ -319,11 +319,16 @@ async fn create_issue(
                 Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
             };
             let body = body.or(body_from_file);
+
+            // None: The repo does not use templates.
+            // Some(true): The repo uses but does not enforce templates.
+            // Some(false): The repo uses and enforces templates.
             let blank_issues_enabled = api
                 .repo_get_issue_config(repo.owner(), repo.name())
                 .await
                 .ok()
                 .and_then(|cfg| cfg.blank_issues_enabled);
+
             let opts = if let Some(template_name) = template {
                 eyre::ensure!(
                     blank_issues_enabled.is_some(),
