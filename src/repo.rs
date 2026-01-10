@@ -132,7 +132,7 @@ impl RepoInfo {
                             if let Some(url) = remote.url() {
                                 let url = keys.deref_alias(crate::ssh_url_parse(url)?);
                                 let (url, _) = url_strip_repo_name(url)?;
-                                if crate::host_name(&url) == crate::host_name(&url)
+                                if crate::host_name(&url) == crate::host_name(host_url)
                                     && url.path() == host_url.path()
                                 {
                                     name = Some(remote_name.to_owned());
