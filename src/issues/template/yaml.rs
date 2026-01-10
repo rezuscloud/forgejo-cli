@@ -220,6 +220,11 @@ impl YamlTemplate {
 
         let mut output = Vec::new();
 
+        let num_regex = std::cell::LazyCell::new(|| {
+            let regex_s = r#"^-?[0-9]+(?:\.[0-9]+)?(?:(?:e|E)(?:-|\+)?[0-9]+)?$"#;
+            regex::Regex::new(regex_s).expect("invalid regex (bug in forgejo-cli)")
+        });
+
         for item in &self.body {
             if !item.visibility().form {
                 output.push(None);
@@ -319,12 +324,9 @@ impl YamlTemplate {
                         body.pop();
                     }
                     if validations.is_number {
-                        let regex_s = r#"^-?[0-9]+(?:\.[0-9]+)?(?:(?:e|E)(?:-|\+)?[0-9]+)?$"#;
-                        let regex =
-                            regex::Regex::new(regex_s).expect("invalid regex (bug in forgejo-cli)");
                         ensure_at!(
                             field,
-                            regex.is_match(body.trim()),
+                            num_regex.is_match(body.trim()),
                             "submitted value must be a number",
                         );
                     }
