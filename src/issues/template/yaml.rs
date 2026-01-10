@@ -318,10 +318,12 @@ impl YamlTemplate {
                         body.pop();
                     }
                     if validations.is_number {
+                        let regex_s = r#"^-?[0-9]+(?:\.[0-9]+)?(?:(?:e|E)(?:-|\+)?[0-9]+)?$"#;
+                        let regex =
+                            regex::Regex::new(regex_s).expect("invalid regex (bug in forgejo-cli)");
                         ensure_at!(
                             field,
-                            body.trim().parse::<i64>().is_ok()
-                                || body.trim().parse::<f64>().is_ok(),
+                            regex.is_match(body.trim()),
                             "submitted value must be a number",
                         );
                     }
