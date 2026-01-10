@@ -291,7 +291,7 @@ impl YamlTemplate {
                         require_node!(form_iter, NodeValue::BlockQuote, "expected block quote");
                     ensure_at!(
                         field,
-                        !(validations.required && field.children().next().is_none()),
+                        !(validations.required && field.first_child().is_none()),
                         "missing required field",
                     );
                     ensure_at!(
