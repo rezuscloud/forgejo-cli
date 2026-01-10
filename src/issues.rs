@@ -338,7 +338,7 @@ async fn create_issue(
                 );
                 let (template_file, is_yaml) =
                     template::get_template_file(repo, api, &template_name).await?;
-                let (body, labels) = crate::issues::template::metadata_from_template(
+                let (body, r#ref, labels) = crate::issues::template::metadata_from_template(
                     repo,
                     api,
                     body,
@@ -356,7 +356,7 @@ async fn create_issue(
                     due_date: None,
                     labels: labels,
                     milestone: None,
-                    r#ref: None,
+                    r#ref,
                 }
             } else {
                 eyre::ensure!(

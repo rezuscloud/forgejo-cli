@@ -1130,7 +1130,7 @@ async fn create_pr(
                 let (title, body, labels) =
                     if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
                         let title = title.ok_or_eyre("title is required")?;
-                        let (body, labels) = crate::issues::template::metadata_from_template(
+                        let (body, _, labels) = crate::issues::template::metadata_from_template(
                             repo,
                             api,
                             body,
@@ -1268,7 +1268,7 @@ async fn create_pr(
                 let (title, body) =
                     if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
                         let title = title.ok_or_eyre("title is required")?;
-                        let (body, _) = crate::issues::template::metadata_from_template(
+                        let (body, _, _) = crate::issues::template::metadata_from_template(
                             repo,
                             api,
                             body,
