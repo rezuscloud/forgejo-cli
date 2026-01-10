@@ -1,4 +1,3 @@
-use eyre::OptionExt;
 use forgejo_api::Forgejo;
 
 pub mod yaml;
@@ -15,22 +14,28 @@ impl MarkdownTemplate {
         let md_without_start = md
             .strip_prefix("---\n")
             .or_else(|| md.strip_prefix("---\r\n"));
-        let (front_matter, body) = md_without_start
+        let stripped = md_without_start
             .and_then(|md| md.split_once("\n---\n"))
-            .or_else(|| md_without_start.and_then(|md| md.split_once("\r\n---\r\n")))
-            .ok_or_eyre("no front matter")?;
+            .or_else(|| md_without_start.and_then(|md| md.split_once("\r\n---\r\n")));
 
-        #[derive(serde::Deserialize)]
-        struct TemplateMetadata {
-            labels: Option<Vec<String>>,
+        if let Some((front_matter, body)) = stripped {
+            #[derive(serde::Deserialize)]
+            struct TemplateMetadata {
+                labels: Option<Vec<String>>,
+            }
+
+            let metadata = serde_saphyr::from_str::<TemplateMetadata>(front_matter)?;
+
+            Ok(Self {
+                labels: metadata.labels,
+                body: body.to_owned(),
+            })
+        } else {
+            Ok(Self {
+                labels: None,
+                body: md.to_owned(),
+            })
         }
-
-        let metadata = serde_saphyr::from_str::<TemplateMetadata>(front_matter)?;
-
-        Ok(Self {
-            labels: metadata.labels,
-            body: body.to_owned(),
-        })
     }
 }
 
