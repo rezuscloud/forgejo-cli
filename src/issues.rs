@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Args, Subcommand};
@@ -15,7 +16,7 @@ pub mod template;
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
     /// The local git remote that points to the repo to operate on.
-    #[clap(long, short = 'R')]
+    #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
     #[clap(subcommand)]
     command: IssueSubcommand,
@@ -29,9 +30,12 @@ pub enum IssueSubcommand {
         title: Option<String>,
         /// The text body of the issue
         ///
-        /// Leaving this out will open your editor.
+        /// Leaving this out will open your editor, unless --body-file is specified.
         #[clap(long, conflicts_with = "template")]
         body: Option<String>,
+        /// The text body of the issue, to read from a file
+        #[clap(long, conflicts_with = "body")]
+        body_file: Option<PathBuf>,
         /// The template to use when creating an issue
         ///
         /// If the repo has disabled blank issues, this flag is required.
@@ -58,7 +62,13 @@ pub enum IssueSubcommand {
     /// Add a comment on an issue
     Comment {
         issue: IssueId,
+        /// The text content of the comment.
+        ///
+        /// Leaving this out will open your editor, unless --body-file is specified.
         body: Option<String>,
+        /// The text content of the comment, to read from a file
+        #[clap(long, conflicts_with = "body")]
+        body_file: Option<PathBuf>,
     },
     /// Close an issue
     Close {
@@ -69,6 +79,7 @@ pub enum IssueSubcommand {
     },
     /// Search for an issue in a repo
     Search {
+        /// The repo to search in
         #[clap(long, short)]
         repo: Option<RepoArg>,
         query: Option<String>,
@@ -94,7 +105,7 @@ pub enum IssueSubcommand {
 #[derive(Clone, Debug)]
 pub struct IssueId {
     pub repo: Option<RepoArg>,
-    pub number: u64,
+    pub number: i64,
 }
 
 impl FromStr for IssueId {
@@ -107,7 +118,7 @@ impl FromStr for IssueId {
         };
         Ok(Self {
             repo,
-            number: number.parse()?,
+            number: number.parse::<u64>()? as i64,
         })
     }
 }
@@ -190,10 +201,23 @@ impl IssueCommand {
                 repo: _,
                 title,
                 body,
+                body_file,
                 template,
                 no_template,
                 web,
-            } => create_issue(repo, &api, title, body, template, no_template, web).await?,
+            } => {
+                create_issue(
+                    repo,
+                    &api,
+                    title,
+                    body,
+                    body_file,
+                    template,
+                    no_template,
+                    web,
+                )
+                .await?
+            }
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_issue(repo, &api, id.number).await?,
                 ViewCommand::Comment { idx } => view_comment(repo, &api, id.number, idx).await?,
@@ -220,7 +244,11 @@ impl IssueCommand {
             },
             Close { issue, with_msg } => close_issue(repo, &api, issue.number, with_msg).await?,
             Browse { id } => browse_issue(repo, &api, id.number).await?,
-            Comment { issue, body } => add_comment(repo, &api, issue.number, body).await?,
+            Comment {
+                issue,
+                body,
+                body_file,
+            } => add_comment(repo, &api, issue.number, body, body_file).await?,
         }
         Ok(())
     }
@@ -260,30 +288,14 @@ pub async fn label_names_to_ids(
     api: &Forgejo,
     names: Vec<String>,
 ) -> eyre::Result<Vec<i64>> {
-    // convert from label names to label ids
-    let mut all_labels = BTreeMap::new();
-    for page_num in 1.. {
-        let query = forgejo_api::structs::IssueListLabelsQuery {
-            page: Some(page_num),
-            limit: Some(50),
-        };
-        let (headers, page) = api
-            .issue_list_labels(repo.owner(), repo.name(), query)
-            .await?;
-        let empty_page = page.is_empty();
-        for label in page {
-            let name = label.name.ok_or_eyre("label does not have name")?;
-            let id = label.id.ok_or_eyre("label does not have name")?;
-            all_labels.insert(name, id);
-        }
-        if empty_page
-            || headers
-                .x_total_count
-                .is_none_or(|count| all_labels.len() >= count as usize)
-        {
-            break;
-        }
-    }
+    let query = forgejo_api::structs::IssueListLabelsQuery { sort: None };
+    let (_, all_labels) = api
+        .issue_list_labels(repo.owner(), repo.name(), query)
+        .await?;
+    let mut all_labels = all_labels
+        .into_iter()
+        .filter_map(|l| Some((l.name?, l.id?)))
+        .collect::<BTreeMap<_, _>>();
     Ok(names
         .into_iter()
         .filter_map(|name| all_labels.remove(&name))
@@ -295,12 +307,18 @@ async fn create_issue(
     api: &Forgejo,
     title: Option<String>,
     body: Option<String>,
+    body_file: Option<PathBuf>,
     template: Option<String>,
     no_template: bool,
     web: bool,
 ) -> eyre::Result<()> {
     match (title, web) {
         (Some(title), false) => {
+            let body_from_file = match body_file {
+                None => None,
+                Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
+            };
+            let body = body.or(body_from_file);
             let blank_issues_enabled = api
                 .repo_get_issue_config(repo.owner(), repo.name())
                 .await
@@ -371,6 +389,7 @@ async fn create_issue(
                     r#ref: None,
                 }
             };
+
             let issue = api
                 .issue_create_issue(repo.owner(), repo.name(), opts)
                 .await?;
@@ -405,7 +424,7 @@ async fn create_issue(
     Ok(())
 }
 
-pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
     let crate::SpecialRender {
         dash,
 
@@ -479,7 +498,7 @@ async fn view_issues(
     let labels = labels
         .map(|s| s.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
         .unwrap_or_default();
-    let mut query = forgejo_api::structs::IssueListIssuesQuery {
+    let query = forgejo_api::structs::IssueListIssuesQuery {
         q: query_str,
         labels: Some(labels.join(",")),
         created_by: creator,
@@ -490,20 +509,12 @@ async fn view_issues(
         since: None,
         before: None,
         mentioned_by: None,
-        page: None,
-        limit: None,
+        sort: None,
     };
-    let mut issues = Vec::new();
-    for page_idx in 1.. {
-        query.page = Some(page_idx);
-        let (headers, page) = api
-            .issue_list_issues(repo.owner(), repo.name(), query.clone())
-            .await?;
-        issues.extend(page);
-        if issues.len() >= headers.x_total_count.unwrap_or_default() as usize {
-            break;
-        }
-    }
+    let issues = api
+        .issue_list_issues(repo.owner(), repo.name(), query)
+        .all()
+        .await?;
     if issues.len() == 1 {
         println!("1 issue");
     } else {
@@ -530,7 +541,7 @@ async fn view_issues(
     Ok(())
 }
 
-pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -> eyre::Result<()> {
+pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: i64, idx: usize) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -545,7 +556,7 @@ pub async fn view_comment(repo: &RepoName, api: &Forgejo, id: u64, idx: usize) -
     Ok(())
 }
 
-pub async fn view_comments(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn view_comments(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
     let query = IssueGetCommentsQuery {
         since: None,
         before: None,
@@ -598,7 +609,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
     Ok(())
 }
 
-pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Result<()> {
+pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
     let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
     let html_url = issue
         .html_url
@@ -611,10 +622,15 @@ pub async fn browse_issue(repo: &RepoName, api: &Forgejo, id: u64) -> eyre::Resu
 pub async fn add_comment(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     body: Option<String>,
+    body_file: Option<PathBuf>,
 ) -> eyre::Result<()> {
-    let body = match body {
+    let body_from_file = match body_file {
+        None => None,
+        Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
+    };
+    let body = match body.or(body_from_file) {
         Some(body) => body,
         None => {
             let mut body = String::new();
@@ -638,7 +654,7 @@ pub async fn add_comment(
 pub async fn edit_title(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     new_title: Option<String>,
 ) -> eyre::Result<()> {
     let new_title = match new_title {
@@ -685,7 +701,7 @@ pub async fn edit_title(
 pub async fn edit_body(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     new_body: Option<String>,
 ) -> eyre::Result<()> {
     let new_body = match new_body {
@@ -725,7 +741,7 @@ pub async fn edit_body(
 pub async fn edit_comment(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     idx: usize,
     new_body: Option<String>,
 ) -> eyre::Result<()> {
@@ -756,7 +772,7 @@ pub async fn edit_comment(
     };
     let id = comment
         .id
-        .ok_or_else(|| eyre::eyre!("comment does not have id"))? as u64;
+        .ok_or_else(|| eyre::eyre!("comment does not have id"))?;
     api.issue_edit_comment(
         repo.owner(),
         repo.name(),
@@ -773,7 +789,7 @@ pub async fn edit_comment(
 pub async fn close_issue(
     repo: &RepoName,
     api: &Forgejo,
-    issue: u64,
+    issue: i64,
     message: Option<Option<String>>,
 ) -> eyre::Result<()> {
     if let Some(message) = message {

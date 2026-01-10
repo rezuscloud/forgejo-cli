@@ -60,13 +60,12 @@ pub async fn get_template_file(
             match file {
                 Ok(file) => {
                     let is_yaml = matches!(ext, "yml" | "yaml");
-                    return Ok((file, is_yaml));
+                    return Ok((file.to_vec(), is_yaml));
                 }
-                Err(forgejo_api::ForgejoError::ApiError(status, ..))
-                    if status == hyper::http::StatusCode::NOT_FOUND =>
-                {
-                    ()
-                }
+                Err(forgejo_api::ForgejoError::ApiError(forgejo_api::ApiError {
+                    kind: forgejo_api::ApiErrorKind::NotFound { .. },
+                    ..
+                })) => (),
                 Err(e) => return Err(e.into()),
             }
         }

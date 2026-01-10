@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use eyre::{Context, OptionExt};
+use eyre::{Context, ContextCompat, OptionExt};
 use forgejo_api::Forgejo;
 
 use crate::{repo::RepoInfo, SpecialRender};
@@ -83,8 +83,8 @@ pub enum UserSubcommand {
         #[clap(long)]
         sort: Option<RepoSortOrder>,
         /// Page of repos to get
-        #[clap(long)]
-        page: Option<u32>,
+        #[clap(long, default_value_t = 1)]
+        page: u32,
     },
     /// List the organizations a user is a member of
     Orgs {
@@ -103,6 +103,14 @@ pub enum UserSubcommand {
     /// Edit your user settings
     #[clap(subcommand)]
     Edit(EditCommand),
+
+    /// Manage SSH keys
+    #[clap(subcommand)]
+    Key(KeyCommand),
+
+    /// Manage GPG keys
+    #[clap(subcommand)]
+    Gpg(GpgCommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -168,6 +176,93 @@ pub enum EditCommand {
     },
 }
 
+#[derive(Subcommand, Clone, Debug)]
+pub enum KeyCommand {
+    /// List your SSH keys
+    List {
+        /// Show detailed information about every key
+        #[clap(short, long)]
+        verbose: bool,
+    },
+
+    /// View an SSH key
+    View {
+        // The ID of the key to view as shown in `user key list`
+        id: i64,
+    },
+
+    /// Delete an SSH key
+    Delete {
+        // The ID of the key to view as shown in `user key list`
+        id: i64,
+    },
+
+    /// Upload an SSH key
+    Upload {
+        /// Path to the key file or '-' to read from stdin. If omitted, will try to guess.
+        keyfile: Option<String>,
+
+        /// The title of the key. If omitted, will try to guess from the file content.
+        #[clap(short, long)]
+        title: Option<String>,
+
+        /// If provided, will skip checks against accidentally uploading private keys.
+        #[clap(short, long)]
+        force: bool,
+
+        /// If provided, the new key will only have read access.
+        #[clap(short, long)]
+        read_only: bool,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum GpgCommand {
+    /// List your GPG keys
+    List {
+        /// Show detailed information about every key
+        #[clap(short, long)]
+        verbose: bool,
+    },
+
+    /// Show details about a GPG key
+    View {
+        /// ID of the GPG key to show as shown in `user gpg list`
+        id: i64,
+    },
+
+    /// Deletes a GPG key. This will un-verify all commits signed with that key!
+    Delete {
+        /// ID of the GPG key to delete as shown in `user gpg list`
+        id: i64,
+
+        /// Don't ask for confirmation
+        #[clap(short, long)]
+        force: bool,
+    },
+
+    /// Upload a new GPG key from your local keyring.
+    /// This command requires `gpg` to be installed.
+    Upload {
+        /// The key to add. This can be anything the GPG CLI recognizes such as an email associated
+        /// with the key or the key ID.
+        key: String,
+
+        /// Skip the verification step. With this disabled, you can only add keys with emails
+        /// associated with your account.
+        #[clap(short, long)]
+        no_verify: bool,
+    },
+
+    /// Verifies a GPG key. You need to have the to-be-verified key installed locally in order to
+    /// sign some data with it.
+    /// This command requires `gpg` to be installed.
+    Verify {
+        /// ID of the GPG key to verify as shown in `user gpg list`
+        id: i64,
+    },
+}
+
 #[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
 pub enum VisbilitySetting {
     Hidden,
@@ -214,6 +309,24 @@ impl UserCommand {
                     rm,
                 } => edit_email(&api, visibility, add, rm).await?,
                 EditCommand::Website { url, unset } => edit_website(&api, url, unset).await?,
+            },
+            UserSubcommand::Key(cmd) => match cmd {
+                KeyCommand::List { verbose } => list_keys(&api, verbose).await?,
+                KeyCommand::View { id } => view_key(&api, id).await?,
+                KeyCommand::Delete { id } => delete_key(&api, id).await?,
+                KeyCommand::Upload {
+                    keyfile,
+                    title,
+                    force,
+                    read_only,
+                } => upload_key(&api, keyfile, title, force, read_only).await?,
+            },
+            UserSubcommand::Gpg(cmd) => match cmd {
+                GpgCommand::List { verbose } => list_gpg(&api, verbose).await?,
+                GpgCommand::View { id } => view_gpg(&api, id).await?,
+                GpgCommand::Delete { id, force } => delete_gpg(&api, id, force).await?,
+                GpgCommand::Upload { key, no_verify } => upload_gpg(&api, key, no_verify).await?,
+                GpgCommand::Verify { id } => verify_gpg(&api, id).await?,
             },
         }
         Ok(())
@@ -374,21 +487,9 @@ async fn unfollow_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
 }
 
 async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let (_, following) = match user {
-        Some(user) => {
-            let query = forgejo_api::structs::UserListFollowingQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_list_following(user, query).await?
-        }
-        None => {
-            let query = forgejo_api::structs::UserCurrentListFollowingQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_current_list_following(query).await?
-        }
+    let following = match user {
+        Some(user) => api.user_list_following(user).all().await?,
+        None => api.user_current_list_following().all().await?,
     };
 
     if following.is_empty() {
@@ -417,20 +518,8 @@ async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 
 async fn list_followers(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
     let (_, followers) = match user {
-        Some(user) => {
-            let query = forgejo_api::structs::UserListFollowersQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_list_followers(user, query).await?
-        }
-        None => {
-            let query = forgejo_api::structs::UserCurrentListFollowersQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.user_current_list_followers(query).await?
-        }
+        Some(user) => api.user_list_followers(user).await?,
+        None => api.user_current_list_followers().await?,
     };
 
     if followers.is_empty() {
@@ -484,41 +573,29 @@ async fn list_repos(
     user: Option<&str>,
     starred: bool,
     sort: Option<RepoSortOrder>,
-    page: Option<u32>,
+    page: u32,
 ) -> eyre::Result<()> {
     let (headers, mut repos) = if starred {
         match user {
-            Some(user) => {
-                let query = forgejo_api::structs::UserListStarredQuery {
-                    limit: Some(u32::MAX),
-                    page,
-                };
-                api.user_list_starred(user, query).await?
-            }
+            Some(user) => api.user_list_starred(user).page(page).page_size(50).await?,
             None => {
-                let query = forgejo_api::structs::UserCurrentListStarredQuery {
-                    limit: Some(u32::MAX),
-                    page,
-                };
-                api.user_current_list_starred(query).await?
+                api.user_current_list_starred()
+                    .page(page)
+                    .page_size(50)
+                    .await?
             }
         }
     } else {
         match user {
-            Some(user) => {
-                let query = forgejo_api::structs::UserListReposQuery {
-                    limit: Some(u32::MAX),
-                    page,
-                };
-                api.user_list_repos(user, query).await?
-            }
+            Some(user) => api.user_list_repos(user).page(page).page_size(50).await?,
             None => {
                 let query = forgejo_api::structs::UserCurrentListReposQuery {
-                    limit: Some(u32::MAX),
-                    page,
                     ..Default::default()
                 };
-                api.user_current_list_repos(query).await?
+                api.user_current_list_repos(query)
+                    .page(page)
+                    .page_size(50)
+                    .await?
             }
         }
     };
@@ -563,7 +640,6 @@ async fn list_repos(
             println!("{bullet} {name}");
         }
 
-        let page = page.unwrap_or(1);
         let page_start = (page - 1) * 50;
         let total_items = match headers.x_total_count {
             Some(t) => t as usize,
@@ -587,21 +663,9 @@ async fn list_repos(
 }
 
 async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let (_, mut orgs) = match user {
-        Some(user) => {
-            let query = forgejo_api::structs::OrgListUserOrgsQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.org_list_user_orgs(user, query).await?
-        }
-        None => {
-            let query = forgejo_api::structs::OrgListCurrentUserOrgsQuery {
-                limit: Some(u32::MAX),
-                ..Default::default()
-            };
-            api.org_list_current_user_orgs(query).await?
-        }
+    let mut orgs = match user {
+        Some(user) => api.org_list_user_orgs(user).all().await?,
+        None => api.org_list_current_user_orgs().all().await?,
     };
 
     if orgs.is_empty() {
@@ -892,6 +956,7 @@ fn default_settings_opt() -> forgejo_api::structs::UserSettingsOptions {
         language: None,
         location: None,
         pronouns: None,
+        hide_pronouns: None,
         theme: None,
         website: None,
     }
@@ -1044,5 +1109,428 @@ async fn edit_website(api: &Forgejo, new_url: Option<String>, unset: bool) -> ey
         }
         _ => println!("Use --unset to remove your name from your profile"),
     }
+    Ok(())
+}
+
+async fn list_keys(api: &Forgejo, verbose: bool) -> eyre::Result<()> {
+    let SpecialRender {
+        bold,
+        bright_cyan,
+        bright_magenta,
+        reset,
+        ..
+    } = *crate::special_render();
+
+    let keys = api.user_current_list_keys(Default::default()).all().await?;
+
+    println!("total keys: {}", keys.len());
+
+    let id_length = keys
+        .iter()
+        // Compute number of digits in the ID using the logarithm
+        .map(|k| std::cmp::max(k.id.unwrap_or(0), 1).ilog10() + 1)
+        .max()
+        .unwrap_or(0) as usize;
+
+    let title_length = keys
+        .iter()
+        .map(|k| k.title.as_ref().map(String::len).unwrap_or(0))
+        .max()
+        .unwrap_or(0);
+
+    for key in keys {
+        let id = key.id.unwrap_or(0);
+
+        if verbose {
+            println!("\n{bold}Key {bright_magenta}{id}{reset}:");
+            print_key(&key, 4);
+        } else {
+            let title = crate::DisplayOptional(key.title, "?");
+            let fingerprint = crate::DisplayOptional(key.fingerprint, "?");
+
+            println!(
+                "{bold}{id: >id_length$} {bright_cyan}{title: <title_length$}{reset} {fingerprint}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+async fn view_key(api: &Forgejo, id: i64) -> eyre::Result<()> {
+    let key = api.user_current_get_key(id).await?;
+    print_key(&key, 0);
+
+    Ok(())
+}
+
+fn print_key(key: &forgejo_api::structs::PublicKey, indent: usize) {
+    let SpecialRender {
+        bold,
+        bright_red,
+        bright_cyan,
+        reset,
+        ..
+    } = *crate::special_render();
+
+    let indent = " ".repeat(indent);
+    let unknown_value = format!("{bright_red}?{reset}");
+
+    println!(
+        "{indent}{bold}Title:       {reset}{bright_cyan}{}{reset}",
+        crate::DisplayOptional(key.title.as_ref(), &unknown_value),
+    );
+    println!(
+        "{indent}{bold}Created At:  {reset}{bright_cyan}{}{reset}",
+        crate::DisplayOptional(key.created_at, &unknown_value),
+    );
+    println!(
+        "{indent}{bold}Type:        {reset}{bright_cyan}{}{reset}",
+        crate::DisplayOptional(key.key_type.as_ref(), &unknown_value),
+    );
+    println!(
+        "{indent}{bold}Fingerprint: {reset}{bright_cyan}{}{reset}",
+        crate::DisplayOptional(key.fingerprint.as_ref(), &unknown_value),
+    );
+
+    if let Some(key) = &key.key {
+        println!("\n{indent}{key}");
+    }
+}
+
+async fn delete_key(api: &Forgejo, id: i64) -> eyre::Result<()> {
+    api.user_current_delete_key(id).await?;
+    println!("successfully deleted key with ID {id}");
+
+    Ok(())
+}
+
+async fn upload_key(
+    api: &Forgejo,
+    file: Option<String>,
+    title: Option<String>,
+    force: bool,
+    read_only: bool,
+) -> eyre::Result<()> {
+    use tokio::io::AsyncReadExt;
+
+    let is_stdin = matches!(file.as_deref(), Some("-"));
+
+    let file =
+        if let Some(file) = file {
+            std::path::PathBuf::from(file)
+        } else {
+            let ssh_dir = directories::UserDirs::new().ok_or_eyre(
+                "Couldn't locate home directory. Please provide an explicit path for the key file.",
+            )?.home_dir().join(".ssh");
+
+            let mut dirstream = tokio::fs::read_dir(ssh_dir).await?;
+
+            loop {
+                let Some(entry) = dirstream.next_entry().await? else {
+                    eyre::bail!("No keys found.");
+                };
+
+                if !entry.file_type().await?.is_file() {
+                    continue;
+                }
+
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !name.starts_with("id_") || !name.ends_with(".pub") {
+                    continue;
+                }
+
+                let path = entry.path();
+                println!("Guessed key file: {}", path.display());
+
+                eyre::ensure!(
+                    crate::prompt_bool("Does this look good?", false).await?,
+                    "User didn't confirm guessed key file.",
+                );
+
+                break path;
+            }
+        };
+
+    eyre::ensure!(
+        force || is_stdin || file.extension().map(|e| e == "pub").unwrap_or_default(),
+        concat!(
+            "'{}' doesn't end in '.pub'. Are you sure this isn't a private key?",
+            " If you want to proceed anyways, add --force."
+        ),
+        file.display(),
+    );
+
+    let SpecialRender {
+        bright_cyan, reset, ..
+    } = *crate::special_render();
+
+    let content = if is_stdin {
+        let mut key_content = String::new();
+        tokio::io::stdin().read_to_string(&mut key_content).await?;
+        key_content
+    } else {
+        tokio::fs::read_to_string(&file).await?
+    };
+
+    // Private keys start with
+    // -----BEGIN OPENSSH PRIVATE KEY-----
+    //
+    // Public keys are one-line and start with "ssh-", so we check for that.
+    let trimmed = content.trim();
+    eyre::ensure!(
+        force || (trimmed.starts_with("ssh-") && !trimmed.contains('\n')),
+        concat!(
+            "'{}' looks like a private key or invalid data!",
+            " If you want to proceed anyways, add --force."
+        ),
+        file.display(),
+    );
+
+    let title = if let Some(title) = title {
+        title
+    } else {
+        let Some(guess) = trimmed.split(' ').last() else {
+            eyre::bail!(
+                "Couldn't guess key title, please provide one explicitly and check your key file."
+            );
+        };
+
+        println!("Guessed title: {bright_cyan}{guess}{reset}");
+        eyre::ensure!(
+            crate::prompt_bool("Does this look good?", false).await?,
+            "User didn't confirm guessed title.",
+        );
+
+        guess.to_string()
+    };
+
+    let body = forgejo_api::structs::CreateKeyOption {
+        key: content,
+        read_only: Some(read_only),
+        title,
+    };
+
+    let key = api.user_current_post_key(body).await?;
+    println!("Key created successfully!\n");
+    print_key(&key, 0);
+
+    Ok(())
+}
+
+async fn list_gpg(api: &Forgejo, verbose: bool) -> eyre::Result<()> {
+    let SpecialRender {
+        bold,
+        bright_cyan,
+        bright_magenta,
+        reset,
+        ..
+    } = *crate::special_render();
+
+    let keys = api.user_current_list_gpg_keys().all().await?;
+
+    let id_length = keys
+        .iter()
+        // Compute number of digits in the ID using the logarithm
+        .map(|k| std::cmp::max(k.id.unwrap_or(0), 1).ilog10() + 1)
+        .max()
+        .unwrap_or(0) as usize;
+
+    let keyid_length = keys
+        .iter()
+        .map(|k| k.key_id.as_ref().map(String::len).unwrap_or(0))
+        .max()
+        .unwrap_or(0);
+
+    println!("total keys: {}", keys.len());
+    for key in keys {
+        let id = key.id.unwrap_or(0);
+        if verbose {
+            println!("\n{bold}Key {bright_magenta}{id}{reset}:");
+            print_gpg(&key, 4);
+        } else {
+            let keyid = crate::DisplayOptional(key.key_id, "?");
+            println!("{bold}{id: >id_length$} {bright_cyan}{keyid: <keyid_length$}{reset}");
+        }
+    }
+
+    Ok(())
+}
+
+async fn view_gpg(api: &Forgejo, id: i64) -> eyre::Result<()> {
+    let key = api.user_current_get_gpg_key(id).await?;
+    print_gpg(&key, 0);
+
+    Ok(())
+}
+
+fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
+    let SpecialRender {
+        bold,
+        bright_cyan,
+        bright_red,
+        bright_magenta,
+        reset,
+        ..
+    } = *crate::special_render();
+
+    let indent = " ".repeat(indent_depth);
+    let unknown_value = format!("{bright_red}?{reset}");
+
+    println!(
+        "{indent}{bold}Key ID:              {reset}{bright_cyan}{}{reset}",
+        crate::DisplayOptional(key.key_id.as_ref(), &unknown_value)
+    );
+    println!(
+        "{indent}{bold}Can Sign:            {reset}{}",
+        crate::DisplayBool(key.can_sign.unwrap_or(false))
+    );
+    println!(
+        "{indent}{bold}Can Encrypt Comms:   {reset}{}",
+        crate::DisplayBool(key.can_encrypt_comms.unwrap_or(false))
+    );
+    println!(
+        "{indent}{bold}Can Encrypt Storage: {reset}{}",
+        crate::DisplayBool(key.can_encrypt_storage.unwrap_or(false))
+    );
+    println!(
+        "{indent}{bold}Can Certify:         {reset}{}",
+        crate::DisplayBool(key.can_certify.unwrap_or(false))
+    );
+    println!(
+        "{indent}{bold}Verified:            {reset}{}",
+        crate::DisplayBool(key.verified.unwrap_or(false))
+    );
+
+    for email in key.emails.as_ref().map(Vec::as_slice).unwrap_or_default() {
+        if let forgejo_api::structs::GPGKeyEmail {
+            email: Some(email),
+            verified,
+        } = email
+        {
+            let verified = verified.unwrap_or(false);
+            println!(
+                "{indent}{bright_cyan}{email}{reset} {}",
+                if verified { "verified" } else { "not verified" }
+            );
+        }
+    }
+
+    if let Some(key) = key.public_key.as_ref() {
+        println!("\n{indent}{key}");
+    }
+
+    for subkey in key.subkeys.as_ref().map(Vec::as_slice).unwrap_or(&[]) {
+        println!(
+            "\n{indent}{bold}Subkey {bright_magenta}{}{reset}:",
+            crate::DisplayOptional(key.id, "?")
+        );
+        print_gpg(subkey, indent_depth + 4);
+    }
+}
+
+async fn delete_gpg(api: &Forgejo, id: i64, force: bool) -> eyre::Result<()> {
+    let prompt =
+        "Deleting a GPG key will cause all commits signed by that key to become unverified! Continue?";
+    eyre::ensure!(
+        force || crate::prompt_bool(prompt, false).await?,
+        "User aborted process.",
+    );
+
+    api.user_current_delete_gpg_key(id).await?;
+    println!("Key with ID {id} deleted successfully.");
+
+    Ok(())
+}
+
+async fn upload_gpg(api: &Forgejo, key_name: String, no_verify: bool) -> eyre::Result<()> {
+    println!("Exporting key...");
+    let key_output = tokio::process::Command::new("gpg")
+        .arg("--export")
+        .arg("--armor")
+        .arg(&key_name)
+        .stderr(std::process::Stdio::inherit())
+        .output()
+        .await?;
+
+    eyre::ensure!(
+        key_output.status.success(),
+        "Failed to export key. GPG status: {}",
+        key_output.status,
+    );
+
+    eyre::ensure!(!key_output.stdout.is_empty(), "No such key found!");
+
+    let key = String::from_utf8(key_output.stdout).context("Couldn't convert key to string.")?;
+
+    let signature = if no_verify {
+        None
+    } else {
+        Some(gpg_verify_token(api, &key_name).await?)
+    };
+
+    let form = forgejo_api::structs::CreateGPGKeyOption {
+        armored_public_key: key,
+        armored_signature: signature,
+    };
+    let key = api.user_current_post_gpg_key(form).await?;
+
+    println!("Key successfully added!\n");
+    print_gpg(&key, 0);
+
+    Ok(())
+}
+
+async fn gpg_verify_token(api: &Forgejo, key_name: &str) -> eyre::Result<String> {
+    use tokio::io::AsyncWriteExt;
+
+    println!("Fetching verification token...");
+    let token = api.get_verification_token().await?;
+
+    println!("Signing verification token with key '{key_name}'...");
+    let mut child = tokio::process::Command::new("gpg")
+        .arg("--armor")
+        .arg("--default-key")
+        .arg(key_name)
+        .arg("--detach-sig")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+
+    let mut stdin = child.stdin.take().context("Failed to open GPG stdin")?;
+    let writer = tokio::spawn(async move { stdin.write_all(token.as_bytes()).await });
+
+    let output = child.wait_with_output().await?;
+    writer.await??;
+
+    eyre::ensure!(
+        output.status.success(),
+        "Failed to export key. GPG status: {}",
+        output.status,
+    );
+
+    Ok(String::from_utf8(output.stdout)?)
+}
+
+async fn verify_gpg(api: &Forgejo, id: i64) -> eyre::Result<()> {
+    let key = api.user_current_get_gpg_key(id).await?;
+
+    let Some(key_id) = &key.key_id else {
+        eyre::bail!("API didn't return a key ID!");
+    };
+
+    println!("Verifying this key:");
+    print_gpg(&key, 0);
+
+    let token = gpg_verify_token(api, key_id).await?;
+
+    let option = forgejo_api::structs::VerifyGPGKeyOption {
+        armored_signature: Some(token),
+        key_id: key_id.clone(),
+    };
+    api.user_verify_gpg_key(option).await?;
+
+    println!("Verification successful!");
+
     Ok(())
 }

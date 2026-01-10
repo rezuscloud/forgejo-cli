@@ -4,8 +4,7 @@ use clap::{Args, Subcommand};
 use eyre::{bail, OptionExt};
 use forgejo_api::{
     structs::{
-        ActionVariable, CreateOrUpdateSecretOption, CreateVariableOption,
-        GetRepoVariablesListQuery, RepoListActionsSecretsQuery, UpdateVariableOption,
+        ActionVariable, CreateOrUpdateSecretOption, CreateVariableOption, UpdateVariableOption,
     },
     Forgejo, ForgejoError,
 };
@@ -19,11 +18,12 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct ActionsCommand {
-    /// The local git remote that points to the repo to operate on.
-    #[clap(long, short = 'R')]
+    /// The local git remote that points to the repo to operate on
+    #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
 
-    #[clap(long, short = 'r')]
+    /// The repo to operate on
+    #[clap(long, short, global = true)]
     repo: Option<RepoArg>,
 
     #[clap(subcommand)]
@@ -160,14 +160,9 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo, page: u32) -> eyre::Result<(
     // We don't iterate this to collect all tasks (not just the ones on the first page) like the
     // issue search subcommand will do, because it's unlikely someone wants to see *all* tasks.
     let res = api
-        .list_action_tasks(
-            repo.owner(),
-            repo.name(),
-            forgejo_api::structs::ListActionTasksQuery {
-                page: Some(page),
-                limit: Some(20),
-            },
-        )
+        .list_action_tasks(repo.owner(), repo.name())
+        .page(page)
+        .page_size(20)
         .await?;
 
     if res.total_count == Some(1) {
@@ -231,27 +226,10 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo, page: u32) -> eyre::Result<(
 }
 
 async fn list_variables(repo: &RepoName, api: &Forgejo, verbose: bool) -> eyre::Result<()> {
-    let per_page = 64;
-    let mut variables = vec![];
-
-    for page in 1.. {
-        let (_headers, vars) = api
-            .get_repo_variables_list(
-                repo.owner(),
-                repo.name(),
-                GetRepoVariablesListQuery {
-                    page: Some(page),
-                    limit: Some(per_page),
-                },
-            )
-            .await?;
-
-        let done = vars.len() < per_page as usize;
-        variables.extend(vars.into_iter());
-        if done {
-            break;
-        }
-    }
+    let variables = api
+        .get_repo_variables_list(repo.owner(), repo.name())
+        .all()
+        .await?;
 
     for var in variables {
         println!("{}", DisplayActionVariable::new(var, verbose)?);
@@ -293,7 +271,10 @@ async fn create_variable(
         )
         .await
     {
-        Err(ForgejoError::ApiError(StatusCode::CONFLICT, _)) => {
+        Err(ForgejoError::ApiError(forgejo_api::ApiError {
+            kind: forgejo_api::ApiErrorKind::Other(StatusCode::CONFLICT),
+            ..
+        })) => {
             if !force {
                 bail!("variable already exists, pass --force to replace it.");
             }
@@ -318,41 +299,18 @@ async fn create_variable(
 }
 
 async fn delete_variable(repo: &RepoName, api: &Forgejo, name: String) -> eyre::Result<()> {
-    let var = api
-        .delete_repo_variable(repo.owner(), repo.name(), &name)
+    api.delete_repo_variable(repo.owner(), repo.name(), &name)
         .await?;
-
-    if let Some(var) = var {
-        println!("Deleted: {}", DisplayActionVariable::new(var, false)?);
-    } else {
-        println!("Variable {name} deleted.");
-    }
+    println!("Variable {name} deleted.");
 
     Ok(())
 }
 
 async fn list_secrets(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
-    let per_page = 64;
-    let mut secrets = vec![];
-
-    for page in 1.. {
-        let (_headers, page_secrets) = api
-            .repo_list_actions_secrets(
-                repo.owner(),
-                repo.name(),
-                RepoListActionsSecretsQuery {
-                    page: Some(page),
-                    limit: Some(per_page),
-                },
-            )
-            .await?;
-
-        let done = page_secrets.len() < per_page as usize;
-        secrets.extend(page_secrets.into_iter());
-        if done {
-            break;
-        }
-    }
+    let secrets = api
+        .repo_list_actions_secrets(repo.owner(), repo.name())
+        .all()
+        .await?;
 
     for secret in secrets {
         println!(
@@ -403,6 +361,7 @@ async fn dispatch(
         &name,
         forgejo_api::structs::DispatchWorkflowOption {
             inputs: Some(inputs),
+            return_run_info: Some(false),
             r#ref: r#ref.clone(),
         },
     )

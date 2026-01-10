@@ -106,7 +106,7 @@ impl RepoInfo {
                             let url_s = std::str::from_utf8(remote.url_bytes())?;
                             let url = keys.deref_alias(crate::ssh_url_parse(url_s)?);
 
-                            if crate::host_with_port(&url) == crate::host_with_port(host_url) {
+                            if crate::host_name(&url) == crate::host_name(host_url) {
                                 name = Some(remote_name_s.to_owned());
                             }
                         } else {
@@ -132,7 +132,7 @@ impl RepoInfo {
                             if let Some(url) = remote.url() {
                                 let url = keys.deref_alias(crate::ssh_url_parse(url)?);
                                 let (url, _) = url_strip_repo_name(url)?;
-                                if crate::host_with_port(&url) == crate::host_with_port(&url)
+                                if crate::host_name(&url) == crate::host_name(&url)
                                     && url.path() == host_url.path()
                                 {
                                     name = Some(remote_name.to_owned());
@@ -161,8 +161,8 @@ impl RepoInfo {
         };
 
         let same_instance = |a: &Option<Url>, b: &Option<Url>| {
-            let a = a.as_ref().map(crate::host_with_port_and_path);
-            let b = b.as_ref().map(crate::host_with_port_and_path);
+            let a = a.as_ref().map(crate::host_name);
+            let b = b.as_ref().map(crate::host_name);
             a == b
         };
 
@@ -409,9 +409,17 @@ pub enum RepoCommand {
         ssh: Option<Option<bool>>,
     },
     /// Add a star to a repo
-    Star { repo: RepoArg },
+    Star {
+        repo: Option<RepoArg>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
     /// Take away a star from a repo
-    Unstar { repo: RepoArg },
+    Unstar {
+        repo: Option<RepoArg>,
+        #[clap(long, short = 'R')]
+        remote: Option<String>,
+    },
     /// Delete a repository
     ///
     /// This cannot be undone!
@@ -441,7 +449,7 @@ impl RepoCommand {
             } => {
                 let host = RepoInfo::get_current(host_name, None, None, &keys)?;
                 let api = keys.get_api(host.host_url()).await?;
-                let url_host = crate::host_with_port(&host.host_url());
+                let url_host = crate::host_name(&host.host_url());
                 let ssh = ssh
                     .unwrap_or(Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
@@ -519,23 +527,29 @@ impl RepoCommand {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo.name().unwrap();
-                let url_host = crate::host_with_port(&repo.host_url());
+                let url_host = crate::host_name(&repo.host_url());
                 let ssh = ssh
                     .unwrap_or(Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
                 cmd_clone_repo(&api, name, path, ssh).await?;
             }
-            RepoCommand::Star { repo } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
+            RepoCommand::Star { repo, remote } => {
+                let repo =
+                    RepoInfo::get_current(host_name, repo.as_ref(), remote.as_deref(), &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
-                let name = repo.name().unwrap();
+                let name = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
                 api.user_current_put_star(name.owner(), name.name()).await?;
                 println!("Starred {}/{}!", name.owner(), name.name());
             }
-            RepoCommand::Unstar { repo } => {
-                let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
+            RepoCommand::Unstar { repo, remote } => {
+                let repo =
+                    RepoInfo::get_current(host_name, repo.as_ref(), remote.as_deref(), &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
-                let name = repo.name().unwrap();
+                let name = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
                 api.user_current_delete_star(name.owner(), name.name())
                     .await?;
                 println!("Removed star from {}/{}", name.owner(), name.name());
@@ -1050,12 +1064,14 @@ pub fn clone_repo(
     // I find it surprising that auth_git2 just hardcodes what key files to look for instead of
     // looking in .ssh/config
     if url.scheme() == "ssh" {
-        let ssh_config =
-            ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)?;
-        let params = ssh_config.query(url.host_str().ok_or_eyre("url does not have host")?);
-        if let Some(identity_file) = params.identity_file.as_deref() {
-            for path in identity_file {
-                auth = auth.add_ssh_key_from_file(path, None);
+        if let Ok(ssh_config) =
+            ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)
+        {
+            let params = ssh_config.query(url.host_str().ok_or_eyre("url does not have host")?);
+            if let Some(identity_file) = params.identity_file.as_deref() {
+                for path in identity_file {
+                    auth = auth.add_ssh_key_from_file(path, None);
+                }
             }
         }
     }

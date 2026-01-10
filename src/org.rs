@@ -2,12 +2,11 @@ use clap::{Args, Subcommand};
 use eyre::OptionExt;
 use forgejo_api::{
     structs::{
-        CreateLabelOption, CreateOrgOption, EditLabelOption, EditOrgOption, OrgGetAllQuery,
-        OrgListCurrentUserOrgsQuery, OrgListLabelsQuery, OrgListMembersQuery,
-        OrgListPublicMembersQuery, OrgListReposQuery,
+        CreateLabelOption, CreateOrgOption, EditLabelOption, EditOrgOption, OrgListLabelsQuery,
     },
     Forgejo,
 };
+use futures::{future, TryStreamExt};
 
 use crate::{repo::RepoInfo, SpecialRender};
 
@@ -27,8 +26,8 @@ pub enum OrgSubcommand {
     /// List all organizations
     List {
         /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
+        #[clap(long, short, default_value_t = 1)]
+        page: u32,
         /// Only list organizations you are a member of.
         #[clap(long, short)]
         only_member_of: bool,
@@ -70,8 +69,8 @@ pub enum OrgSubcommand {
         /// The name of the organization to view the members of.
         org: String,
         /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
+        #[clap(long, short, default_value_t = 1)]
+        page: u32,
     },
     /// View and change the visibility of your membership in an organization
     Visibility {
@@ -185,20 +184,12 @@ fn is_valid_name_char(c: char) -> bool {
     }
 }
 
-async fn list_orgs(api: &Forgejo, page: Option<u32>, only_member_of: bool) -> eyre::Result<()> {
+async fn list_orgs(api: &Forgejo, page: u32, only_member_of: bool) -> eyre::Result<()> {
     let (count, orgs) = if only_member_of {
-        let query = OrgListCurrentUserOrgsQuery {
-            page,
-            limit: Some(20),
-        };
-        let (headers, orgs) = api.org_list_current_user_orgs(query).await?;
+        let (headers, orgs) = api.org_list_current_user_orgs().page(page).await?;
         (headers.x_total_count.unwrap_or_default() as u64, orgs)
     } else {
-        let query = OrgGetAllQuery {
-            page,
-            limit: Some(20),
-        };
-        let (headers, orgs) = api.org_get_all(query).await?;
+        let (headers, orgs) = api.org_get_all().page(page).await?;
         (headers.x_total_count.unwrap_or_default() as u64, orgs)
     };
 
@@ -215,7 +206,7 @@ async fn list_orgs(api: &Forgejo, page: Option<u32>, only_member_of: bool) -> ey
             let name = org.name.ok_or_eyre("org does not have name")?;
             println!("{bullet} {bold}{name}{reset}");
         }
-        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
+        println!("Page {} of {}", page, count.div_ceil(20));
     }
     Ok(())
 }
@@ -251,28 +242,19 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
     }
     print!(" {dash} {vis_pretty}");
     println!();
-
-    let members_query = forgejo_api::structs::OrgListMembersQuery {
-        page: Some(1),
-        limit: Some(1),
-    };
-    let member_count = match api.org_list_members(&name, members_query).await {
+    let member_count = match api.org_list_members(&name).page(1).page_size(1).await {
         Ok((members_headers, _)) => members_headers.x_total_count.unwrap_or_default(),
         Err(_) => {
-            let members_query = forgejo_api::structs::OrgListPublicMembersQuery {
-                page: Some(1),
-                limit: Some(1),
-            };
-            let (members_headers, _) = api.org_list_public_members(&name, members_query).await?;
+            let (members_headers, _) = api
+                .org_list_public_members(&name)
+                .page(1)
+                .page_size(1)
+                .await?;
             members_headers.x_total_count.unwrap_or_default()
         }
     };
     print!("{bold}{member_count}{reset} members");
-    let teams_query = forgejo_api::structs::OrgListTeamsQuery {
-        page: Some(1),
-        limit: Some(1),
-    };
-    if let Ok((teams_headers, _)) = api.org_list_teams(&name, teams_query).await {
+    if let Ok((teams_headers, _)) = api.org_list_teams(&name).page(1).page_size(1).await {
         let teams = teams_headers.x_total_count.unwrap_or_default();
         println!(" {dash} {bold}{teams}{reset} teams");
     }
@@ -406,25 +388,17 @@ async fn list_activity(api: &Forgejo, name: String) -> eyre::Result<()> {
     Ok(())
 }
 
-async fn list_org_members(api: &Forgejo, org: String, page: Option<u32>) -> eyre::Result<()> {
+async fn list_org_members(api: &Forgejo, org: String, page: u32) -> eyre::Result<()> {
     let my_username = api
         .user_get_current()
         .await?
         .login
         .ok_or_eyre("current user does not have username")?;
     let (count, users) = if api.org_is_member(&org, &my_username).await.is_ok() {
-        let query = OrgListMembersQuery {
-            page,
-            limit: Some(20),
-        };
-        let (headers, users) = api.org_list_members(&org, query).await?;
+        let (headers, users) = api.org_list_members(&org).page(page).await?;
         (headers.x_total_count.unwrap_or_default() as u64, users)
     } else {
-        let query = OrgListPublicMembersQuery {
-            page,
-            limit: Some(20),
-        };
-        let (headers, users) = api.org_list_public_members(&org, query).await?;
+        let (headers, users) = api.org_list_public_members(&org).page(page).await?;
         (headers.x_total_count.unwrap_or_default() as u64, users)
     };
 
@@ -450,7 +424,7 @@ async fn list_org_members(api: &Forgejo, org: String, page: Option<u32>) -> eyre
                 None => println!("{bullet} {bright_cyan}{username}{reset}"),
             }
         }
-        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
+        println!("Page {} of {}", page, count.div_ceil(20));
     }
     Ok(())
 }
@@ -585,41 +559,32 @@ impl LabelSubcommand {
 }
 
 async fn list_org_labels(api: &Forgejo, org: String) -> eyre::Result<()> {
-    crate::prs::render_label_list(&get_all_org_labels(api, &org).await?)?;
+    let labels = api
+        .org_list_labels(&org, OrgListLabelsQuery::default())
+        .all()
+        .await?;
+    crate::prs::render_label_list(&labels)?;
     Ok(())
-}
-
-async fn get_all_org_labels(
-    api: &Forgejo,
-    org: &str,
-) -> eyre::Result<Vec<forgejo_api::structs::Label>> {
-    let mut labels = Vec::new();
-    for page_idx in 1.. {
-        let query = OrgListLabelsQuery {
-            page: Some(page_idx),
-            limit: None,
-        };
-        let (headers, label_page) = api.org_list_labels(&org, query).await?;
-        labels.extend(label_page);
-        if headers
-            .x_total_count
-            .is_some_and(|n| n as usize <= labels.len())
-        {
-            break;
-        }
-    }
-    Ok(labels)
 }
 
 async fn find_label_by_name(
     api: &Forgejo,
     org: &str,
-    label: &str,
+    name: &str,
 ) -> eyre::Result<Option<forgejo_api::structs::Label>> {
-    let labels = get_all_org_labels(api, org).await?;
-    Ok(labels
-        .into_iter()
-        .find(|l| l.name.as_deref().is_some_and(|s| s == label)))
+    Ok(api
+        .org_list_labels(&org, OrgListLabelsQuery::default())
+        .stream()
+        .try_filter(|label| {
+            future::ready(
+                label
+                    .name
+                    .as_deref()
+                    .is_some_and(|label_name| label_name == name),
+            )
+        })
+        .try_next()
+        .await?)
 }
 
 async fn add_org_label(
@@ -673,7 +638,7 @@ async fn edit_org_label(
         is_archived: archived,
         name: new_name,
     };
-    let label = api.org_edit_label(&org, id as u64, opt).await?;
+    let label = api.org_edit_label(&org, id, opt).await?;
     println!(
         "Changed label {} to {}",
         crate::prs::render_label(&old_label)?,
@@ -687,7 +652,7 @@ async fn remove_org_label(api: &Forgejo, org: String, name: String) -> eyre::Res
         .await?
         .ok_or_eyre("label not found")?;
     let id = label.id.ok_or_eyre("label does not have id")?;
-    api.org_delete_label(&org, id as u64).await?;
+    api.org_delete_label(&org, id).await?;
     println!("Removed label {}", crate::prs::render_label(&label)?);
     Ok(())
 }
@@ -699,8 +664,8 @@ pub enum RepoSubcommand {
         /// The name of the organization to list the repos of.
         org: String,
         /// Which page of the results to view
-        #[clap(long, short)]
-        page: Option<u32>,
+        #[clap(long, short, default_value_t = 1)]
+        page: u32,
     },
     /// Create a new repository in this organization.
     Create {
@@ -732,7 +697,7 @@ impl RepoSubcommand {
                         ssh,
                     },
             } => {
-                let url_host = crate::host_with_port(&repo_info.host_url());
+                let url_host = crate::host_name(&repo_info.host_url());
                 let ssh = ssh
                     .unwrap_or(Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
@@ -753,12 +718,8 @@ impl RepoSubcommand {
     }
 }
 
-async fn list_org_repos(api: &Forgejo, org: String, page: Option<u32>) -> eyre::Result<()> {
-    let query = OrgListReposQuery {
-        page,
-        limit: Some(20),
-    };
-    let (headers, repos) = api.org_list_repos(&org, query).await?;
+async fn list_org_repos(api: &Forgejo, org: String, page: u32) -> eyre::Result<()> {
+    let (headers, repos) = api.org_list_repos(&org).page(page).await?;
     let SpecialRender { bullet, .. } = crate::special_render();
     if repos.is_empty() {
         println!("No results");
@@ -771,7 +732,7 @@ async fn list_org_repos(api: &Forgejo, org: String, page: Option<u32>) -> eyre::
             println!("{bullet} {full_name}");
         }
         let count = headers.x_total_count.unwrap_or_default() as u64;
-        println!("Page {} of {}", page.unwrap_or(1), count.div_ceil(20));
+        println!("Page {} of {}", page, count.div_ceil(20));
     }
     Ok(())
 }

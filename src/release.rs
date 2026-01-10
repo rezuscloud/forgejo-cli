@@ -4,6 +4,7 @@ use forgejo_api::{
     structs::{RepoCreateReleaseAttachmentQuery, RepoListReleasesQuery},
     Forgejo,
 };
+use futures::stream::TryStreamExt;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
@@ -14,11 +15,11 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct ReleaseCommand {
-    /// The local git remote that points to the repo to operate on.
-    #[clap(long, short = 'R')]
+    /// The local git remote that points to the repo to operate on
+    #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
-    /// The name of the repository to operate on.
-    #[clap(long, short)]
+    /// The name of the repository to operate on
+    #[clap(long, short, global = true)]
     repo: Option<RepoArg>,
     #[clap(subcommand)]
     command: ReleaseSubcommand,
@@ -262,12 +263,12 @@ async fn create_release(
         };
         let id = release
             .id
-            .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
+            .ok_or_else(|| eyre::eyre!("release does not have id"))?;
         api.repo_create_release_attachment(
             repo.owner(),
             repo.name(),
             id,
-            Some(tokio::fs::read(file).await?),
+            Some(&tokio::fs::read(file).await?),
             None,
             query,
         )
@@ -313,7 +314,7 @@ async fn edit_release(
     };
     let id = release
         .id
-        .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
+        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
     api.repo_edit_release(repo.owner(), repo.name(), id, release_edit)
         .await?;
     Ok(())
@@ -329,8 +330,6 @@ async fn list_releases(
         q: None,
         pre_release: Some(prerelease),
         draft: Some(draft),
-        page: None,
-        limit: None,
     };
     let (_, releases) = api
         .repo_list_releases(repo.owner(), repo.name(), query)
@@ -467,7 +466,7 @@ async fn create_asset(
     let id = find_release(repo, api, &release)
         .await?
         .id
-        .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
+        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
     let query = RepoCreateReleaseAttachmentQuery {
         name: Some(asset.to_owned()),
     };
@@ -475,7 +474,7 @@ async fn create_asset(
         repo.owner(),
         repo.name(),
         id,
-        Some(tokio::fs::read(file).await?),
+        Some(&tokio::fs::read(file).await?),
         None,
         query,
     )
@@ -503,10 +502,10 @@ async fn delete_asset(
         .ok_or_else(|| eyre!("asset not found"))?;
     let release_id = release
         .id
-        .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
+        .ok_or_else(|| eyre::eyre!("release does not have id"))?;
     let asset_id = asset
         .id
-        .ok_or_else(|| eyre::eyre!("asset does not have id"))? as u64;
+        .ok_or_else(|| eyre::eyre!("asset does not have id"))?;
     api.repo_delete_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
         .await?;
     println!("Removed attachment `{}` from {}", asset_name, release_name);
@@ -549,15 +548,12 @@ async fn download_asset(
                 .ok_or_else(|| eyre!("asset not found"))?;
             let release_id = release
                 .id
-                .ok_or_else(|| eyre::eyre!("release does not have id"))?
-                as u64;
+                .ok_or_else(|| eyre::eyre!("release does not have id"))?;
             let asset_id = asset
                 .id
-                .ok_or_else(|| eyre::eyre!("asset does not have id"))?
-                as u64;
+                .ok_or_else(|| eyre::eyre!("asset does not have id"))?;
             api.download_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
                 .await?
-                .to_vec()
         }
     };
     let real_output = output
@@ -589,17 +585,19 @@ async fn find_release(
         q: None,
         draft: None,
         pre_release: None,
-        page: None,
-        limit: None,
     };
-    let (_, mut releases) = api
-        .repo_list_releases(repo.owner(), repo.name(), query)
-        .await?;
-    let idx = releases
-        .iter()
-        .position(|r| r.name.as_deref() == Some(name))
-        .ok_or_else(|| eyre!("release not found"))?;
-    Ok(releases.swap_remove(idx))
+    api.repo_list_releases(repo.owner(), repo.name(), query)
+        .stream()
+        .try_filter(|r| {
+            futures::future::ready(
+                r.name
+                    .as_deref()
+                    .is_some_and(|release_name| release_name == name),
+            )
+        })
+        .try_next()
+        .await?
+        .ok_or_else(|| eyre::eyre!("could not find release {name}"))
 }
 
 async fn delete_release(
@@ -615,7 +613,7 @@ async fn delete_release(
         let id = find_release(repo, api, &name)
             .await?
             .id
-            .ok_or_else(|| eyre::eyre!("release does not have id"))? as u64;
+            .ok_or_else(|| eyre::eyre!("release does not have id"))?;
         api.repo_delete_release(repo.owner(), repo.name(), id)
             .await?;
     }

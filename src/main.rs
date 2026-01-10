@@ -1,9 +1,10 @@
 use std::fmt::Display;
 use std::io::IsTerminal;
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use eyre::eyre;
-use tokio::io::AsyncWriteExt;
+use eyre::{eyre, Context};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 mod keys;
 use keys::*;
@@ -105,6 +106,30 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     .await?
 }
 
+async fn prompt_bool(msg: &str, default_answer: bool) -> eyre::Result<bool> {
+    let msg = if default_answer {
+        format!("{msg} [Y/n]: ")
+    } else {
+        format!("{msg} [y/N]: ")
+    };
+
+    loop {
+        let input = readline(&msg).await?;
+        let input = input.trim();
+
+        if input.is_empty() {
+            return Ok(default_answer);
+        }
+
+        if input.eq_ignore_ascii_case("y") {
+            return Ok(true);
+        }
+        if input.eq_ignore_ascii_case("n") {
+            return Ok(false);
+        }
+    }
+}
+
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     let editor = std::path::PathBuf::from(
         std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?,
@@ -138,6 +163,21 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     tokio::fs::remove_file(path).await?;
     res?;
     Ok(())
+}
+
+// Read a filename, unless “-” is given, in which case, stdin is read and returned
+async fn read_file_or_stdin(path: &PathBuf) -> eyre::Result<String> {
+    if *path == PathBuf::from("-") {
+        // Typical use should be not interactive, so it's fine to call stdin() (see docs)
+        let mut stdin = tokio::io::stdin();
+        let mut body = String::new();
+        stdin.read_to_string(&mut body).await?;
+        Ok(body)
+    } else {
+        tokio::fs::read_to_string(&path)
+            .await
+            .wrap_err_with(|| eyre::eyre!("Error reading file `{}`", path.to_string_lossy()))
+    }
 }
 
 fn get_editor_flags(editor_path: &std::path::Path) -> &'static [&'static str] {
@@ -178,12 +218,14 @@ fn ssh_url_parse(s: &str) -> Result<url::Url, url::ParseError> {
     })
 }
 
-fn host_with_port(url: &url::Url) -> &str {
-    &url[url::Position::BeforeHost..url::Position::AfterPort]
+fn host_name(url: &url::Url) -> &str {
+    let name = &url[url::Position::BeforeHost..url::Position::AfterPath];
+    name.strip_suffix("/").unwrap_or(name)
 }
 
-fn host_with_port_and_path(url: &url::Url) -> &str {
-    &url[url::Position::BeforeHost..url::Position::AfterPath]
+fn repo_url_host_name(url: &url::Url) -> &str {
+    let host = host_name(url);
+    host.rsplitn(2, '/').last().unwrap_or(host)
 }
 
 use std::sync::OnceLock;
@@ -798,5 +840,27 @@ impl<T: Display, F: Display> Display for DisplayOptional<T, F> {
         } else {
             write!(f, "{}", self.1)
         }
+    }
+}
+
+/// When formatted, show the boolean with coloring.
+struct DisplayBool(bool);
+
+impl Display for DisplayBool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let SpecialRender {
+            bright_red,
+            bright_green,
+            reset,
+            ..
+        } = *special_render();
+
+        if self.0 {
+            write!(f, "{bright_green}true{reset}")?;
+        } else {
+            write!(f, "{bright_red}false{reset}")?;
+        }
+
+        Ok(())
     }
 }
