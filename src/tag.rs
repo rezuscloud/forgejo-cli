@@ -121,5 +121,9 @@ async fn view_tag(repo: &RepoName, api: &Forgejo, name: String) -> eyre::Result<
     let crate::SpecialRender { bold, reset, .. } = crate::special_render();
     println!("{bold}{name}{reset}");
     println!("{id}");
+    if let Some(msg) = &tag.message {
+        println!();
+        println!("{}", crate::markdown(msg));
+    }
     Ok(())
 }
