@@ -315,53 +315,25 @@ async fn create_issue(
                 );
                 let (template_file, is_yaml) =
                     template::get_template_file(repo, api, &template_name).await?;
-                let template_file = std::str::from_utf8(&template_file)?;
-                if is_yaml {
-                    let tmpl =
-                        serde_saphyr::from_str::<template::yaml::YamlTemplate>(template_file)?;
+                let (body, labels) = crate::issues::template::metadata_from_template(
+                    repo,
+                    api,
+                    body,
+                    template_file,
+                    is_yaml,
+                )
+                .await?;
 
-                    let mut form = tmpl.generate_form()?;
-                    crate::editor(&mut form, Some("md")).await?;
-                    let body = tmpl.generate_content(tmpl.parse_form(&form)?)?;
-
-                    let labels = if let Some(labels) = tmpl.labels {
-                        Some(label_names_to_ids(repo, api, labels).await?)
-                    } else {
-                        None
-                    };
-
-                    CreateIssueOption {
-                        body: Some(body),
-                        title,
-                        assignee: None,
-                        assignees: None,
-                        closed: None,
-                        due_date: None,
-                        labels,
-                        milestone: None,
-                        r#ref: None,
-                    }
-                } else {
-                    let mut tmpl = template::MarkdownTemplate::new(template_file)?;
-                    crate::editor(&mut tmpl.body, Some("md")).await?;
-
-                    let labels = if let Some(labels) = tmpl.labels {
-                        Some(label_names_to_ids(repo, api, labels).await?)
-                    } else {
-                        None
-                    };
-
-                    CreateIssueOption {
-                        body: Some(tmpl.body),
-                        title,
-                        assignee: None,
-                        assignees: None,
-                        closed: None,
-                        due_date: None,
-                        labels: labels,
-                        milestone: None,
-                        r#ref: None,
-                    }
+                CreateIssueOption {
+                    body: Some(body),
+                    title,
+                    assignee: None,
+                    assignees: None,
+                    closed: None,
+                    due_date: None,
+                    labels: labels,
+                    milestone: None,
+                    r#ref: None,
                 }
             } else {
                 eyre::ensure!(

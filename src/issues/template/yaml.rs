@@ -63,16 +63,19 @@ pub struct YamlTemplate {
     pub body: Vec<TemplateItem>,
 }
 
+static MD_OPTIONS: std::sync::LazyLock<comrak::Options<'static>> = std::sync::LazyLock::new(|| {
+    let mut options = comrak::Options::default();
+    options.extension.strikethrough = true;
+    options.extension.tasklist = true;
+    options.render.unsafe_ = true;
+    options
+});
+
 impl YamlTemplate {
     pub fn generate_form(&self) -> eyre::Result<String> {
         use comrak::nodes::{NodeList, NodeValue};
 
         let arena = &comrak::Arena::new();
-        let mut options = comrak::Options::default();
-        options.extension.strikethrough = true;
-        options.extension.tasklist = true;
-        options.render.unsafe_ = true;
-        let options = &options;
         let output = arena.alloc(NodeValue::Document.into());
         for item in &self.body {
             if !item.visibility().form {
@@ -80,7 +83,7 @@ impl YamlTemplate {
             }
             match item {
                 TemplateItem::Markdown { attributes, .. } => {
-                    append_markdown(arena, output, &attributes.value, options);
+                    append_markdown(arena, output, &attributes.value);
                 }
                 TemplateItem::TextArea {
                     attributes,
@@ -89,7 +92,7 @@ impl YamlTemplate {
                 } => {
                     append_header(arena, output, 3, &attributes.label);
                     if let Some(description) = &attributes.description {
-                        append_markdown(arena, output, description, options);
+                        append_markdown(arena, output, description);
                     }
 
                     if validations.required {
@@ -119,7 +122,7 @@ impl YamlTemplate {
                 } => {
                     append_header(arena, output, 3, &attributes.label);
                     if let Some(description) = &attributes.description {
-                        append_markdown(arena, output, description, options);
+                        append_markdown(arena, output, description);
                     }
 
                     if validations.required {
@@ -143,7 +146,7 @@ impl YamlTemplate {
                     }
 
                     let textarea_blockquote = append_node(arena, output, NodeValue::BlockQuote);
-                    append_markdown(arena, textarea_blockquote, &attributes.value, options);
+                    append_markdown(arena, textarea_blockquote, &attributes.value);
                 }
                 TemplateItem::Dropdown {
                     attributes,
@@ -152,7 +155,7 @@ impl YamlTemplate {
                 } => {
                     append_header(arena, output, 3, &attributes.label);
                     if let Some(description) = &attributes.description {
-                        append_markdown(arena, output, description, options);
+                        append_markdown(arena, output, description);
                     }
 
                     let requirements = match (validations.required, attributes.multiple) {
@@ -172,13 +175,13 @@ impl YamlTemplate {
                     let list = append_node(arena, output, NodeValue::List(list_cfg));
                     for list_option in &attributes.options {
                         let list_item = append_node(arena, list, NodeValue::TaskItem(None));
-                        append_markdown(arena, list_item, &list_option, options);
+                        append_markdown(arena, list_item, &list_option);
                     }
                 }
                 TemplateItem::Checkboxes { attributes, .. } => {
                     append_header(arena, output, 3, &attributes.label);
                     if let Some(description) = &attributes.description {
-                        append_markdown(arena, output, description, options);
+                        append_markdown(arena, output, description);
                     }
 
                     let list_cfg = NodeList {
@@ -194,14 +197,14 @@ impl YamlTemplate {
                             } else {
                                 &list_option.label
                             };
-                            append_markdown(arena, list_item, label, options);
+                            append_markdown(arena, list_item, label);
                         }
                     }
                 }
             }
         }
         let mut output_buf = Vec::new();
-        comrak::format_commonmark(output, options, &mut output_buf)?;
+        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_buf)?;
         let output_str = String::from_utf8(output_buf)?;
         Ok(output_str)
     }
@@ -210,13 +213,8 @@ impl YamlTemplate {
         use comrak::nodes::{NodeCodeBlock, NodeList, NodeValue};
 
         let arena = &comrak::Arena::new();
-        let mut options = comrak::Options::default();
-        options.extension.strikethrough = true;
-        options.extension.tasklist = true;
-        options.render.unsafe_ = true;
-        let options = &options;
 
-        let form = comrak::parse_document(arena, form, options);
+        let form = comrak::parse_document(arena, form, &*MD_OPTIONS);
         let mut form_iter = form.children();
 
         let mut output = Vec::new();
@@ -227,10 +225,10 @@ impl YamlTemplate {
                 continue;
             }
             if let Some(header) = item.header() {
-                validate_header(arena, &mut form_iter, 3, header, options)?;
+                validate_header(arena, &mut form_iter, 3, header)?;
             }
             if let Some(description) = item.description() {
-                validate_description(arena, &mut form_iter, description, options)?;
+                validate_description(arena, &mut form_iter, description)?;
             }
             match item {
                 // this is already covered by the description validation
@@ -244,7 +242,7 @@ impl YamlTemplate {
                     ..
                 } => {
                     if validations.required {
-                        validate_description(arena, &mut form_iter, FIELD_REQUIRED, options)?;
+                        validate_description(arena, &mut form_iter, FIELD_REQUIRED)?;
                     }
 
                     let node = form_iter.next().ok_or_eyre("unexpected EOF")?;
@@ -276,17 +274,16 @@ impl YamlTemplate {
 
                 TemplateItem::Input { validations, .. } => {
                     if validations.required {
-                        validate_description(arena, &mut form_iter, FIELD_REQUIRED, options)?;
+                        validate_description(arena, &mut form_iter, FIELD_REQUIRED)?;
                     }
                     if validations.is_number {
-                        validate_description(arena, &mut form_iter, FIELD_NUMBER, options)?;
+                        validate_description(arena, &mut form_iter, FIELD_NUMBER)?;
                     }
                     if let Some(regex) = &validations.regex {
                         validate_description(
                             arena,
                             &mut form_iter,
                             &format!("{FIELD_REGEX}`{regex}`."),
-                            options,
                         )?;
                     }
 
@@ -312,7 +309,7 @@ impl YamlTemplate {
                     }
 
                     let mut body = Vec::new();
-                    comrak::format_commonmark(new_doc, options, &mut body)?;
+                    comrak::format_commonmark(new_doc, &*MD_OPTIONS, &mut body)?;
                     let mut body = String::from_utf8(body)?;
                     if body.ends_with("\r\n") {
                         body.pop();
@@ -351,7 +348,7 @@ impl YamlTemplate {
                         (false, false) => Some(FIELD_AT_MOST_ONE),
                     };
                     if let Some(requirements) = requirements {
-                        validate_description(arena, &mut form_iter, requirements, options)?;
+                        validate_description(arena, &mut form_iter, requirements)?;
                     }
 
                     let list_cfg = NodeList {
@@ -375,7 +372,7 @@ impl YamlTemplate {
                             NodeValue::TaskItem(fill_char) => fill_char.is_some(),
                             _ => bail_at!(@child_data, "expected task list"),
                         };
-                        validate_contents(arena, child, option, options).wrap_err("dropdown")?;
+                        validate_contents(arena, child, option).wrap_err("dropdown")?;
 
                         if is_ticked {
                             eyre::ensure!(
@@ -425,7 +422,7 @@ impl YamlTemplate {
                             } else {
                                 &option.label
                             };
-                            validate_contents(arena, child, label, options).wrap_err("checkbox")?;
+                            validate_contents(arena, child, label).wrap_err("checkbox")?;
                             ensure_at!(@child_data, is_ticked || !option.required, "option is required");
 
                             ticked.push(is_ticked);
@@ -451,11 +448,6 @@ impl YamlTemplate {
         use comrak::nodes::{NodeCodeBlock, NodeList, NodeValue};
 
         let arena = &comrak::Arena::new();
-        let mut options = comrak::Options::default();
-        options.extension.strikethrough = true;
-        options.extension.tasklist = true;
-        options.render.unsafe_ = true;
-        let options = &options;
 
         let output = arena.alloc(NodeValue::Document.into());
         for (item, field_value) in self.body.iter().zip(form.into_iter()) {
@@ -464,7 +456,7 @@ impl YamlTemplate {
             }
             match item {
                 TemplateItem::Markdown { attributes, .. } => {
-                    append_markdown(arena, output, &attributes.value, options);
+                    append_markdown(arena, output, &attributes.value);
                 }
                 TemplateItem::TextArea { attributes, .. } => {
                     append_header(arena, output, 3, &attributes.label);
@@ -555,7 +547,7 @@ impl YamlTemplate {
             }
         }
         let mut output_buf = Vec::new();
-        comrak::format_commonmark(output, options, &mut output_buf)?;
+        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_buf)?;
         let output_str = String::from_utf8(output_buf)?;
         Ok(output_str)
     }
@@ -575,9 +567,8 @@ fn append_markdown<'a>(
     arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
     parent: &'a comrak::nodes::AstNode<'a>,
     md: &str,
-    options: &comrak::Options<'_>,
 ) {
-    let parsed = comrak::parse_document(arena, md, options);
+    let parsed = comrak::parse_document(arena, md, &*MD_OPTIONS);
     for child in parsed.children() {
         parent.append(child);
     }
@@ -587,10 +578,9 @@ fn validate_contents<'a>(
     arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
     parent: &'a comrak::nodes::AstNode<'a>,
     md: &str,
-    options: &comrak::Options<'_>,
 ) -> eyre::Result<()> {
-    let parsed = comrak::parse_document(arena, md, options);
-    ensure_at!(parent, children_eq(parent, parsed), "modified content",);
+    let parsed = comrak::parse_document(arena, md, &*MD_OPTIONS);
+    ensure_at!(parent, children_eq(parent, parsed), "modified content");
     Ok(())
 }
 
@@ -598,12 +588,11 @@ fn validate_description<'a>(
     arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
     form: &mut comrak::arena_tree::Children<'a, std::cell::RefCell<comrak::nodes::Ast>>,
     md: &str,
-    options: &comrak::Options<'_>,
 ) -> eyre::Result<()> {
-    let parsed = comrak::parse_document(arena, md, options);
+    let parsed = comrak::parse_document(arena, md, &*MD_OPTIONS);
     for a in parsed.children() {
         let b = form.next().ok_or_eyre("unexpected EOF")?;
-        ensure_at!(b, nodes_eq(a, b), "modified content",);
+        ensure_at!(b, nodes_eq(a, b), "modified content");
     }
     Ok(())
 }
@@ -631,7 +620,6 @@ fn validate_header<'a>(
     form: &mut comrak::arena_tree::Children<'a, std::cell::RefCell<comrak::nodes::Ast>>,
     level: u8,
     content: &str,
-    options: &comrak::Options<'_>,
 ) -> eyre::Result<()> {
     use comrak::nodes::{NodeHeading, NodeValue};
 
@@ -643,7 +631,7 @@ fn validate_header<'a>(
         }),
         "expected header"
     );
-    let parsed = comrak::parse_document(arena, content, options);
+    let parsed = comrak::parse_document(arena, content, &*MD_OPTIONS);
     let parsed_inline = parsed.first_child().ok_or_eyre("invalid label")?;
     ensure_at!(
         form_heading,

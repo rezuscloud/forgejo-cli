@@ -978,52 +978,6 @@ pub async fn get_template_file(
     Ok(None)
 }
 
-async fn metadata_from_template(
-    repo: &RepoName,
-    api: &Forgejo,
-    body: Option<String>,
-    template_file: Vec<u8>,
-    is_yaml: bool,
-) -> eyre::Result<(String, Option<Vec<i64>>)> {
-    let template_file = std::str::from_utf8(&template_file)?;
-    let (body, labels) = if is_yaml {
-        let tmpl =
-            serde_saphyr::from_str::<crate::issues::template::yaml::YamlTemplate>(template_file)?;
-
-        let form = match body {
-            Some(body) => body,
-            None => {
-                let mut form = tmpl.generate_form()?;
-                crate::editor(&mut form, Some("md")).await?;
-                form
-            }
-        };
-        let body = tmpl.generate_content(tmpl.parse_form(&form)?)?;
-
-        (body, tmpl.labels)
-    } else {
-        let mut tmpl = crate::issues::template::MarkdownTemplate::new(template_file)?;
-
-        let body = match body {
-            Some(body) => body,
-            None => {
-                crate::editor(&mut tmpl.body, Some("md")).await?;
-                tmpl.body
-            }
-        };
-
-        (body, tmpl.labels)
-    };
-
-    let labels = if let Some(labels) = labels {
-        Some(crate::issues::label_names_to_ids(repo, api, labels).await?)
-    } else {
-        None
-    };
-
-    Ok((body, labels))
-}
-
 async fn create_pr(
     repo: &RepoName,
     api: &Forgejo,
@@ -1161,8 +1115,14 @@ async fn create_pr(
                 let (title, body, labels) =
                     if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
                         let title = title.ok_or_eyre("title is required")?;
-                        let (body, labels) =
-                            metadata_from_template(repo, api, body, template_file, is_yaml).await?;
+                        let (body, labels) = crate::issues::template::metadata_from_template(
+                            repo,
+                            api,
+                            body,
+                            template_file,
+                            is_yaml,
+                        )
+                        .await?;
                         (title, body, labels)
                     } else {
                         let pr_compare = api
@@ -1244,8 +1204,14 @@ async fn create_pr(
                 let (title, body) =
                     if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
                         let title = title.ok_or_eyre("title is required")?;
-                        let (body, _) =
-                            metadata_from_template(repo, api, body, template_file, is_yaml).await?;
+                        let (body, _) = crate::issues::template::metadata_from_template(
+                            repo,
+                            api,
+                            body,
+                            template_file,
+                            is_yaml,
+                        )
+                        .await?;
                         (title, body)
                     } else {
                         let title = title.ok_or_eyre("title is required")?;

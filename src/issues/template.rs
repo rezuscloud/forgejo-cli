@@ -73,3 +73,49 @@ pub async fn get_template_file(
     }
     eyre::bail!("Could not find template '{name}'");
 }
+
+pub async fn metadata_from_template(
+    repo: &RepoName,
+    api: &Forgejo,
+    body: Option<String>,
+    template_file: Vec<u8>,
+    is_yaml: bool,
+) -> eyre::Result<(String, Option<Vec<i64>>)> {
+    let template_file = std::str::from_utf8(&template_file)?;
+    let (body, labels) = if is_yaml {
+        let tmpl =
+            serde_saphyr::from_str::<crate::issues::template::yaml::YamlTemplate>(template_file)?;
+
+        let form = match body {
+            Some(body) => body,
+            None => {
+                let mut form = tmpl.generate_form()?;
+                crate::editor(&mut form, Some("md")).await?;
+                form
+            }
+        };
+        let body = tmpl.generate_content(tmpl.parse_form(&form)?)?;
+
+        (body, tmpl.labels)
+    } else {
+        let mut tmpl = crate::issues::template::MarkdownTemplate::new(template_file)?;
+
+        let body = match body {
+            Some(body) => body,
+            None => {
+                crate::editor(&mut tmpl.body, Some("md")).await?;
+                tmpl.body
+            }
+        };
+
+        (body, tmpl.labels)
+    };
+
+    let labels = if let Some(labels) = labels {
+        Some(crate::issues::label_names_to_ids(repo, api, labels).await?)
+    } else {
+        None
+    };
+
+    Ok((body, labels))
+}
