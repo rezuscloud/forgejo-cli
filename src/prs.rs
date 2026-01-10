@@ -112,6 +112,9 @@ pub enum PrSubcommand {
         /// Pull the commits using SSH instead of HTTP(S).
         #[clap(long, short = 'S')]
         ssh: Option<Option<bool>>,
+        /// An SSH key file to use when cloning over SSH.
+        #[clap(long, short = 'I')]
+        identity_file: Option<PathBuf>,
     },
     /// Add a comment on a pull request
     Comment {
@@ -393,12 +396,13 @@ impl PrCommand {
                 pr,
                 branch_name,
                 ssh,
+                identity_file: identity,
             } => {
                 let url_host = crate::host_name(&repo_info.host_url());
                 let ssh = ssh
-                    .unwrap_or(Some(keys.default_ssh.contains(url_host)))
+                    .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
-                checkout_pr(repo, &api, pr, branch_name, ssh).await?
+                checkout_pr(repo, &api, pr, branch_name, ssh, identity).await?
             }
             Browse { id } => {
                 let (repo, id) = try_get_pr_number(repo, &api, id.map(|pr| pr.number)).await?;
@@ -1139,33 +1143,23 @@ async fn create_pr(
                         let pr_compare = api
                             .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
                             .await?;
-                        let pr_commits = pr_compare
+                        let commit_messages = pr_compare
                             .commits
                             .as_ref()
-                            .ok_or_eyre("failed to get branch comparison")?;
+                            .ok_or_eyre("failed to get branch comparison")?
+                            .iter()
+                            .map(get_commit_msg)
+                            .collect::<Result<Vec<_>, _>>()?;
 
                         let (guessed_title, guessed_body) = {
-                            if pr_commits.len() == 1 {
-                                let (commit_title, commit_body) = get_commit_msg(&pr_commits[0])?;
+                            if commit_messages.len() == 1 {
+                                let (commit_title, commit_body) = commit_messages[0];
                                 (commit_title.to_owned(), commit_body.to_owned())
                             } else {
-                                let mut body = String::new();
-                                for pr_commit in pr_commits {
-                                    let (commit_title, commit_body) = get_commit_msg(pr_commit)?;
-                                    body.push_str(commit_title);
-                                    body.push('\n');
-                                    for (i, line) in commit_body.lines().enumerate() {
-                                        if i == 0 {
-                                            body.push_str(": ");
-                                        } else {
-                                            body.push_str("  ");
-                                        }
-                                        body.push_str(line);
-                                        body.push('\n');
-                                    }
-                                    body.push('\n');
-                                }
-                                (head_branch_name, body)
+                                (
+                                    head_branch_name,
+                                    body_from_commit_messages(commit_messages.iter().copied()),
+                                )
                             }
                         };
                         let title = match title {
@@ -1212,6 +1206,65 @@ async fn create_pr(
             }
             // no head means agit
             None => {
+                let local_repo = git2::Repository::open(".")?;
+
+                let mut git_config = local_repo.config()?;
+                let clone_url = base_repo
+                    .clone_url
+                    .as_ref()
+                    .ok_or_eyre("base repo does not have clone url")?;
+
+                let git_auth = auth_git2::GitAuthenticator::new();
+
+                let current_branch = git2::Branch::wrap(local_repo.head()?.resolve()?);
+                let current_branch_name = current_branch
+                    .name()?
+                    .ok_or_eyre("branch name is not utf8")?;
+                let topic = format!("agit-{current_branch_name}");
+
+                let mut remote = if let Some(remote_name) = remote_name {
+                    local_repo.find_remote(remote_name)?
+                } else {
+                    local_repo.remote_anonymous(clone_url.as_str())?
+                };
+
+                let head_id = local_repo.head()?.peel_to_commit()?.id();
+
+                let mut fetch_options = git2::FetchOptions::new();
+                let mut remote_callbacks = git2::RemoteCallbacks::new();
+                remote_callbacks.credentials(git_auth.credentials(&git_config));
+                fetch_options.remote_callbacks(remote_callbacks);
+                remote.fetch(&[&base], Some(&mut fetch_options), None)?;
+                drop(fetch_options);
+                let base_id = local_repo
+                    .find_reference("FETCH_HEAD")?
+                    .peel_to_commit()?
+                    .id();
+
+                let merge_base = local_repo.merge_base(base_id, head_id)?;
+                let mut revwalk = local_repo.revwalk()?;
+                revwalk.push_head()?;
+                revwalk.hide(merge_base)?;
+                revwalk.set_sorting(
+                    git2::Sort::TOPOLOGICAL | git2::Sort::TIME | git2::Sort::REVERSE,
+                )?;
+
+                let mut commit_messages = Vec::new();
+                for id in revwalk {
+                    let commit = local_repo.find_commit(id?)?;
+                    let title = String::from_utf8_lossy(
+                        commit
+                            .summary_bytes()
+                            .ok_or_eyre("invalid commit message summary")?,
+                    );
+                    let body = String::from_utf8_lossy(
+                        commit
+                            .body_bytes()
+                            .ok_or_eyre("invalid commit message body")?,
+                    );
+                    commit_messages.push((title.into_owned(), body.into_owned()));
+                }
+
                 let (title, body) =
                     if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
                         let title = title.ok_or_eyre("title is required")?;
@@ -1225,25 +1278,31 @@ async fn create_pr(
                         .await?;
                         (title, body)
                     } else {
-                        let title = title.ok_or_eyre("title is required")?;
+                        let (guessed_title, guessed_body) = {
+                            if commit_messages.len() == 1 {
+                                commit_messages.remove(0)
+                            } else {
+                                let iter = commit_messages.iter().map(|(t, b)| (&**t, &**b));
+                                let body = body_from_commit_messages(iter);
+                                (current_branch_name.to_owned(), body)
+                            }
+                        };
+                        let title = match title {
+                            Some(title) => title,
+                            None if autofill => guessed_title,
+                            None => eyre::bail!("title is required"),
+                        };
                         let body = match body {
                             Some(body) => body,
+                            None if autofill => guessed_body,
                             None => {
-                                let mut body = String::new();
+                                let mut body = guessed_body;
                                 crate::editor(&mut body, Some("md")).await?;
                                 body
                             }
                         };
                         (title, body)
                     };
-                let local_repo = git2::Repository::open(".")?;
-                let mut git_config = local_repo.config()?;
-                let clone_url = base_repo
-                    .clone_url
-                    .as_ref()
-                    .ok_or_eyre("base repo does not have clone url")?;
-
-                let git_auth = auth_git2::GitAuthenticator::new();
 
                 let mut push_options = git2::PushOptions::new();
 
@@ -1251,24 +1310,11 @@ async fn create_pr(
                 remote_callbacks.credentials(git_auth.credentials(&git_config));
                 push_options.remote_callbacks(remote_callbacks);
 
-                let current_branch = git2::Branch::wrap(local_repo.head()?.resolve()?);
-                let current_branch_name = current_branch
-                    .name()?
-                    .ok_or_eyre("branch name is not utf8")?;
-                let topic = format!("agit-{current_branch_name}");
-
                 push_options.remote_push_options(&[
                     &format!("topic={topic}"),
                     &format!("title={title}"),
                     &format!("description={body}"),
                 ]);
-
-                let mut remote = if let Some(remote_name) = remote_name {
-                    local_repo.find_remote(remote_name)?
-                } else {
-                    local_repo.remote_anonymous(clone_url.as_str())?
-                };
-
                 remote.push(&[&format!("HEAD:refs/for/{base}")], Some(&mut push_options))?;
 
                 // needed so the mutable reference later is valid
@@ -1326,6 +1372,25 @@ fn get_commit_msg(commit: &forgejo_api::structs::Commit) -> eyre::Result<(&str, 
         .split_once('\n')
         .unwrap_or((commit_message, ""));
     Ok((commit_title, commit_body.trim_start_matches(&['\n', '\r'])))
+}
+
+fn body_from_commit_messages<'s>(msgs: impl Iterator<Item = (&'s str, &'s str)>) -> String {
+    let mut body = String::new();
+    for (commit_title, commit_body) in msgs {
+        body.push_str(&commit_title);
+        body.push('\n');
+        for (i, line) in commit_body.lines().enumerate() {
+            if i == 0 {
+                body.push_str(": ");
+            } else {
+                body.push_str("  ");
+            }
+            body.push_str(line);
+            body.push('\n');
+        }
+        body.push('\n');
+    }
+    body
 }
 
 async fn merge_pr(
@@ -1405,6 +1470,7 @@ async fn checkout_pr(
     pr: PrNumber,
     branch_name: Option<String>,
     ssh: bool,
+    identity_file: Option<PathBuf>,
 ) -> eyre::Result<()> {
     let local_repo = git2::Repository::discover(".").unwrap();
 
@@ -1445,7 +1511,15 @@ async fn checkout_pr(
         )
     });
 
-    auth_git2::GitAuthenticator::new().fetch(
+    let mut auth = auth_git2::GitAuthenticator::new();
+    if let Some(id) = identity_file {
+        auth = auth.add_ssh_key_from_file(id, None);
+    } else if url.scheme() == "ssh" {
+        auth =
+            crate::repo::load_ssh_keys(auth, url.host_str().ok_or_eyre("url does not have host")?);
+    }
+
+    auth.fetch(
         &local_repo,
         &mut remote,
         &[&format!("pull/{}/head", pr.number())],
