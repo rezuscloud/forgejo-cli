@@ -38,6 +38,7 @@ pub enum PrSubcommand {
         creator: Option<String>,
         #[clap(long, short)]
         assignee: Option<String>,
+        /// Filter PRs by state. Default: open
         #[clap(long, short)]
         state: Option<crate::issues::State>,
         /// The repo to search in
