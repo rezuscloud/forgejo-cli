@@ -302,6 +302,17 @@ pub async fn label_names_to_ids(
         .collect())
 }
 
+pub async fn maybe_label_names_to_ids(
+    repo: &RepoName,
+    api: &Forgejo,
+    names: Option<Vec<String>>,
+) -> eyre::Result<Option<Vec<i64>>> {
+    Ok(match names {
+        Some(names) => Some(crate::issues::label_names_to_ids(repo, api, names).await?),
+        None => None,
+    })
+}
+
 async fn create_issue(
     repo: &RepoName,
     api: &Forgejo,
@@ -338,14 +349,9 @@ async fn create_issue(
                 );
                 let (template_file, is_yaml) =
                     template::get_template_file(repo, api, &template_name).await?;
-                let (body, r#ref, labels) = crate::issues::template::metadata_from_template(
-                    repo,
-                    api,
-                    body,
-                    template_file,
-                    is_yaml,
-                )
-                .await?;
+                let (body, metadata) =
+                    crate::issues::template::generate_from_template(body, template_file, is_yaml)
+                        .await?;
 
                 CreateIssueOption {
                     body: Some(body),
@@ -354,9 +360,9 @@ async fn create_issue(
                     assignees: None,
                     closed: None,
                     due_date: None,
-                    labels: labels,
+                    labels: maybe_label_names_to_ids(repo, api, metadata.labels).await?,
                     milestone: None,
-                    r#ref,
+                    r#ref: metadata.r#ref,
                 }
             } else {
                 eyre::ensure!(

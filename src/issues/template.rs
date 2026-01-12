@@ -4,9 +4,14 @@ pub mod yaml;
 
 use crate::repo::RepoName;
 
-pub struct MarkdownTemplate {
+#[derive(serde::Deserialize, Default, Debug)]
+pub struct TemplateMetadata {
     pub labels: Option<Vec<String>>,
     pub r#ref: Option<String>,
+}
+
+pub struct MarkdownTemplate {
+    pub metadata: TemplateMetadata,
     pub body: String,
 }
 
@@ -20,23 +25,15 @@ impl MarkdownTemplate {
             .or_else(|| md_without_start.and_then(|md| md.split_once("\r\n---\r\n")));
 
         if let Some((front_matter, body)) = stripped {
-            #[derive(serde::Deserialize)]
-            struct TemplateMetadata {
-                labels: Option<Vec<String>>,
-                r#ref: Option<String>,
-            }
-
             let metadata = serde_saphyr::from_str::<TemplateMetadata>(front_matter)?;
 
             Ok(Self {
-                labels: metadata.labels,
-                r#ref: metadata.r#ref,
+                metadata,
                 body: body.to_owned(),
             })
         } else {
             Ok(Self {
-                labels: None,
-                r#ref: None,
+                metadata: TemplateMetadata::default(),
                 body: md.to_owned(),
             })
         }
@@ -82,15 +79,13 @@ pub async fn get_template_file(
     eyre::bail!("Could not find template '{name}'");
 }
 
-pub async fn metadata_from_template(
-    repo: &RepoName,
-    api: &Forgejo,
+pub async fn generate_from_template(
     body: Option<String>,
     template_file: Vec<u8>,
     is_yaml: bool,
-) -> eyre::Result<(String, Option<String>, Option<Vec<i64>>)> {
+) -> eyre::Result<(String, TemplateMetadata)> {
     let template_file = std::str::from_utf8(&template_file)?;
-    let (body, r#ref, labels) = if is_yaml {
+    if is_yaml {
         let tmpl =
             serde_saphyr::from_str::<crate::issues::template::yaml::YamlTemplate>(template_file)?;
 
@@ -104,7 +99,7 @@ pub async fn metadata_from_template(
         };
         let body = tmpl.generate_content(tmpl.parse_form(&form)?)?;
 
-        (body, tmpl.r#ref, tmpl.labels)
+        Ok((body, tmpl.metadata))
     } else {
         let mut tmpl = crate::issues::template::MarkdownTemplate::new(template_file)?;
 
@@ -116,14 +111,6 @@ pub async fn metadata_from_template(
             }
         };
 
-        (body, tmpl.r#ref, tmpl.labels)
-    };
-
-    let labels = if let Some(labels) = labels {
-        Some(crate::issues::label_names_to_ids(repo, api, labels).await?)
-    } else {
-        None
-    };
-
-    Ok((body, r#ref, labels))
+        Ok((body, tmpl.metadata))
+    }
 }

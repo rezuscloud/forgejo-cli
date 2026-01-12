@@ -1127,73 +1127,79 @@ async fn create_pr(
         let body = body.or(body_from_file);
         match head.zip(head_branch_name) {
             Some((head, head_branch_name)) => {
-                let (title, body, labels) =
-                    if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
-                        let title = title.ok_or_eyre("title is required")?;
-                        let (body, _, labels) = crate::issues::template::metadata_from_template(
-                            repo,
-                            api,
-                            body,
-                            template_file,
-                            is_yaml,
-                        )
-                        .await?;
-                        (title, body, labels)
-                    } else {
-                        let pr_compare = api
-                            .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
-                            .await?;
-                        let commit_messages = pr_compare
-                            .commits
-                            .as_ref()
-                            .ok_or_eyre("failed to get branch comparison")?
-                            .iter()
-                            .map(get_commit_msg)
-                            .collect::<Result<Vec<_>, _>>()?;
-
-                        let (guessed_title, guessed_body) = {
-                            if commit_messages.len() == 1 {
-                                let (commit_title, commit_body) = commit_messages[0];
-                                (commit_title.to_owned(), commit_body.to_owned())
-                            } else {
-                                (
-                                    head_branch_name,
-                                    body_from_commit_messages(commit_messages.iter().copied()),
-                                )
-                            }
-                        };
-                        let title = match title {
-                            Some(title) => title,
-                            None if autofill => guessed_title,
-                            None => eyre::bail!("title is required"),
-                        };
-                        let body = match body {
-                            Some(body) => body,
-                            None if autofill => guessed_body,
-                            None => {
-                                let mut body = guessed_body;
-                                crate::editor(&mut body, Some("md")).await?;
-                                body
-                            }
-                        };
-                        (title, body, None)
-                    };
-                let pr = api
-                    .repo_create_pull_request(
-                        &repo_owner,
-                        &repo_name,
-                        CreatePullRequestOption {
-                            assignee: None,
-                            assignees: None,
-                            base: Some(base.to_owned()),
-                            body: Some(body),
-                            due_date: None,
-                            head: Some(head),
-                            labels,
-                            milestone: None,
-                            title: Some(title),
-                        },
+                let base_opt = CreatePullRequestOption {
+                    assignee: None,
+                    assignees: None,
+                    base: Some(base.to_owned()),
+                    body: None,
+                    due_date: None,
+                    head: Some(head.clone()),
+                    labels: None,
+                    milestone: None,
+                    title: None,
+                };
+                let opt = if let Some((template_file, is_yaml)) =
+                    get_template_file(repo, api).await?
+                {
+                    let title = title.ok_or_eyre("title is required")?;
+                    let (body, metadata) = crate::issues::template::generate_from_template(
+                        body,
+                        template_file,
+                        is_yaml,
                     )
+                    .await?;
+                    CreatePullRequestOption {
+                        body: Some(body),
+                        labels: crate::issues::maybe_label_names_to_ids(repo, api, metadata.labels)
+                            .await?,
+                        title: Some(title),
+                        ..base_opt
+                    }
+                } else {
+                    let pr_compare = api
+                        .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
+                        .await?;
+                    let commit_messages = pr_compare
+                        .commits
+                        .as_ref()
+                        .ok_or_eyre("failed to get branch comparison")?
+                        .iter()
+                        .map(get_commit_msg)
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let (guessed_title, guessed_body) = {
+                        if commit_messages.len() == 1 {
+                            let (commit_title, commit_body) = commit_messages[0];
+                            (commit_title.to_owned(), commit_body.to_owned())
+                        } else {
+                            (
+                                head_branch_name,
+                                body_from_commit_messages(commit_messages.iter().copied()),
+                            )
+                        }
+                    };
+                    let title = match title {
+                        Some(title) => title,
+                        None if autofill => guessed_title,
+                        None => eyre::bail!("title is required"),
+                    };
+                    let body = match body {
+                        Some(body) => body,
+                        None if autofill => guessed_body,
+                        None => {
+                            let mut body = guessed_body;
+                            crate::editor(&mut body, Some("md")).await?;
+                            body
+                        }
+                    };
+                    CreatePullRequestOption {
+                        body: Some(body),
+                        title: Some(title),
+                        ..base_opt
+                    }
+                };
+                let pr = api
+                    .repo_create_pull_request(&repo_owner, &repo_name, opt)
                     .await?;
                 let number = pr
                     .number
@@ -1268,9 +1274,7 @@ async fn create_pr(
                 let (title, body) =
                     if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
                         let title = title.ok_or_eyre("title is required")?;
-                        let (body, _, _) = crate::issues::template::metadata_from_template(
-                            repo,
-                            api,
+                        let (body, _) = crate::issues::template::generate_from_template(
                             body,
                             template_file,
                             is_yaml,

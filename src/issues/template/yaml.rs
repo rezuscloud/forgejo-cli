@@ -59,8 +59,8 @@ const FIELD_CHECKBOX_REQUIRED: &str = "(required) ";
 
 #[derive(serde::Deserialize, Debug)]
 pub struct YamlTemplate {
-    pub labels: Option<Vec<String>>,
-    pub r#ref: Option<String>,
+    #[serde(flatten)]
+    pub metadata: super::TemplateMetadata,
     pub body: Vec<TemplateItem>,
 }
 
