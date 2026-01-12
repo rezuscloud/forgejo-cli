@@ -36,7 +36,7 @@ pub enum IssueSubcommand {
         /// The repo to create this issue on
         #[clap(long, short)]
         repo: Option<RepoArg>,
-        /// Open the PR creation page in your web browser
+        /// Open the issue creation page in your web browser
         #[clap(long)]
         web: bool,
     },
@@ -76,6 +76,7 @@ pub enum IssueSubcommand {
         creator: Option<String>,
         #[clap(long, short)]
         assignee: Option<String>,
+        /// Filter issues by state. Default: open
         #[clap(long, short)]
         state: Option<State>,
     },
@@ -143,6 +144,7 @@ impl std::error::Error for IssueIdError {}
 pub enum State {
     Open,
     Closed,
+    All,
 }
 
 impl From<State> for forgejo_api::structs::IssueListIssuesQueryState {
@@ -150,6 +152,7 @@ impl From<State> for forgejo_api::structs::IssueListIssuesQueryState {
         match value {
             State::Open => forgejo_api::structs::IssueListIssuesQueryState::Open,
             State::Closed => forgejo_api::structs::IssueListIssuesQueryState::Closed,
+            State::All => forgejo_api::structs::IssueListIssuesQueryState::All,
         }
     }
 }
