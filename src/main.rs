@@ -17,6 +17,7 @@ mod org;
 mod prs;
 mod release;
 mod repo;
+mod tag;
 mod user;
 mod version;
 mod whoami;
@@ -54,6 +55,7 @@ pub enum Command {
     #[clap(subcommand)]
     Auth(auth::AuthCommand),
     Release(release::ReleaseCommand),
+    Tag(tag::TagCommand),
     User(user::UserCommand),
     Org(org::OrgCommand),
     Version(version::VersionCommand),
@@ -71,6 +73,7 @@ impl Command {
             Command::WhoAmI(command) => command.run(keys, host_name).await?,
             Command::Auth(subcommand) => subcommand.run(keys, host_name).await?,
             Command::Release(subcommand) => subcommand.run(keys, host_name).await?,
+            Command::Tag(subcommand) => subcommand.run(keys, host_name).await?,
             Command::User(subcommand) => subcommand.run(keys, host_name).await?,
             Command::Org(subcommand) => subcommand.run(keys, host_name).await?,
             Command::Version(command) => command.run().await?,

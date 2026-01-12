@@ -38,6 +38,7 @@ pub enum PrSubcommand {
         creator: Option<String>,
         #[clap(long, short)]
         assignee: Option<String>,
+        /// Filter PRs by state. Default: open
         #[clap(long, short)]
         state: Option<crate::issues::State>,
         /// The repo to search in
@@ -1226,7 +1227,6 @@ async fn create_pr(
                 let current_branch_name = current_branch
                     .name()?
                     .ok_or_eyre("branch name is not utf8")?;
-                let topic = format!("agit-{current_branch_name}");
 
                 let mut remote = if let Some(remote_name) = remote_name {
                     local_repo.find_remote(remote_name)?
@@ -1315,7 +1315,7 @@ async fn create_pr(
                 push_options.remote_callbacks(remote_callbacks);
 
                 push_options.remote_push_options(&[
-                    &format!("topic={topic}"),
+                    &format!("topic={current_branch_name}"),
                     &format!("title={title}"),
                     &format!("description={body}"),
                 ]);
@@ -1332,7 +1332,7 @@ async fn create_pr(
                 let cfg_branch_merge = git_config.get_string(&merge_setting_name).ok();
                 let cfg_branch_remote = git_config.get_string(&remote_setting_name).ok();
 
-                let topic_setting = format!("refs/for/{base}/{topic}");
+                let topic_setting = format!("refs/for/{base}/{current_branch_name}");
 
                 let default_is_upstream = cfg_push_default.is_some_and(|s| s == "upstream");
                 let branch_merge_is_agit = cfg_branch_merge.is_some_and(|s| s == topic_setting);
