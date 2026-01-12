@@ -98,6 +98,12 @@ pub enum IssueSubcommand {
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
+    /// List the issue templates in a repo.
+    Templates {
+        /// The repo to view the templates of.
+        #[clap(long, short)]
+        repo: Option<RepoArg>,
+    },
     /// Open an issue in your browser
     Browse { id: IssueId },
 }
@@ -231,6 +237,7 @@ impl IssueCommand {
                 assignee,
                 state,
             } => view_issues(repo, &api, query, labels, creator, assignee, state).await?,
+            Templates { .. } => view_issue_templates(repo, &api).await?,
             Edit { issue, command } => match command {
                 EditCommand::Title { new_title } => {
                     edit_title(repo, &api, issue.number, new_title).await?
@@ -256,7 +263,7 @@ impl IssueCommand {
     fn repo(&self) -> Option<&RepoArg> {
         use IssueSubcommand::*;
         match &self.command {
-            Create { repo, .. } | Search { repo, .. } => repo.as_ref(),
+            Create { repo, .. } | Search { repo, .. } | Templates { repo } => repo.as_ref(),
             View { id: issue, .. }
             | Edit { issue, .. }
             | Close { issue, .. }
@@ -268,7 +275,7 @@ impl IssueCommand {
     fn no_repo_error(&self) -> eyre::Error {
         use IssueSubcommand::*;
         match &self.command {
-            Create { .. } | Search { .. } => {
+            Create { .. } | Search { .. } | Templates { .. } => {
                 eyre::eyre!("can't figure what repo to access, try specifying with `--repo`")
             }
             View { id: issue, .. }
@@ -549,6 +556,67 @@ async fn view_issues(
             .as_ref()
             .ok_or_else(|| eyre::eyre!("user does not have login"))?;
         println!("#{}: {} (by {})", number, title, username);
+    }
+    Ok(())
+}
+
+pub async fn view_issue_templates(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
+    let crate::SpecialRender {
+        dash, bold, reset, ..
+    } = crate::special_render();
+
+    let mut total_count = 0;
+
+    if let Ok(templates) = api
+        .repo_get_issue_templates(repo.owner(), repo.name())
+        .await
+    {
+        total_count += templates.len();
+        for template in templates {
+            let filename = template
+                .file_name
+                .as_deref()
+                .ok_or_eyre("template does not have filename")?;
+            let name = filename
+                .rsplit_once(".")
+                .map(|(s, _)| s)
+                .unwrap_or(filename);
+            let name = name.rsplit_once("/").map(|(_, s)| s).unwrap_or(name);
+            let display_name = template.name.as_deref().filter(|s| !s.is_empty());
+            print!("{bold}{name}{reset}");
+            if let Some(display_name) = display_name {
+                print!(" {dash} {display_name}");
+            }
+            println!();
+            let desc = template.about.as_deref().filter(|s| !s.is_empty());
+            if let Some(desc) = desc {
+                println!("{}", crate::render_text(desc));
+            }
+            println!();
+        }
+    }
+
+    let config = api.repo_get_issue_config(repo.owner(), repo.name()).await?;
+    let contact_links = config.contact_links.unwrap_or_default();
+    total_count += contact_links.len();
+    for contact in contact_links {
+        let url = contact.url.ok_or_eyre("contact info does not have url")?;
+        let name = contact.name.ok_or_eyre("contact info does not have name")?;
+        println!("{bold}{url}{reset} {dash} {name}");
+        let desc = contact.about.as_deref().filter(|s| !s.is_empty());
+        if let Some(desc) = desc {
+            println!("{}", crate::render_text(desc));
+        }
+        println!();
+    }
+
+    if total_count == 0 {
+        eprintln!("No issue templates or contact info.");
+    }
+    if config.blank_issues_enabled.unwrap_or(true) {
+        println!("'--no-template' is allowed");
+    } else {
+        println!("'--no-template' is not allowed");
     }
     Ok(())
 }
