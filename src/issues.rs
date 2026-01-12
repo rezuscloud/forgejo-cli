@@ -144,6 +144,7 @@ impl std::error::Error for IssueIdError {}
 pub enum State {
     Open,
     Closed,
+    All,
 }
 
 impl From<State> for forgejo_api::structs::IssueListIssuesQueryState {
@@ -151,6 +152,7 @@ impl From<State> for forgejo_api::structs::IssueListIssuesQueryState {
         match value {
             State::Open => forgejo_api::structs::IssueListIssuesQueryState::Open,
             State::Closed => forgejo_api::structs::IssueListIssuesQueryState::Closed,
+            State::All => forgejo_api::structs::IssueListIssuesQueryState::All,
         }
     }
 }
