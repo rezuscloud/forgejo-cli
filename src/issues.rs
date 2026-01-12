@@ -331,18 +331,19 @@ async fn create_issue(
             };
             let body = body.or(body_from_file);
 
-            // None: The repo does not use templates.
-            // Some(true): The repo uses but does not enforce templates.
-            // Some(false): The repo uses and enforces templates.
+            let has_templates = api
+                .repo_get_issue_templates(repo.owner(), repo.name())
+                .await
+                .is_ok();
             let blank_issues_enabled = api
                 .repo_get_issue_config(repo.owner(), repo.name())
-                .await
-                .ok()
-                .and_then(|cfg| cfg.blank_issues_enabled);
+                .await?
+                .blank_issues_enabled
+                .unwrap_or(true);
 
             let opts = if let Some(template_name) = template {
                 eyre::ensure!(
-                    blank_issues_enabled.is_some(),
+                    has_templates,
                     "{}/{} does not have any issue templates",
                     repo.owner(),
                     repo.name()
@@ -366,14 +367,14 @@ async fn create_issue(
                 }
             } else {
                 eyre::ensure!(
-                    blank_issues_enabled.unwrap_or(true),
+                    blank_issues_enabled,
                     "{}/{} requires using a template. \
                     Please choose one with `--template <NAME>`",
                     repo.owner(),
                     repo.name()
                 );
                 eyre::ensure!(
-                    blank_issues_enabled.is_none() || no_template,
+                    !has_templates || no_template,
                     "{}/{} uses issue templates. \
                     Please choose one with `--template <NAME>`, \
                     or use `--no-template` to write one from scratch",
