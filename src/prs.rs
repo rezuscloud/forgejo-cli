@@ -787,6 +787,7 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
         bright_red,
         bright_green,
         yellow,
+        bright_yellow,
         light_grey,
         dash,
         bullet,
@@ -864,6 +865,7 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                 match state {
                     CommitStatusState::Success => print!("{bright_green}Success{reset}"),
                     CommitStatusState::Pending => print!("{yellow}Pending{reset}"),
+                    CommitStatusState::Warning => print!("{bright_yellow}Warning{reset}"),
                     CommitStatusState::Failure => print!("{bright_red}Failure{reset}"),
                     CommitStatusState::Error => print!("{bright_red}Error{reset}"),
                 };
