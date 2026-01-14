@@ -1203,11 +1203,7 @@ async fn create_pr(
                             .summary_bytes()
                             .ok_or_eyre("invalid commit message summary")?,
                     );
-                    let body = String::from_utf8_lossy(
-                        commit
-                            .body_bytes()
-                            .ok_or_eyre("invalid commit message body")?,
-                    );
+                    let body = String::from_utf8_lossy(commit.body_bytes().unwrap_or_default());
                     commit_messages.push((title.into_owned(), body.into_owned()));
                 }
 
