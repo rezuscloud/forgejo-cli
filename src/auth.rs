@@ -348,12 +348,7 @@ async fn add_ssh_alias(
 async fn get_instance_ssh_url(api: forgejo_api::Forgejo) -> Option<url::Url> {
     let query = forgejo_api::structs::RepoSearchQuery::default();
     let results = api.repo_search(query).page_size(1).await.ok()?;
-    if let Some(mut repos) = results.data {
-        if let Some(repo) = repos.pop() {
-            if let Some(ssh_url) = repo.ssh_url {
-                return Some(ssh_url);
-            }
-        }
-    }
-    None
+    let ssh_url = results.data?.pop()?.ssh_url?;
+    let (instance_ssh_url, _) = crate::repo::url_strip_repo_name(ssh_url).ok()?;
+    Some(instance_ssh_url)
 }

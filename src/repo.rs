@@ -230,7 +230,7 @@ fn fallback_host() -> Option<Url> {
     }
 }
 
-fn url_strip_repo_name(mut url: Url) -> eyre::Result<(Url, RepoName)> {
+pub fn url_strip_repo_name(mut url: Url) -> eyre::Result<(Url, RepoName)> {
     let mut iter = url
         .path_segments()
         .ok_or_eyre("repo url cannot be a base")?
