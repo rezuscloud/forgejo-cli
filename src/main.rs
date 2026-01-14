@@ -228,7 +228,7 @@ fn host_name(url: &url::Url) -> &str {
 
 fn repo_url_host_name(url: &url::Url) -> &str {
     let host = host_name(url);
-    host.rsplitn(2, '/').last().unwrap_or(host)
+    host.rsplitn(3, '/').last().unwrap_or(host)
 }
 
 use std::sync::OnceLock;
