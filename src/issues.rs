@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -9,6 +10,8 @@ use forgejo_api::structs::{
 use forgejo_api::Forgejo;
 
 use crate::repo::{RepoArg, RepoInfo, RepoName};
+
+pub mod template;
 
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
@@ -28,11 +31,21 @@ pub enum IssueSubcommand {
         /// The text body of the issue
         ///
         /// Leaving this out will open your editor, unless --body-file is specified.
-        #[clap(long)]
+        #[clap(long, conflicts_with = "template")]
         body: Option<String>,
         /// The text body of the issue, to read from a file
         #[clap(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
+        /// The template to use when creating an issue
+        ///
+        /// If the repo has disabled blank issues, this flag is required.
+        #[clap(long)]
+        template: Option<String>,
+        /// Don't use a template for this issue.
+        ///
+        /// If the repo has disabled blank issues, this will fail.
+        #[clap(long, conflicts_with = "template")]
+        no_template: bool,
         /// The repo to create this issue on
         #[clap(long, short)]
         repo: Option<RepoArg>,
@@ -85,6 +98,12 @@ pub enum IssueSubcommand {
         id: IssueId,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
+    },
+    /// List the issue templates in a repo.
+    Templates {
+        /// The repo to view the templates of.
+        #[clap(long, short)]
+        repo: Option<RepoArg>,
     },
     /// Open an issue in your browser
     Browse { id: IssueId },
@@ -192,8 +211,22 @@ impl IssueCommand {
                 title,
                 body,
                 body_file,
+                template,
+                no_template,
                 web,
-            } => create_issue(repo, &api, title, body, body_file, web).await?,
+            } => {
+                create_issue(
+                    repo,
+                    &api,
+                    title,
+                    body,
+                    body_file,
+                    template,
+                    no_template,
+                    web,
+                )
+                .await?
+            }
             View { id, command } => match command.unwrap_or(ViewCommand::Body) {
                 ViewCommand::Body => view_issue(repo, &api, id.number).await?,
                 ViewCommand::Comment { idx } => view_comment(repo, &api, id.number, idx).await?,
@@ -207,6 +240,7 @@ impl IssueCommand {
                 assignee,
                 state,
             } => view_issues(repo, &api, query, labels, creator, assignee, state).await?,
+            Templates { .. } => view_issue_templates(repo, &api).await?,
             Edit { issue, command } => match command {
                 EditCommand::Title { new_title } => {
                     edit_title(repo, &api, issue.number, new_title).await?
@@ -232,7 +266,7 @@ impl IssueCommand {
     fn repo(&self) -> Option<&RepoArg> {
         use IssueSubcommand::*;
         match &self.command {
-            Create { repo, .. } | Search { repo, .. } => repo.as_ref(),
+            Create { repo, .. } | Search { repo, .. } | Templates { repo } => repo.as_ref(),
             View { id: issue, .. }
             | Edit { issue, .. }
             | Close { issue, .. }
@@ -244,7 +278,7 @@ impl IssueCommand {
     fn no_repo_error(&self) -> eyre::Error {
         use IssueSubcommand::*;
         match &self.command {
-            Create { .. } | Search { .. } => {
+            Create { .. } | Search { .. } | Templates { .. } => {
                 eyre::eyre!("can't figure what repo to access, try specifying with `--repo`")
             }
             View { id: issue, .. }
@@ -259,12 +293,44 @@ impl IssueCommand {
     }
 }
 
+pub async fn label_names_to_ids(
+    repo: &RepoName,
+    api: &Forgejo,
+    names: Vec<String>,
+) -> eyre::Result<Vec<i64>> {
+    let query = forgejo_api::structs::IssueListLabelsQuery { sort: None };
+    let (_, all_labels) = api
+        .issue_list_labels(repo.owner(), repo.name(), query)
+        .await?;
+    let mut all_labels = all_labels
+        .into_iter()
+        .filter_map(|l| Some((l.name?, l.id?)))
+        .collect::<BTreeMap<_, _>>();
+    Ok(names
+        .into_iter()
+        .filter_map(|name| all_labels.remove(&name))
+        .collect())
+}
+
+pub async fn maybe_label_names_to_ids(
+    repo: &RepoName,
+    api: &Forgejo,
+    names: Option<Vec<String>>,
+) -> eyre::Result<Option<Vec<i64>>> {
+    Ok(match names {
+        Some(names) => Some(crate::issues::label_names_to_ids(repo, api, names).await?),
+        None => None,
+    })
+}
+
 async fn create_issue(
     repo: &RepoName,
     api: &Forgejo,
     title: Option<String>,
     body: Option<String>,
     body_file: Option<PathBuf>,
+    template: Option<String>,
+    no_template: bool,
     web: bool,
 ) -> eyre::Result<()> {
     match (title, web) {
@@ -273,31 +339,81 @@ async fn create_issue(
                 None => None,
                 Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
             };
-            let body = match body.or(body_from_file) {
-                Some(body) => body,
-                None => {
-                    let mut body = String::new();
-                    crate::editor(&mut body, Some("md")).await?;
-                    body
+            let body = body.or(body_from_file);
+
+            let has_templates = api
+                .repo_get_issue_templates(repo.owner(), repo.name())
+                .await
+                .is_ok();
+            let blank_issues_enabled = api
+                .repo_get_issue_config(repo.owner(), repo.name())
+                .await?
+                .blank_issues_enabled
+                .unwrap_or(true);
+
+            let opts = if let Some(template_name) = template {
+                eyre::ensure!(
+                    has_templates,
+                    "{}/{} does not have any issue templates",
+                    repo.owner(),
+                    repo.name()
+                );
+                let (template_file, is_yaml) =
+                    template::get_template_file(repo, api, &template_name).await?;
+                let (body, metadata) =
+                    crate::issues::template::generate_from_template(body, template_file, is_yaml)
+                        .await?;
+
+                CreateIssueOption {
+                    body: Some(body),
+                    title,
+                    assignee: None,
+                    assignees: None,
+                    closed: None,
+                    due_date: None,
+                    labels: maybe_label_names_to_ids(repo, api, metadata.labels).await?,
+                    milestone: None,
+                    r#ref: metadata.r#ref,
+                }
+            } else {
+                eyre::ensure!(
+                    blank_issues_enabled,
+                    "{}/{} requires using a template. \
+                    Please choose one with `--template <NAME>`",
+                    repo.owner(),
+                    repo.name()
+                );
+                eyre::ensure!(
+                    !has_templates || no_template,
+                    "{}/{} uses issue templates. \
+                    Please choose one with `--template <NAME>`, \
+                    or use `--no-template` to write one from scratch",
+                    repo.owner(),
+                    repo.name()
+                );
+                let body = match body {
+                    Some(body) => body,
+                    None => {
+                        let mut body = String::new();
+                        crate::editor(&mut body, Some("md")).await?;
+                        body
+                    }
+                };
+                CreateIssueOption {
+                    body: Some(body),
+                    title,
+                    assignee: None,
+                    assignees: None,
+                    closed: None,
+                    due_date: None,
+                    labels: None,
+                    milestone: None,
+                    r#ref: None,
                 }
             };
 
             let issue = api
-                .issue_create_issue(
-                    repo.owner(),
-                    repo.name(),
-                    CreateIssueOption {
-                        body: Some(body),
-                        title,
-                        assignee: None,
-                        assignees: None,
-                        closed: None,
-                        due_date: None,
-                        labels: None,
-                        milestone: None,
-                        r#ref: None,
-                    },
-                )
+                .issue_create_issue(repo.owner(), repo.name(), opts)
                 .await?;
             let number = issue
                 .number
@@ -443,6 +559,67 @@ async fn view_issues(
             .as_ref()
             .ok_or_else(|| eyre::eyre!("user does not have login"))?;
         println!("#{}: {} (by {})", number, title, username);
+    }
+    Ok(())
+}
+
+pub async fn view_issue_templates(repo: &RepoName, api: &Forgejo) -> eyre::Result<()> {
+    let crate::SpecialRender {
+        dash, bold, reset, ..
+    } = crate::special_render();
+
+    let mut total_count = 0;
+
+    if let Ok(templates) = api
+        .repo_get_issue_templates(repo.owner(), repo.name())
+        .await
+    {
+        total_count += templates.len();
+        for template in templates {
+            let filename = template
+                .file_name
+                .as_deref()
+                .ok_or_eyre("template does not have filename")?;
+            let name = filename
+                .rsplit_once(".")
+                .map(|(s, _)| s)
+                .unwrap_or(filename);
+            let name = name.rsplit_once("/").map(|(_, s)| s).unwrap_or(name);
+            let display_name = template.name.as_deref().filter(|s| !s.is_empty());
+            print!("{bold}{name}{reset}");
+            if let Some(display_name) = display_name {
+                print!(" {dash} {display_name}");
+            }
+            println!();
+            let desc = template.about.as_deref().filter(|s| !s.is_empty());
+            if let Some(desc) = desc {
+                println!("{}", crate::render_text(desc));
+            }
+            println!();
+        }
+    }
+
+    let config = api.repo_get_issue_config(repo.owner(), repo.name()).await?;
+    let contact_links = config.contact_links.unwrap_or_default();
+    total_count += contact_links.len();
+    for contact in contact_links {
+        let url = contact.url.ok_or_eyre("contact info does not have url")?;
+        let name = contact.name.ok_or_eyre("contact info does not have name")?;
+        println!("{bold}{url}{reset} {dash} {name}");
+        let desc = contact.about.as_deref().filter(|s| !s.is_empty());
+        if let Some(desc) = desc {
+            println!("{}", crate::render_text(desc));
+        }
+        println!();
+    }
+
+    if total_count == 0 {
+        eprintln!("No issue templates or contact info.");
+    }
+    if config.blank_issues_enabled.unwrap_or(true) {
+        println!("'--no-template' is allowed");
+    } else {
+        println!("'--no-template' is not allowed");
     }
     Ok(())
 }

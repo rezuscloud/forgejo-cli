@@ -945,6 +945,44 @@ async fn edit_pr_labels(
     Ok(())
 }
 
+pub async fn get_template_file(
+    repo: &RepoName,
+    api: &Forgejo,
+) -> eyre::Result<Option<(Vec<u8>, bool)>> {
+    const FILES: [&str; 8] = [
+        ".forgejo/pull_request_template",
+        ".forgejo/PULL_REQUEST_TEMPLATE",
+        ".gitea/pull_request_template",
+        ".gitea/PULL_REQUEST_TEMPLATE",
+        ".github/pull_request_template",
+        ".github/PULL_REQUEST_TEMPLATE",
+        "docs/pull_request_template",
+        "docs/PULL_REQUEST_TEMPLATE",
+    ];
+    const EXTS: [&str; 3] = ["md", "yml", "yaml"];
+    let query = forgejo_api::structs::RepoGetRawFileQuery { r#ref: None };
+    for file in FILES {
+        for ext in EXTS {
+            let path = format!("{file}.{ext}");
+            let file = api
+                .repo_get_raw_file(repo.owner(), repo.name(), &path, query.clone())
+                .await;
+            match file {
+                Ok(file) => {
+                    let is_yaml = matches!(ext, "yml" | "yaml");
+                    return Ok(Some((file.to_vec(), is_yaml)));
+                }
+                Err(forgejo_api::ForgejoError::ApiError(forgejo_api::ApiError {
+                    kind: forgejo_api::ApiErrorKind::NotFound { .. },
+                    ..
+                })) => (),
+                Err(e) => return Err(e.into()),
+            }
+        }
+    }
+    Ok(None)
+}
+
 async fn create_pr(
     repo: &RepoName,
     api: &Forgejo,
@@ -1087,60 +1125,82 @@ async fn create_pr(
             None => None,
             Some(ref path) => Some(crate::read_file_or_stdin(path).await?),
         };
+        let body = body.or(body_from_file);
         match head.zip(head_branch_name) {
             Some((head, head_branch_name)) => {
-                let pr_compare = api
-                    .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
+                let base_opt = CreatePullRequestOption {
+                    assignee: None,
+                    assignees: None,
+                    base: Some(base.to_owned()),
+                    body: None,
+                    due_date: None,
+                    head: Some(head.clone()),
+                    labels: None,
+                    milestone: None,
+                    title: None,
+                };
+                let opt = if let Some((template_file, is_yaml)) =
+                    get_template_file(repo, api).await?
+                {
+                    let title = title.ok_or_eyre("title is required")?;
+                    let (body, metadata) = crate::issues::template::generate_from_template(
+                        body,
+                        template_file,
+                        is_yaml,
+                    )
                     .await?;
-                let commit_messages = pr_compare
-                    .commits
-                    .as_ref()
-                    .ok_or_eyre("failed to get branch comparison")?
-                    .iter()
-                    .map(get_commit_msg)
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let (guessed_title, guessed_body) = {
-                    if commit_messages.len() == 1 {
-                        let (commit_title, commit_body) = commit_messages[0];
-                        (commit_title.to_owned(), commit_body.to_owned())
-                    } else {
-                        (
-                            head_branch_name,
-                            body_from_commit_messages(commit_messages.iter().copied()),
-                        )
+                    CreatePullRequestOption {
+                        body: Some(body),
+                        labels: crate::issues::maybe_label_names_to_ids(repo, api, metadata.labels)
+                            .await?,
+                        title: Some(title),
+                        ..base_opt
                     }
-                };
-                let title = match title {
-                    Some(title) => title,
-                    None if autofill => guessed_title,
-                    None => eyre::bail!("title is required"),
-                };
-                let body = match body.or(body_from_file) {
-                    Some(body) => body,
-                    None if autofill => guessed_body,
-                    None => {
-                        let mut body = guessed_body;
-                        crate::editor(&mut body, Some("md")).await?;
-                        body
+                } else {
+                    let pr_compare = api
+                        .repo_compare_diff(&repo_owner, &repo_name, &format!("{base}...{head}"))
+                        .await?;
+                    let commit_messages = pr_compare
+                        .commits
+                        .as_ref()
+                        .ok_or_eyre("failed to get branch comparison")?
+                        .iter()
+                        .map(get_commit_msg)
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let (guessed_title, guessed_body) = {
+                        if commit_messages.len() == 1 {
+                            let (commit_title, commit_body) = commit_messages[0];
+                            (commit_title.to_owned(), commit_body.to_owned())
+                        } else {
+                            (
+                                head_branch_name,
+                                body_from_commit_messages(commit_messages.iter().copied()),
+                            )
+                        }
+                    };
+                    let title = match title {
+                        Some(title) => title,
+                        None if autofill => guessed_title,
+                        None => eyre::bail!("title is required"),
+                    };
+                    let body = match body {
+                        Some(body) => body,
+                        None if autofill => guessed_body,
+                        None => {
+                            let mut body = guessed_body;
+                            crate::editor(&mut body, Some("md")).await?;
+                            body
+                        }
+                    };
+                    CreatePullRequestOption {
+                        body: Some(body),
+                        title: Some(title),
+                        ..base_opt
                     }
                 };
                 let pr = api
-                    .repo_create_pull_request(
-                        &repo_owner,
-                        &repo_name,
-                        CreatePullRequestOption {
-                            assignee: None,
-                            assignees: None,
-                            base: Some(base.to_owned()),
-                            body: Some(body),
-                            due_date: None,
-                            head: Some(head),
-                            labels: None,
-                            milestone: None,
-                            title: Some(title),
-                        },
-                    )
+                    .repo_create_pull_request(&repo_owner, &repo_name, opt)
                     .await?;
                 let number = pr
                     .number
@@ -1207,29 +1267,42 @@ async fn create_pr(
                     commit_messages.push((title.into_owned(), body.into_owned()));
                 }
 
-                let (guessed_title, guessed_body) = {
-                    if commit_messages.len() == 1 {
-                        commit_messages.remove(0)
+                let (title, body) =
+                    if let Some((template_file, is_yaml)) = get_template_file(repo, api).await? {
+                        let title = title.ok_or_eyre("title is required")?;
+                        let (body, _) = crate::issues::template::generate_from_template(
+                            body,
+                            template_file,
+                            is_yaml,
+                        )
+                        .await?;
+                        (title, body)
                     } else {
-                        let iter = commit_messages.iter().map(|(t, b)| (&**t, &**b));
-                        let body = body_from_commit_messages(iter);
-                        (current_branch_name.to_owned(), body)
-                    }
-                };
-                let title = match title {
-                    Some(title) => title,
-                    None if autofill => guessed_title,
-                    None => eyre::bail!("title is required"),
-                };
-                let body = match body.or(body_from_file) {
-                    Some(body) => body,
-                    None if autofill => guessed_body,
-                    None => {
-                        let mut body = guessed_body;
-                        crate::editor(&mut body, Some("md")).await?;
-                        body
-                    }
-                };
+                        let (guessed_title, guessed_body) = {
+                            if commit_messages.len() == 1 {
+                                commit_messages.remove(0)
+                            } else {
+                                let iter = commit_messages.iter().map(|(t, b)| (&**t, &**b));
+                                let body = body_from_commit_messages(iter);
+                                (current_branch_name.to_owned(), body)
+                            }
+                        };
+                        let title = match title {
+                            Some(title) => title,
+                            None if autofill => guessed_title,
+                            None => eyre::bail!("title is required"),
+                        };
+                        let body = match body {
+                            Some(body) => body,
+                            None if autofill => guessed_body,
+                            None => {
+                                let mut body = guessed_body;
+                                crate::editor(&mut body, Some("md")).await?;
+                                body
+                            }
+                        };
+                        (title, body)
+                    };
 
                 let mut push_options = git2::PushOptions::new();
 
