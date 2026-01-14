@@ -29,7 +29,7 @@ pub enum OrgSubcommand {
         #[clap(long, short, default_value_t = 1)]
         page: u32,
         /// Only list organizations you are a member of.
-        #[clap(long, short)]
+        #[clap(long, short, conflicts_with = "page")]
         only_member_of: bool,
     },
     /// View info about an organization
@@ -185,12 +185,12 @@ fn is_valid_name_char(c: char) -> bool {
 }
 
 async fn list_orgs(api: &Forgejo, page: u32, only_member_of: bool) -> eyre::Result<()> {
-    let (count, orgs) = if only_member_of {
-        let (headers, orgs) = api.org_list_current_user_orgs().page(page).await?;
-        (headers.x_total_count.unwrap_or_default() as u64, orgs)
+    let (total, orgs) = if only_member_of {
+        let orgs = api.org_list_current_user_orgs().await?;
+        (None, orgs)
     } else {
         let (headers, orgs) = api.org_get_all().page(page).await?;
-        (headers.x_total_count.unwrap_or_default() as u64, orgs)
+        (Some(headers.x_total_count.unwrap_or_default() as u64), orgs)
     };
 
     if orgs.is_empty() {
@@ -206,7 +206,9 @@ async fn list_orgs(api: &Forgejo, page: u32, only_member_of: bool) -> eyre::Resu
             let name = org.name.ok_or_eyre("org does not have name")?;
             println!("{bullet} {bold}{name}{reset}");
         }
-        println!("Page {} of {}", page, count.div_ceil(20));
+        if let Some(total) = total {
+            println!("Page {} of {}", page, total.div_ceil(20));
+        }
     }
     Ok(())
 }

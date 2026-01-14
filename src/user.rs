@@ -664,8 +664,8 @@ async fn list_repos(
 
 async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
     let mut orgs = match user {
-        Some(user) => api.org_list_user_orgs(user).all().await?,
-        None => api.org_list_current_user_orgs().all().await?,
+        Some(user) => api.org_list_user_orgs(user).await?,
+        None => api.org_list_current_user_orgs().await?,
     };
 
     if orgs.is_empty() {
