@@ -2,6 +2,8 @@ use clap::Subcommand;
 use eyre::OptionExt;
 
 use std::collections::BTreeMap;
+#[cfg(unix)]
+use std::path::PathBuf;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum AuthCommand {
@@ -115,20 +117,24 @@ impl AuthCommand {
 pub async fn get_client_info_for(url: &url::Url) -> eyre::Result<Option<String>> {
     let host = crate::host_name(url);
     let host = host.strip_suffix("/").unwrap_or(host);
+    let mut possible_paths = Vec::with_capacity(3);
+
+    // On MacOS, `directories::ProjectDirs` doesn't include the `.config` path
+    // like it does on Linux.
+    #[cfg(target_os = "macos")]
+    if let Some(user_dirs) = directories::UserDirs::new() {
+        possible_paths.push(user_dirs.home_dir().join(".config/forgejo-cli/client_ids"));
+    }
+
     if let Some(dirs) = directories::ProjectDirs::from("", "Cyborus", "forgejo-cli") {
-        let client_info_path = dirs.config_dir().join("client_ids");
-        if let Ok(file) = tokio::fs::read_to_string(client_info_path).await {
-            let ids = parse_client_info_file(&file)?;
-            if let Some(id) = ids.get(host) {
-                return Ok(Some(id.to_string()));
-            }
-        }
+        possible_paths.push(dirs.config_dir().join("client_ids"));
     }
 
     #[cfg(unix)]
-    {
-        let global_client_info_path = "/etc/fj/client_ids";
-        if let Ok(file) = tokio::fs::read_to_string(global_client_info_path).await {
+    possible_paths.push(PathBuf::from("/etc/fj/client_ids"));
+
+    for possible_path in possible_paths {
+        if let Ok(file) = tokio::fs::read_to_string(possible_path).await {
             let ids = parse_client_info_file(&file)?;
             if let Some(id) = ids.get(host) {
                 return Ok(Some(id.to_string()));
