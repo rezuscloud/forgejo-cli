@@ -37,7 +37,7 @@ steps:
       password:
         from_secret: token
   publish-builds:
-    image: codeberg.org/cyborus/forgejo-cli:latest
+    image: codeberg.org/forgejo-contrib/forgejo-cli:latest
     pull: true
     environment:
       TOKEN:
