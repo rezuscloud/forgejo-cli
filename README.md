@@ -1,131 +1,31 @@
-# forgejo-cli
+## `fj`, a CLI client for Forgejo
 
-CLI tool for interacting with Forgejo
+... akin to `gh`, `glab`, or `tea`!
+
+You can...
+
+- Open, edit, comment on, close issues
+- Create and merge pull requests
+  - Easily create AGit pull requests, no need to fork!
+- Create, star, watch, and edit repositories
+- Manage organizations and teams
+- Publish new releases
+
+all from the command line! Check out [the wiki](https://codeberg.org/forgejo-contrib/forgejo-cli/wiki) for more details and explanations.
+
+`fj` doesn't try to replace your usage of `git`, it's meant to work alongside it. 
+It handles all the Forgejo-specific things that `git` doesn't.
 
 [Matrix Chat](https://matrix.to/#/#forgejo-cli:cartoon-aa.xyz)
 
-## Installation
-
-### Pre-built
+### Installation
 
 Pre-built binaries are available for `x86_64` Windows and Linux (GNU) on the
 [releases tab](https://codeberg.org/forgejo-contrib/forgejo-cli/releases/latest).
 
-### From source
+See [the wiki page on installation](https://codeberg.org/forgejo-contrib/forgejo-cli/wiki/Installation) for more options.
 
-Install with `cargo install` or `cargo binstall`
-
-```
-# Latest version compiled from source
-cargo install forgejo-cli
-# From `main`
-cargo install --git https://codeberg.org/forgejo-contrib/forgejo-cli.git --branch main
-
-# Using precompiled releases (requires cargo-binstall)
-cargo binstall forgejo-cli
-```
-
-### Debian and Ubuntu
-
-forgejo-cli is included in the official repositories as of Debian unstable and Ubuntu plucky.
-```sh
-sudo apt install forgejo-cli
-```
-
-### Fedora
-
-An **unofficial** [COPR repository](https://copr.fedorainfracloud.org/coprs/lihaohong/forgejo-cli/) is available. Fedora users can install forgejo-cli with
-```sh
-sudo dnf copr enable lihaohong/forgejo-cli
-sudo dnf install forgejo-cli
-```
-
-If you see an error about copr not being an available command, run `sudo dnf install dnf-plugins-core`.
-
-### Guix
-
-If it's not already done, you need to update Guix (Guix is rolling release):
-```sh
-guix pull
-```
-
-One done you can then install forgejo-cli with the following command:
-```sh
-guix install forgejo-cli
-```
-
-### Nix
-
-A Nix flake is included in this repository that you may use. You could install it into your Nix
-profile, for example:
-```
-nix profile install git+https://codeberg.org/forgejo-contrib/forgejo-cli
-```
-...or include it in the flake inputs of your NixOS system:
-```nix
-{
-  inputs = {
-    # ...
-    forgejo-cli.url = "git+https://codeberg.org/forgejo-contrib/forgejo-cli";
-  };
-  # ...
-}
-```
-
-
-### OCI Container
-
-`forgejo-cli` is available as an OCI container for use in CI, at
-`codeberg.org/cyborus/forgejo-cli:latest`
-
-## Usage
-
-### Instance-specific aliases
-
-While you can just use the `fj` binary directly, it can be useful to alias it
-with the `--host` flag set, to create shorthands for certain instances.
-
-```bash
-# For example, a `cb` command for interacting with codeberg
-alias cb="fj --host codeberg.org"
-# Or code.forgejo.org
-alias cfj="fj --host code.forgejo.org"
-# Or any other instance you want!
-# And the alias name can be whatever, as long as the `--host` flag is set.
-```
-
-Now, when you reference a repository such as `forgejo/forgejo`, it will
-implicitly get it from whichever alias you used!
-
-```
-$ cb repo view forgejo/forgejo
-forgejo/forgejo
-> Beyond coding. We forge.
-
-Primary language is Go
-# etc...
-```
-
-When using `fj` directly, you'd have to use a URL to access it.
-
-```
-$ fj repo view codeberg.org/forgejo/forgejo
-forgejo/forgejo
-> Beyond coding. We forge.
-
-Primary language is Go
-# etc...
-
-# Notice the "cfj", trying to access code.forgejo.org, still works when you specify Codeberg in the repository name!
-$ cfj repo view codeberg.org/forgejo/forgejo
-forgejo/forgejo
-> Beyond coding. We forge.
-
-Primary language is Go
-# etc...
-```
-
-## Licensing
+### Licensing
 
 This project is licensed under either
 [Apache License Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT)
