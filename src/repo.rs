@@ -199,7 +199,13 @@ impl RepoInfo {
                 remote_name: final_remote_name,
             },
             (None, Some(_)) => eyre::bail!("cannot find repo, no host specified"),
-            (None, None) => eyre::bail!("no repo info specified"),
+            (None, None) => eyre::bail!(
+                "no repo info specified
+
+If you're trying to operate on a repository in the current directory, try adding a remote
+referencing the forgejo instance. If you have multiple remotes, try setting one as upstream to the
+current branch. You may also specify a host explictly using the `--host` argument."
+            ),
         };
 
         Ok(info)
