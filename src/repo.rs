@@ -6,7 +6,7 @@ use forgejo_api::{structs::CreateRepoOption, Forgejo};
 use ssh2_config::ParseRule;
 use url::Url;
 
-use crate::SpecialRender;
+use crate::{DisplayOptional, SpecialRender};
 
 pub struct RepoInfo {
     url: Url,
@@ -444,6 +444,14 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+
+    /// Manage a repo's issue labels
+    Label {
+        repo: Option<RepoArg>,
+
+        #[clap(subcommand)]
+        cmd: LabelSubcommand,
+    },
 }
 
 impl RepoCommand {
@@ -592,9 +600,26 @@ impl RepoCommand {
 
                 open::that_detached(url.as_str()).wrap_err("Failed to open URL")?;
             }
+            RepoCommand::Label {
+                repo,
+                cmd: LabelSubcommand::View {},
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                list_repo_labels(&api, &repo).await?;
+            }
         };
         Ok(())
     }
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum LabelSubcommand {
+    /// Show a repo's labels
+    View {},
 }
 
 pub async fn create_repo(
@@ -1175,5 +1200,30 @@ async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
     } else {
         println!("Did not delete");
     }
+    Ok(())
+}
+
+async fn list_repo_labels(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
+    let (_headers, labels) = api
+        .issue_list_labels(repo.owner(), repo.name(), Default::default())
+        .await?;
+
+    for label in labels {
+        let label_str = crate::render_label(&label)?;
+        println!(
+            "{} {label_str}{}\n  {}",
+            DisplayOptional(label.id, "?"),
+            if label.is_archived.unwrap_or_default() {
+                " (archived)"
+            } else {
+                ""
+            },
+            match label.description.as_deref() {
+                None | Some("") => "(no description)",
+                Some(x) => x,
+            },
+        );
+    }
+
     Ok(())
 }
