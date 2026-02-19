@@ -611,6 +611,37 @@ impl RepoCommand {
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 list_repo_labels(&api, &repo).await?;
             }
+            RepoCommand::Label {
+                repo,
+                cmd:
+                    LabelSubcommand::Create {
+                        name,
+                        color,
+                        description,
+                        exclusive,
+                        archived,
+                    },
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                create_repo_label(&api, &repo, name, color, description, exclusive, archived)
+                    .await?;
+            }
+            RepoCommand::Label {
+                repo,
+                cmd: LabelSubcommand::Delete { id },
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+
+                delete_repo_label(&api, &repo, id).await?;
+            }
         };
         Ok(())
     }
@@ -620,6 +651,33 @@ impl RepoCommand {
 pub enum LabelSubcommand {
     /// Show a repo's labels
     View {},
+
+    /// Create a new label
+    Create {
+        /// Name of the new label. You may include a '/' here to namespace the label
+        name: String,
+
+        /// Color of the new label in hexadecimal format
+        color: String,
+
+        /// A description for the new label. If no argument is given, open the editor
+        #[clap(long, short)]
+        description: Option<Option<String>>,
+
+        /// Make this label exclusive with other labels in the same namespace
+        #[clap(long, short)]
+        exclusive: bool,
+
+        /// Create an archived label
+        #[clap(long, short)]
+        archived: bool,
+    },
+
+    /// Delete a label
+    Delete {
+        /// The ID or name of the label to delete
+        id: String,
+    },
 }
 
 pub async fn create_repo(
@@ -1225,5 +1283,67 @@ async fn list_repo_labels(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
         );
     }
 
+    Ok(())
+}
+
+async fn create_repo_label(
+    api: &Forgejo,
+    repo: &RepoName,
+    name: String,
+    color: String,
+    description: Option<Option<String>>,
+    exclusive: bool,
+    archived: bool,
+) -> eyre::Result<()> {
+    let description = match description {
+        None => None,
+        Some(Some(desc)) => Some(desc),
+        Some(None) => {
+            let mut desc = String::new();
+            crate::editor(&mut desc, Some("txt")).await?;
+            Some(desc)
+        }
+    };
+
+    let forgejo_api::structs::Label { id, .. } = api
+        .issue_create_label(
+            repo.owner(),
+            repo.name(),
+            forgejo_api::structs::CreateLabelOption {
+                color,
+                description,
+                exclusive: Some(exclusive),
+                is_archived: Some(archived),
+                name,
+            },
+        )
+        .await?;
+
+    println!(
+        "Successfully created label with ID {}.",
+        DisplayOptional(id, "?")
+    );
+    Ok(())
+}
+
+async fn delete_repo_label(api: &Forgejo, repo: &RepoName, id: String) -> eyre::Result<()> {
+    let id = if let Ok(id) = i64::from_str(&id) {
+        id
+    } else {
+        let (_headers, labels) = api
+            .issue_list_labels(repo.owner(), repo.name(), Default::default())
+            .await?;
+
+        labels
+            .iter()
+            .find(|l| l.name.as_ref().map(|n| n == &id).unwrap_or_default())
+            .and_then(|l| l.id)
+            .ok_or_eyre("No label found with the given name.")?
+    };
+
+    api.issue_delete_label(repo.owner(), repo.name(), id)
+        .await?;
+
+    println!("Successfully deleted label with ID {id}.");
     Ok(())
 }
