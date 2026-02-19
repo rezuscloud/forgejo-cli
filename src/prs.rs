@@ -5,8 +5,8 @@ use clap::{Args, Subcommand};
 use eyre::{Context, OptionExt};
 use forgejo_api::{
     structs::{
-        CreatePullRequestOption, IssueListLabelsQuery, MergePullRequestOption, OrgListLabelsQuery,
-        RepoGetPullRequestCommitsQuery, RepoGetPullRequestFilesQuery, StateType,
+        CreatePullRequestOption, MergePullRequestOption, RepoGetPullRequestCommitsQuery,
+        RepoGetPullRequestFilesQuery, StateType,
     },
     Forgejo,
 };
@@ -800,62 +800,7 @@ async fn edit_pr_labels(
     let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
 
-    let mut labels = api
-        .issue_list_labels(repo.owner(), repo.name(), IssueListLabelsQuery::default())
-        .all()
-        .await?;
-    let org_labels = api
-        .org_list_labels(repo.owner(), OrgListLabelsQuery::default())
-        .all()
-        .await
-        .unwrap_or_default();
-    labels.extend(org_labels);
-
-    let mut unknown_labels = Vec::new();
-
-    let mut add_ids = Vec::with_capacity(add.len());
-    for label_name in &add {
-        let maybe_label = labels
-            .iter()
-            .find(|label| label.name.as_ref() == Some(label_name));
-        if let Some(label) = maybe_label {
-            add_ids.push(serde_json::Value::Number(
-                label.id.ok_or_eyre("label does not have id")?.into(),
-            ));
-        } else {
-            unknown_labels.push(label_name);
-        }
-    }
-
-    let opts = forgejo_api::structs::IssueLabelsOption {
-        labels: Some(add_ids),
-        updated_at: None,
-    };
-    api.issue_add_label(repo.owner(), repo.name(), pr_number, opts)
-        .await?;
-    let opts = forgejo_api::structs::DeleteLabelsOption { updated_at: None };
-    for label_name in &rm {
-        api.issue_remove_label(
-            repo.owner(),
-            repo.name(),
-            pr_number,
-            label_name,
-            opts.clone(),
-        )
-        .await?;
-    }
-
-    if !unknown_labels.is_empty() {
-        if unknown_labels.len() == 1 {
-            println!("'{}' doesn't exist", &unknown_labels[0]);
-        } else {
-            let SpecialRender { bullet, .. } = *crate::special_render();
-            println!("The following labels don't exist:");
-            for unknown_label in unknown_labels {
-                println!("{bullet} {unknown_label}");
-            }
-        }
-    }
+    crate::edit_labels(&repo, api, pr_number, add, rm).await?;
 
     Ok(())
 }

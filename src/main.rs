@@ -954,3 +954,72 @@ pub fn render_label_list(labels: &[forgejo_api::structs::Label]) -> eyre::Result
     }
     Ok(())
 }
+
+/// Edit an issue's or PR's labels.
+pub async fn edit_labels(
+    repo: &crate::repo::RepoName,
+    api: &forgejo_api::Forgejo,
+    num: i64,
+    add: Vec<String>,
+    rm: Vec<String>,
+) -> eyre::Result<()> {
+    let mut labels = api
+        .issue_list_labels(
+            repo.owner(),
+            repo.name(),
+            forgejo_api::structs::IssueListLabelsQuery::default(),
+        )
+        .all()
+        .await?;
+    let org_labels = api
+        .org_list_labels(
+            repo.owner(),
+            forgejo_api::structs::OrgListLabelsQuery::default(),
+        )
+        .all()
+        .await
+        .unwrap_or_default();
+    labels.extend(org_labels);
+
+    let mut unknown_labels = Vec::new();
+
+    let mut add_ids = Vec::with_capacity(add.len());
+    for label_name in &add {
+        let maybe_label = labels
+            .iter()
+            .find(|label| label.name.as_ref() == Some(label_name));
+        if let Some(label) = maybe_label {
+            add_ids.push(serde_json::Value::Number(
+                label.id.ok_or_eyre("label does not have id")?.into(),
+            ));
+        } else {
+            unknown_labels.push(label_name);
+        }
+    }
+
+    let opts = forgejo_api::structs::IssueLabelsOption {
+        labels: Some(add_ids),
+        updated_at: None,
+    };
+    api.issue_add_label(repo.owner(), repo.name(), num, opts)
+        .await?;
+    let opts = forgejo_api::structs::DeleteLabelsOption { updated_at: None };
+    for label_name in &rm {
+        api.issue_remove_label(repo.owner(), repo.name(), num, label_name, opts.clone())
+            .await?;
+    }
+
+    if !unknown_labels.is_empty() {
+        if unknown_labels.len() == 1 {
+            println!("'{}' doesn't exist", &unknown_labels[0]);
+        } else {
+            let SpecialRender { bullet, .. } = *crate::special_render();
+            println!("The following labels don't exist:");
+            for unknown_label in unknown_labels {
+                println!("{bullet} {unknown_label}");
+            }
+        }
+    }
+
+    Ok(())
+}
