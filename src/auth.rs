@@ -158,6 +158,7 @@ pub async fn get_client_info_for(url: &url::Url) -> eyre::Result<Option<String>>
         "git.lix.systems" => "71ec029f-b5a1-4079-8e06-5b957288b063",
         "code.ffmpeg.org" => "75d19c4d-01d0-4825-8953-76ad66543f2c",
         "forge.fedoraproject.org" => "b15a2f44-75b0-4d2f-a740-50e45cc161a3",
+        "codefloe.com" => "78a6d7db-3631-48bb-94a4-340e770f6bce",
         _ => return Ok(None),
     };
 
