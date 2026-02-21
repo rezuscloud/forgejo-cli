@@ -568,6 +568,8 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
         println!("From `{head_name}` into `{base_name}`");
     }
 
+    crate::render_label_list(pr.labels.as_deref().unwrap_or_default())?;
+
     if let Some(body) = &pr.body {
         if !body.trim().is_empty() {
             println!();
