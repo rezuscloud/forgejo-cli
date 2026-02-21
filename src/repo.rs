@@ -642,6 +642,36 @@ impl RepoCommand {
 
                 delete_repo_label(&api, &repo, id).await?;
             }
+            RepoCommand::Label {
+                repo,
+                cmd:
+                    LabelSubcommand::Edit {
+                        id,
+                        name,
+                        color,
+                        description,
+                        exclusive,
+                        archived,
+                    },
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+
+                edit_repo_label(
+                    &api,
+                    &repo,
+                    id,
+                    name,
+                    color,
+                    description,
+                    exclusive,
+                    archived,
+                )
+                .await?;
+            }
         };
         Ok(())
     }
@@ -677,6 +707,32 @@ pub enum LabelSubcommand {
     Delete {
         /// The ID or name of the label to delete
         id: String,
+    },
+
+    /// Edit a label
+    Edit {
+        /// The ID or name of the label to edit
+        id: String,
+
+        /// New name for the label
+        #[clap(short, long)]
+        name: Option<String>,
+
+        /// New color for the label
+        #[clap(short, long)]
+        color: Option<String>,
+
+        /// New description for the label. If no argument is given, open the editor
+        #[clap(short, long)]
+        description: Option<Option<String>>,
+
+        /// New exclusive status
+        #[clap(short, long)]
+        exclusive: Option<bool>,
+
+        /// New archived status
+        #[clap(short, long)]
+        archived: Option<bool>,
     },
 }
 
@@ -1295,15 +1351,7 @@ async fn create_repo_label(
     exclusive: bool,
     archived: bool,
 ) -> eyre::Result<()> {
-    let description = match description {
-        None => None,
-        Some(Some(desc)) => Some(desc),
-        Some(None) => {
-            let mut desc = String::new();
-            crate::editor(&mut desc, Some("txt")).await?;
-            Some(desc)
-        }
-    };
+    let description = get_user_description(description).await?;
 
     let forgejo_api::structs::Label { id, .. } = api
         .issue_create_label(
@@ -1327,23 +1375,73 @@ async fn create_repo_label(
 }
 
 async fn delete_repo_label(api: &Forgejo, repo: &RepoName, id: String) -> eyre::Result<()> {
-    let id = if let Ok(id) = i64::from_str(&id) {
-        id
-    } else {
-        let (_headers, labels) = api
-            .issue_list_labels(repo.owner(), repo.name(), Default::default())
-            .await?;
-
-        labels
-            .iter()
-            .find(|l| l.name.as_ref().map(|n| n == &id).unwrap_or_default())
-            .and_then(|l| l.id)
-            .ok_or_eyre("No label found with the given name.")?
-    };
+    let id = find_user_label(api, repo, &id).await?;
 
     api.issue_delete_label(repo.owner(), repo.name(), id)
         .await?;
 
     println!("Successfully deleted label with ID {id}.");
     Ok(())
+}
+
+async fn edit_repo_label(
+    api: &Forgejo,
+    repo: &RepoName,
+    id: String,
+    name: Option<String>,
+    color: Option<String>,
+    description: Option<Option<String>>,
+    exclusive: Option<bool>,
+    is_archived: Option<bool>,
+) -> eyre::Result<()> {
+    let id = find_user_label(api, repo, &id).await?;
+    let description = get_user_description(description).await?;
+    let label = api
+        .issue_edit_label(
+            repo.owner(),
+            repo.name(),
+            id,
+            forgejo_api::structs::EditLabelOption {
+                color,
+                description,
+                exclusive,
+                is_archived,
+                name,
+            },
+        )
+        .await?;
+
+    println!("Edited label: {}", crate::render_label(&label)?);
+
+    Ok(())
+}
+
+/// Takes an argument of either a description or instruction to open the editor as passed from the
+/// user, potentially opens the editor and returns the final description, if any.
+async fn get_user_description(desc: Option<Option<String>>) -> eyre::Result<Option<String>> {
+    match desc {
+        None => Ok(None),
+        Some(Some(desc)) => Ok(Some(desc)),
+        Some(None) => {
+            let mut desc = String::new();
+            crate::editor(&mut desc, Some("txt")).await?;
+            Ok(Some(desc))
+        }
+    }
+}
+
+/// Takes a name or ID for label as passed from the user and resolves it to a label ID.
+async fn find_user_label(api: &Forgejo, repo: &RepoName, id: &str) -> eyre::Result<i64> {
+    if let Ok(id) = i64::from_str(id) {
+        return Ok(id);
+    }
+    let (_headers, labels) = api
+        .issue_list_labels(repo.owner(), repo.name(), Default::default())
+        .await?;
+
+    return labels
+        .iter()
+        .find(|l| l.name.as_ref().map(|n| n == id).unwrap_or_default())
+        .and_then(|l| l.id)
+        .ok_or_eyre("No label found with the given name.");
 }
