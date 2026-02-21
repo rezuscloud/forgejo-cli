@@ -446,11 +446,12 @@ pub enum RepoCommand {
     },
 
     /// Manage a repo's issue labels
-    Label {
+    #[clap(alias = "label")]
+    Labels {
         repo: Option<RepoArg>,
 
         #[clap(subcommand)]
-        cmd: LabelSubcommand,
+        cmd: LabelsSubcommand,
     },
 }
 
@@ -600,9 +601,9 @@ impl RepoCommand {
 
                 open::that_detached(url.as_str()).wrap_err("Failed to open URL")?;
             }
-            RepoCommand::Label {
+            RepoCommand::Labels {
                 repo,
-                cmd: LabelSubcommand::View {},
+                cmd: LabelsSubcommand::View {},
             } => {
                 let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
@@ -611,10 +612,10 @@ impl RepoCommand {
                     .ok_or_eyre("couldn't get repo name, please specify")?;
                 list_repo_labels(&api, &repo).await?;
             }
-            RepoCommand::Label {
+            RepoCommand::Labels {
                 repo,
                 cmd:
-                    LabelSubcommand::Create {
+                    LabelsSubcommand::Create {
                         name,
                         color,
                         description,
@@ -630,9 +631,9 @@ impl RepoCommand {
                 create_repo_label(&api, &repo, name, color, description, exclusive, archived)
                     .await?;
             }
-            RepoCommand::Label {
+            RepoCommand::Labels {
                 repo,
-                cmd: LabelSubcommand::Delete { id },
+                cmd: LabelsSubcommand::Delete { id },
             } => {
                 let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
@@ -642,10 +643,10 @@ impl RepoCommand {
 
                 delete_repo_label(&api, &repo, id).await?;
             }
-            RepoCommand::Label {
+            RepoCommand::Labels {
                 repo,
                 cmd:
-                    LabelSubcommand::Edit {
+                    LabelsSubcommand::Edit {
                         id,
                         name,
                         color,
@@ -678,7 +679,7 @@ impl RepoCommand {
 }
 
 #[derive(Subcommand, Clone, Debug)]
-pub enum LabelSubcommand {
+pub enum LabelsSubcommand {
     /// Show a repo's labels
     View {},
 
