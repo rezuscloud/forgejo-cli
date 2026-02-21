@@ -603,14 +603,14 @@ impl RepoCommand {
             }
             RepoCommand::Labels {
                 repo,
-                cmd: LabelsSubcommand::View {},
+                cmd: LabelsSubcommand::View { archived },
             } => {
                 let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
                     .ok_or_eyre("couldn't get repo name, please specify")?;
-                list_repo_labels(&api, &repo).await?;
+                list_repo_labels(&api, &repo, archived).await?;
             }
             RepoCommand::Labels {
                 repo,
@@ -681,7 +681,11 @@ impl RepoCommand {
 #[derive(Subcommand, Clone, Debug)]
 pub enum LabelsSubcommand {
     /// Show a repo's labels
-    View {},
+    View {
+        /// Show archived labels
+        #[clap(short, long)]
+        archived: bool,
+    },
 
     /// Create a new label
     Create {
@@ -1318,15 +1322,19 @@ async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
     Ok(())
 }
 
-async fn list_repo_labels(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
+async fn list_repo_labels(api: &Forgejo, repo: &RepoName, archived: bool) -> eyre::Result<()> {
     let (_headers, labels) = api
         .issue_list_labels(repo.owner(), repo.name(), Default::default())
         .await?;
 
     for label in labels {
+        if label.is_archived.unwrap_or_default() && !archived {
+            continue;
+        }
+
         let label_str = crate::render_label(&label)?;
         println!(
-            "{} {label_str}{}\n  {}",
+            "{label_str} {}{}\n  {}\n",
             DisplayOptional(label.id, "?"),
             if label.is_archived.unwrap_or_default() {
                 " (archived)"
