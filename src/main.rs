@@ -933,6 +933,11 @@ fn darken(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
 }
 
 pub fn render_label_list(labels: &[forgejo_api::structs::Label]) -> eyre::Result<()> {
+    if labels.is_empty() {
+        // avoid rendering an empty line in this case
+        return Ok(());
+    }
+
     let SpecialRender { fancy, .. } = *crate::special_render();
     if fancy {
         let mut total_width = 0;
