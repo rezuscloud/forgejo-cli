@@ -1362,7 +1362,7 @@ async fn create_repo_label(
 ) -> eyre::Result<()> {
     let description = get_user_description(description).await?;
 
-    let forgejo_api::structs::Label { id, .. } = api
+    let label = api
         .issue_create_label(
             repo.owner(),
             repo.name(),
@@ -1377,8 +1377,8 @@ async fn create_repo_label(
         .await?;
 
     println!(
-        "Successfully created label with ID {}.",
-        DisplayOptional(id, "?")
+        "Successfully created label {}",
+        crate::render_label(&label)?,
     );
     Ok(())
 }
