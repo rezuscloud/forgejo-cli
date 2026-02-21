@@ -1383,13 +1383,13 @@ async fn create_repo_label(
     Ok(())
 }
 
-async fn delete_repo_label(api: &Forgejo, repo: &RepoName, id: String) -> eyre::Result<()> {
-    let id = find_user_label(api, repo, &id).await?;
+async fn delete_repo_label(api: &Forgejo, repo: &RepoName, name: String) -> eyre::Result<()> {
+    let id = find_user_label(api, repo, &name).await?;
 
     api.issue_delete_label(repo.owner(), repo.name(), id)
         .await?;
 
-    println!("Successfully deleted label with ID {id}.");
+    println!("Successfully deleted label {name}.");
     Ok(())
 }
 
