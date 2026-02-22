@@ -70,7 +70,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -81,7 +81,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -428,7 +428,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -488,7 +488,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1668,7 +1668,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1783,9 +1783,9 @@ dependencies = [
 
 [[package]]
 name = "serde-saphyr"
-version = "0.0.19"
+version = "0.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29fb2d57f074f415e3ea6905994be8aca2bd7a17f8a0344cc43ed15bf240a547"
+checksum = "bfcaa44cda9e21eaf5fefc86175d544a359d4de9bcd1f3a90be7bbf77dfc3492"
 dependencies = [
  "ahash",
  "annotate-snippets",
@@ -1797,7 +1797,6 @@ dependencies = [
  "regex",
  "saphyr-parser-bw",
  "serde",
- "serde_json",
  "smallvec",
  "zmij",
 ]
@@ -1828,7 +1827,6 @@ version = "1.0.149"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
 dependencies = [
- "indexmap",
  "itoa",
  "memchr",
  "serde",
@@ -2039,7 +2037,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
