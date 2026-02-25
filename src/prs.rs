@@ -5,8 +5,8 @@ use clap::{Args, Subcommand};
 use eyre::{Context, OptionExt};
 use forgejo_api::{
     structs::{
-        CreatePullRequestOption, IssueListLabelsQuery, MergePullRequestOption, OrgListLabelsQuery,
-        RepoGetPullRequestCommitsQuery, RepoGetPullRequestFilesQuery, StateType,
+        CreatePullRequestOption, MergePullRequestOption, RepoGetPullRequestCommitsQuery,
+        RepoGetPullRequestFilesQuery, StateType,
     },
     Forgejo,
 };
@@ -568,6 +568,8 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
         println!("From `{head_name}` into `{base_name}`");
     }
 
+    crate::render_label_list(pr.labels.as_deref().unwrap_or_default())?;
+
     if let Some(body) = &pr.body {
         if !body.trim().is_empty() {
             println!();
@@ -586,95 +588,8 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
 async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<i64>) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
     let labels = pr.labels.as_deref().unwrap_or_default();
-    render_label_list(&labels)?;
+    crate::render_label_list(&labels)?;
     Ok(())
-}
-
-pub fn render_label_list(labels: &[forgejo_api::structs::Label]) -> eyre::Result<()> {
-    let SpecialRender { fancy, .. } = *crate::special_render();
-    if fancy {
-        let mut total_width = 0;
-        for label in labels {
-            let name = label.name.as_deref().unwrap_or("???").trim();
-            if total_width + name.len() > 40 {
-                println!();
-                total_width = 0;
-            }
-            print!("{} ", render_label(label)?);
-            total_width += name.len();
-        }
-        println!();
-    } else {
-        for label in labels {
-            let name = label.name.as_deref().unwrap_or("???");
-            println!("{name}");
-        }
-    }
-    Ok(())
-}
-
-pub fn render_label(label: &forgejo_api::structs::Label) -> eyre::Result<String> {
-    use std::fmt::Write;
-    let mut s = String::new();
-    let SpecialRender {
-        black,
-        white,
-        reset,
-        ..
-    } = *crate::special_render();
-    let name = label.name.as_deref().unwrap_or("???").trim();
-    let color_s = label.color.as_deref().unwrap_or("FFFFFF");
-    let (r, g, b) = parse_color(color_s)?;
-    let text_color = if luma(r, g, b) > 0.5 { black } else { white };
-    let rgb_bg = format!("\x1b[48;2;{r};{g};{b}m");
-    if label.exclusive.unwrap_or_default() {
-        let (r2, g2, b2) = darken(r, g, b);
-        let (category, name) = name
-            .split_once("/")
-            .ok_or_eyre("label is exclusive but does not have slash")?;
-        let rgb_bg_dark = format!("\x1b[48;2;{r2};{g2};{b2}m");
-        write!(
-            &mut s,
-            "{rgb_bg_dark}{text_color} {category} {rgb_bg} {name} {reset}"
-        )?;
-    } else {
-        write!(&mut s, "{rgb_bg}{text_color} {name} {reset}")?;
-    }
-    Ok(s)
-}
-
-fn parse_color(color: &str) -> eyre::Result<(u8, u8, u8)> {
-    eyre::ensure!(color.len() == 6, "color string wrong length");
-    let mut iter = color.chars();
-    let mut next_digit = || {
-        iter.next()
-            .unwrap()
-            .to_digit(16)
-            .ok_or_eyre("invalid digit")
-    };
-    let r1 = next_digit()?;
-    let r2 = next_digit()?;
-    let g1 = next_digit()?;
-    let g2 = next_digit()?;
-    let b1 = next_digit()?;
-    let b2 = next_digit()?;
-    let r = ((r1 << 4) | (r2)) as u8;
-    let g = ((g1 << 4) | (g2)) as u8;
-    let b = ((b1 << 4) | (b2)) as u8;
-    Ok((r, g, b))
-}
-
-// Thanks, wikipedia.
-fn luma(r: u8, g: u8, b: u8) -> f32 {
-    ((0.299 * (r as f32)) + (0.578 * (g as f32)) + (0.114 * (b as f32))) / 255.0
-}
-
-fn darken(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
-    (
-        ((r as f32) * 0.85) as u8,
-        ((g as f32) * 0.85) as u8,
-        ((b as f32) * 0.85) as u8,
-    )
 }
 
 async fn view_pr_status(
@@ -887,62 +802,7 @@ async fn edit_pr_labels(
     let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
 
-    let mut labels = api
-        .issue_list_labels(repo.owner(), repo.name(), IssueListLabelsQuery::default())
-        .all()
-        .await?;
-    let org_labels = api
-        .org_list_labels(repo.owner(), OrgListLabelsQuery::default())
-        .all()
-        .await
-        .unwrap_or_default();
-    labels.extend(org_labels);
-
-    let mut unknown_labels = Vec::new();
-
-    let mut add_ids = Vec::with_capacity(add.len());
-    for label_name in &add {
-        let maybe_label = labels
-            .iter()
-            .find(|label| label.name.as_ref() == Some(label_name));
-        if let Some(label) = maybe_label {
-            add_ids.push(serde_json::Value::Number(
-                label.id.ok_or_eyre("label does not have id")?.into(),
-            ));
-        } else {
-            unknown_labels.push(label_name);
-        }
-    }
-
-    let opts = forgejo_api::structs::IssueLabelsOption {
-        labels: Some(add_ids),
-        updated_at: None,
-    };
-    api.issue_add_label(repo.owner(), repo.name(), pr_number, opts)
-        .await?;
-    let opts = forgejo_api::structs::DeleteLabelsOption { updated_at: None };
-    for label_name in &rm {
-        api.issue_remove_label(
-            repo.owner(),
-            repo.name(),
-            pr_number,
-            label_name,
-            opts.clone(),
-        )
-        .await?;
-    }
-
-    if !unknown_labels.is_empty() {
-        if unknown_labels.len() == 1 {
-            println!("'{}' doesn't exist", &unknown_labels[0]);
-        } else {
-            let SpecialRender { bullet, .. } = *crate::special_render();
-            println!("The following labels don't exist:");
-            for unknown_label in unknown_labels {
-                println!("{bullet} {unknown_label}");
-            }
-        }
-    }
+    crate::edit_labels(&repo, api, pr_number, add, rm).await?;
 
     Ok(())
 }

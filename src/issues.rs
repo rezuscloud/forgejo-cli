@@ -187,6 +187,15 @@ pub enum EditCommand {
         idx: usize,
         new_body: Option<String>,
     },
+    /// Edit an issue's labels
+    Labels {
+        /// The labels to add.
+        #[clap(long, short)]
+        add: Vec<String>,
+        /// The labels to remove.
+        #[clap(long, short)]
+        rm: Vec<String>,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -250,6 +259,9 @@ impl IssueCommand {
                 }
                 EditCommand::Comment { idx, new_body } => {
                     edit_comment(repo, &api, issue.number, idx, new_body).await?
+                }
+                EditCommand::Labels { add, rm } => {
+                    crate::edit_labels(repo, &api, issue.number, add, rm).await?;
                 }
             },
             Close { issue, with_msg } => close_issue(repo, &api, issue.number, with_msg).await?,
@@ -492,6 +504,8 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result
         StateType::Open => println!("{bright_green}Open{reset}"),
         StateType::Closed => println!("{bright_red}Closed{reset}"),
     };
+
+    crate::render_label_list(&issue.labels.unwrap_or_default())?;
 
     if let Some(body) = &issue.body {
         if !body.is_empty() {

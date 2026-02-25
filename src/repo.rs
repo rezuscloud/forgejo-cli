@@ -6,7 +6,7 @@ use forgejo_api::{structs::CreateRepoOption, Forgejo};
 use ssh2_config::ParseRule;
 use url::Url;
 
-use crate::SpecialRender;
+use crate::{DisplayOptional, SpecialRender};
 
 pub struct RepoInfo {
     url: Url,
@@ -444,6 +444,15 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+
+    /// Manage a repo's issue labels
+    #[clap(alias = "label")]
+    Labels {
+        repo: Option<RepoArg>,
+
+        #[clap(subcommand)]
+        cmd: LabelsSubcommand,
+    },
 }
 
 impl RepoCommand {
@@ -592,9 +601,144 @@ impl RepoCommand {
 
                 open::that_detached(url.as_str()).wrap_err("Failed to open URL")?;
             }
+            RepoCommand::Labels {
+                repo,
+                cmd: LabelsSubcommand::View { archived },
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                list_repo_labels(&api, &repo, archived).await?;
+            }
+            RepoCommand::Labels {
+                repo,
+                cmd:
+                    LabelsSubcommand::Create {
+                        name,
+                        color,
+                        description,
+                        exclusive,
+                        archived,
+                    },
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                create_repo_label(&api, &repo, name, color, description, exclusive, archived)
+                    .await?;
+            }
+            RepoCommand::Labels {
+                repo,
+                cmd: LabelsSubcommand::Delete { id },
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+
+                delete_repo_label(&api, &repo, id).await?;
+            }
+            RepoCommand::Labels {
+                repo,
+                cmd:
+                    LabelsSubcommand::Edit {
+                        id,
+                        name,
+                        color,
+                        description,
+                        exclusive,
+                        archived,
+                    },
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+
+                edit_repo_label(
+                    &api,
+                    &repo,
+                    id,
+                    name,
+                    color,
+                    description,
+                    exclusive,
+                    archived,
+                )
+                .await?;
+            }
         };
         Ok(())
     }
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum LabelsSubcommand {
+    /// Show a repo's labels
+    View {
+        /// Show archived labels
+        #[clap(short, long)]
+        archived: bool,
+    },
+
+    /// Create a new label
+    Create {
+        /// Name of the new label. You may include a '/' here to namespace the label
+        name: String,
+
+        /// Color of the new label in hexadecimal format
+        color: String,
+
+        /// A description for the new label. If no argument is given, open the editor
+        #[clap(long, short)]
+        description: Option<Option<String>>,
+
+        /// Make this label exclusive with other labels in the same namespace
+        #[clap(long, short)]
+        exclusive: bool,
+
+        /// Create an archived label
+        #[clap(long, short)]
+        archived: bool,
+    },
+
+    /// Delete a label
+    Delete {
+        /// The ID or name of the label to delete
+        id: String,
+    },
+
+    /// Edit a label
+    Edit {
+        /// The ID or name of the label to edit
+        id: String,
+
+        /// New name for the label
+        #[clap(short, long)]
+        name: Option<String>,
+
+        /// New color for the label
+        #[clap(short, long)]
+        color: Option<String>,
+
+        /// New description for the label. If no argument is given, open the editor
+        #[clap(short, long)]
+        description: Option<Option<String>>,
+
+        /// New exclusive status
+        #[clap(short, long)]
+        exclusive: Option<bool>,
+
+        /// New archived status
+        #[clap(short, long)]
+        archived: Option<bool>,
+    },
 }
 
 pub async fn create_repo(
@@ -1176,4 +1320,137 @@ async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
         println!("Did not delete");
     }
     Ok(())
+}
+
+async fn list_repo_labels(api: &Forgejo, repo: &RepoName, archived: bool) -> eyre::Result<()> {
+    let (_headers, labels) = api
+        .issue_list_labels(repo.owner(), repo.name(), Default::default())
+        .await?;
+
+    for label in labels {
+        if label.is_archived.unwrap_or_default() && !archived {
+            continue;
+        }
+
+        let label_str = crate::render_label(&label)?;
+        println!(
+            "{label_str} {}{}\n  {}\n",
+            DisplayOptional(label.id, "?"),
+            if label.is_archived.unwrap_or_default() {
+                " (archived)"
+            } else {
+                ""
+            },
+            match label.description.as_deref() {
+                None | Some("") => "(no description)",
+                Some(x) => x,
+            },
+        );
+    }
+
+    Ok(())
+}
+
+async fn create_repo_label(
+    api: &Forgejo,
+    repo: &RepoName,
+    name: String,
+    color: String,
+    description: Option<Option<String>>,
+    exclusive: bool,
+    archived: bool,
+) -> eyre::Result<()> {
+    let description = get_user_description(description).await?;
+
+    let label = api
+        .issue_create_label(
+            repo.owner(),
+            repo.name(),
+            forgejo_api::structs::CreateLabelOption {
+                color,
+                description,
+                exclusive: Some(exclusive),
+                is_archived: Some(archived),
+                name,
+            },
+        )
+        .await?;
+
+    println!(
+        "Successfully created label {}",
+        crate::render_label(&label)?,
+    );
+    Ok(())
+}
+
+async fn delete_repo_label(api: &Forgejo, repo: &RepoName, name: String) -> eyre::Result<()> {
+    let id = find_user_label(api, repo, &name).await?;
+
+    api.issue_delete_label(repo.owner(), repo.name(), id)
+        .await?;
+
+    println!("Successfully deleted label {name}.");
+    Ok(())
+}
+
+async fn edit_repo_label(
+    api: &Forgejo,
+    repo: &RepoName,
+    id: String,
+    name: Option<String>,
+    color: Option<String>,
+    description: Option<Option<String>>,
+    exclusive: Option<bool>,
+    is_archived: Option<bool>,
+) -> eyre::Result<()> {
+    let id = find_user_label(api, repo, &id).await?;
+    let description = get_user_description(description).await?;
+    let label = api
+        .issue_edit_label(
+            repo.owner(),
+            repo.name(),
+            id,
+            forgejo_api::structs::EditLabelOption {
+                color,
+                description,
+                exclusive,
+                is_archived,
+                name,
+            },
+        )
+        .await?;
+
+    println!("Edited label: {}", crate::render_label(&label)?);
+
+    Ok(())
+}
+
+/// Takes an argument of either a description or instruction to open the editor as passed from the
+/// user, potentially opens the editor and returns the final description, if any.
+async fn get_user_description(desc: Option<Option<String>>) -> eyre::Result<Option<String>> {
+    match desc {
+        None => Ok(None),
+        Some(Some(desc)) => Ok(Some(desc)),
+        Some(None) => {
+            let mut desc = String::new();
+            crate::editor(&mut desc, Some("txt")).await?;
+            Ok(Some(desc))
+        }
+    }
+}
+
+/// Takes a name or ID for label as passed from the user and resolves it to a label ID.
+async fn find_user_label(api: &Forgejo, repo: &RepoName, id: &str) -> eyre::Result<i64> {
+    if let Ok(id) = i64::from_str(id) {
+        return Ok(id);
+    }
+    let (_headers, labels) = api
+        .issue_list_labels(repo.owner(), repo.name(), Default::default())
+        .await?;
+
+    return labels
+        .iter()
+        .find(|l| l.name.as_ref().map(|n| n == id).unwrap_or_default())
+        .and_then(|l| l.id)
+        .ok_or_eyre("No label found with the given name.");
 }
