@@ -453,7 +453,87 @@ pub enum RepoCommand {
         #[clap(subcommand)]
         cmd: LabelsSubcommand,
     },
+
+    /// Edit a repository's properties
+    Edit {
+        repo: Option<RepoArg>,
+
+        /// Archive or unarchive
+        #[clap(short, long)]
+        archived: Option<bool>,
+
+        /// Set the default branch
+        #[clap(long)]
+        default_branch: Option<String>,
+
+        /// Set the description
+        #[clap(short, long)]
+        description: Option<String>,
+
+        /// Remove obsolete remote-tracking references when mirroring
+        #[clap(long)]
+        enable_prune: Option<bool>,
+
+        /// Set the interval for push mirrors. Use a string like 8h30m0s
+        #[clap(long)]
+        mirror_interval: Option<String>,
+
+        /// Set the repo's name
+        #[clap(long)]
+        name: Option<String>,
+
+        /// Set this repository's private status
+        #[clap(short, long)]
+        private: Option<bool>,
+
+        /// Set if this repository should be a template repository
+        #[clap(short, long)]
+        template: Option<bool>,
+
+        /// Set a URL for this repository's website
+        #[clap(short, long)]
+        website: Option<String>,
+    },
 }
+
+// TODO: EditRepoOption should probably implement Default upstream.
+const NOOP_EDIT_REPO_OPTION: forgejo_api::structs::EditRepoOption =
+    forgejo_api::structs::EditRepoOption {
+        allow_fast_forward_only_merge: None,
+        allow_manual_merge: None,
+        allow_merge_commits: None,
+        allow_rebase: None,
+        allow_rebase_explicit: None,
+        allow_rebase_update: None,
+        allow_squash_merge: None,
+        archived: None,
+        autodetect_manual_merge: None,
+        default_allow_maintainer_edit: None,
+        default_branch: None,
+        default_delete_branch_after_merge: None,
+        default_merge_style: None,
+        default_update_style: None,
+        description: None,
+        enable_prune: None,
+        external_tracker: None,
+        external_wiki: None,
+        globally_editable_wiki: None,
+        has_actions: None,
+        has_issues: None,
+        has_packages: None,
+        has_projects: None,
+        has_pull_requests: None,
+        has_releases: None,
+        has_wiki: None,
+        ignore_whitespace_conflicts: None,
+        internal_tracker: None,
+        mirror_interval: None,
+        name: None,
+        private: None,
+        template: None,
+        website: None,
+        wiki_branch: None,
+    };
 
 impl RepoCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
@@ -670,6 +750,42 @@ impl RepoCommand {
                     description,
                     exclusive,
                     archived,
+                )
+                .await?;
+            }
+            RepoCommand::Edit {
+                repo,
+                archived,
+                default_branch,
+                description,
+                enable_prune,
+                mirror_interval,
+                name,
+                private,
+                template,
+                website,
+            } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+
+                api.repo_edit(
+                    repo.owner(),
+                    repo.name(),
+                    forgejo_api::structs::EditRepoOption {
+                        archived,
+                        default_branch,
+                        description,
+                        enable_prune,
+                        mirror_interval,
+                        name,
+                        private,
+                        template,
+                        website,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
                 )
                 .await?;
             }
