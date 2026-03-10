@@ -494,6 +494,15 @@ pub enum RepoCommand {
         #[clap(short, long)]
         website: Option<String>,
     },
+
+    /// Manage a repo's units
+    #[clap(alias = "unit")]
+    Units {
+        repo: Option<RepoArg>,
+
+        #[clap(subcommand)]
+        cmd: UnitsSubcommand,
+    },
 }
 
 // TODO: EditRepoOption should probably implement Default upstream.
@@ -789,6 +798,93 @@ impl RepoCommand {
                 )
                 .await?;
             }
+            RepoCommand::Units { repo, cmd } => {
+                let repo = RepoInfo::get_current(host_name, repo.as_ref(), None, &keys)?;
+                let api = keys.get_api(repo.host_url()).await?;
+                let repo = repo
+                    .name()
+                    .ok_or_eyre("couldn't get repo name, please specify")?;
+
+                let edit_option = match cmd {
+                    UnitsSubcommand::Issues { enable } => forgejo_api::structs::EditRepoOption {
+                        has_issues: enable,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
+                    UnitsSubcommand::Prs {
+                        enable,
+                        allow_fast_forward_only_merge,
+                        allow_manual_merge,
+                        allow_merge_commits,
+                        allow_rebase,
+                        allow_rebase_explicit,
+                        allow_rebase_update,
+                        allow_squash_merge,
+                        autodetect_manual_merge,
+                        default_allow_maintainer_edit,
+                        default_delete_branch_after_merge,
+                        default_merge_style,
+                        default_update_style,
+                        ignore_whitespace_conflicts,
+                    } => forgejo_api::structs::EditRepoOption {
+                        has_pull_requests: enable,
+                        allow_fast_forward_only_merge,
+                        allow_manual_merge,
+                        allow_merge_commits,
+                        allow_rebase,
+                        allow_rebase_explicit,
+                        allow_rebase_update,
+                        allow_squash_merge,
+                        autodetect_manual_merge,
+                        default_allow_maintainer_edit,
+                        default_delete_branch_after_merge,
+                        default_merge_style: default_merge_style
+                            .map(DefaultMergeStyle::to_forgejo_api),
+                        default_update_style: default_update_style
+                            .map(DefaultUpdateStyle::to_forgejo_api)
+                            .map(String::from),
+                        ignore_whitespace_conflicts,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
+                    UnitsSubcommand::Actions { enable } => forgejo_api::structs::EditRepoOption {
+                        has_actions: enable,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
+                    UnitsSubcommand::Wiki {
+                        enable,
+                        branch,
+                        external_url: external_wiki,
+                        globally_editable,
+                    } => forgejo_api::structs::EditRepoOption {
+                        has_wiki: enable,
+                        wiki_branch: branch,
+                        external_wiki: external_wiki.map(|url| {
+                            forgejo_api::structs::ExternalWiki {
+                                // Setting this to None always results in a server-side
+                                // error.
+                                // See: https://codeberg.org/Cyborus/forgejo-api/issues/143
+                                external_wiki_url: Some(url),
+                            }
+                        }),
+                        globally_editable_wiki: globally_editable,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
+                    UnitsSubcommand::Packages { enable } => forgejo_api::structs::EditRepoOption {
+                        has_packages: enable,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
+                    UnitsSubcommand::Projects { enable } => forgejo_api::structs::EditRepoOption {
+                        has_projects: enable,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
+                    UnitsSubcommand::Releases { enable } => forgejo_api::structs::EditRepoOption {
+                        has_releases: enable,
+                        ..NOOP_EDIT_REPO_OPTION
+                    },
+                };
+
+                api.repo_edit(repo.owner(), repo.name(), edit_option)
+                    .await?;
+            }
         };
         Ok(())
     }
@@ -855,6 +951,168 @@ pub enum LabelsSubcommand {
         #[clap(short, long)]
         archived: Option<bool>,
     },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum UnitsSubcommand {
+    /// Manage the issues unit
+    #[clap(alias = "issue")]
+    Issues {
+        /// Enable or disable issues
+        #[clap(short, long)]
+        enable: Option<bool>,
+        // TODO: external_tracker, internal_tracker
+        // These accept quite sophisticated data structures, not sure how to model those.
+    },
+
+    /// Manage the pull requests unit
+    #[clap(alias = "pr")]
+    Prs {
+        /// Enable or disable pull requests
+        #[clap(short, long)]
+        enable: Option<bool>,
+
+        /// Allow fast-forward only merging
+        #[clap(long)]
+        allow_fast_forward_only_merge: Option<bool>,
+
+        /// Allow manual merging
+        #[clap(long)]
+        allow_manual_merge: Option<bool>,
+
+        /// Allow merge commits
+        #[clap(long)]
+        allow_merge_commits: Option<bool>,
+
+        /// Allow rebase merging
+        #[clap(long)]
+        allow_rebase: Option<bool>,
+
+        /// Allow rebase merging with explicit merge commits
+        #[clap(long)]
+        allow_rebase_explicit: Option<bool>,
+
+        /// Allow updating PR branches by rebase
+        #[clap(long)]
+        allow_rebase_update: Option<bool>,
+
+        /// Allow squash merging
+        #[clap(long)]
+        allow_squash_merge: Option<bool>,
+
+        /// Automatically detect manual merges
+        #[clap(long)]
+        autodetect_manual_merge: Option<bool>,
+
+        /// Allow maintainer edits by default
+        #[clap(long)]
+        default_allow_maintainer_edit: Option<bool>,
+
+        /// Delete branch after merge by default
+        #[clap(long)]
+        default_delete_branch_after_merge: Option<bool>,
+
+        /// Default merge style
+        #[clap(long)]
+        default_merge_style: Option<DefaultMergeStyle>,
+
+        /// Default update style
+        #[clap(long)]
+        default_update_style: Option<DefaultUpdateStyle>,
+
+        /// Ignore whitespace merge conflicts
+        #[clap(long)]
+        ignore_whitespace_conflicts: Option<bool>,
+    },
+
+    /// Manage the actions unit
+    Actions {
+        /// Enable or disable actions
+        #[clap(short, long)]
+        enable: Option<bool>,
+    },
+
+    /// Manage the wiki unit
+    Wiki {
+        /// Enable or disable the wiki
+        #[clap(short, long)]
+        enable: Option<bool>,
+
+        /// Set the branch used for the wiki
+        #[clap(long)]
+        branch: Option<String>,
+
+        /// Set the URL for an external wiki.
+        /// If no URL is given, the external wiki is instead disabled.
+        #[clap(long)]
+        external_url: Option<Url>,
+
+        /// Set the globally editable state of the wiki
+        #[clap(long)]
+        globally_editable: Option<bool>,
+    },
+
+    /// Manage the packages unit
+    #[clap(alias = "package")]
+    Packages {
+        /// Enable or disable the package registry
+        #[clap(short, long)]
+        enable: Option<bool>,
+    },
+
+    /// Manage the projects unit
+    #[clap(alias = "project")]
+    Projects {
+        /// Enable or disable the project board
+        #[clap(short, long)]
+        enable: Option<bool>,
+    },
+
+    /// Manage the releases unit
+    #[clap(alias = "release")]
+    Releases {
+        /// Enable or disable the releases unit
+        #[clap(short, long)]
+        enable: Option<bool>,
+    },
+}
+
+#[derive(clap::ValueEnum, Copy, Clone, Debug)]
+pub enum DefaultMergeStyle {
+    Merge,
+    Rebase,
+    RebaseMerge,
+    Squash,
+    FastForwardOnly,
+}
+
+impl DefaultMergeStyle {
+    fn to_forgejo_api(self) -> forgejo_api::structs::DefaultMergeStyle {
+        match self {
+            DefaultMergeStyle::Merge => forgejo_api::structs::DefaultMergeStyle::Merge,
+            DefaultMergeStyle::Rebase => forgejo_api::structs::DefaultMergeStyle::Rebase,
+            DefaultMergeStyle::RebaseMerge => forgejo_api::structs::DefaultMergeStyle::RebaseMerge,
+            DefaultMergeStyle::Squash => forgejo_api::structs::DefaultMergeStyle::Squash,
+            DefaultMergeStyle::FastForwardOnly => {
+                forgejo_api::structs::DefaultMergeStyle::FastForwardOnly
+            }
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Copy, Clone, Debug)]
+pub enum DefaultUpdateStyle {
+    Rebase,
+    Merge,
+}
+
+impl DefaultUpdateStyle {
+    fn to_forgejo_api(self) -> &'static str {
+        match self {
+            DefaultUpdateStyle::Rebase => "rebase",
+            DefaultUpdateStyle::Merge => "merge",
+        }
+    }
 }
 
 pub async fn create_repo(
