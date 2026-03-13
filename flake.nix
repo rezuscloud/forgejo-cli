@@ -16,8 +16,17 @@
 
         cargoLock.lockFile = ./Cargo.lock;
 
-        nativeBuildInputs = with pkgs; [ pkg-config ];
+        nativeBuildInputs = with pkgs; [ pkg-config installShellFiles ];
         buildInputs = with pkgs; [ openssl ];
+
+        postInstall = ''
+          export HOME=$(mktemp -d)
+          installShellCompletion --cmd fj \
+            --bash <($out/bin/fj completion bash) \
+            --fish <($out/bin/fj completion fish) \
+            --zsh <($out/bin/fj completion zsh) \
+            --nushell <($out/bin/fj completion nushell)
+        '';
 
         meta = with pkgs.lib; {
           description = "CLI tool for Forgejo";
@@ -46,4 +55,3 @@
       };
     });
 }
-
