@@ -188,10 +188,11 @@ fn get_editor_flags(editor_path: &std::path::Path) -> &'static [&'static str] {
         Some(name) => name,
         None => return &[],
     };
-    if editor_name == "code" {
-        return &["--wait"];
+
+    match editor_name {
+        "code" | "code-oss" | "codium" | "zed" | "gram" => &["--wait"],
+        _ => &[],
     }
-    &[]
 }
 
 async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std::path::PathBuf)> {
