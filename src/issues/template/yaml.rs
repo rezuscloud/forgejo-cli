@@ -68,7 +68,7 @@ static MD_OPTIONS: std::sync::LazyLock<comrak::Options<'static>> = std::sync::La
     let mut options = comrak::Options::default();
     options.extension.strikethrough = true;
     options.extension.tasklist = true;
-    options.render.unsafe_ = true;
+    options.render.r#unsafe = true;
     options
 });
 
@@ -147,7 +147,7 @@ impl YamlTemplate {
                     }
 
                     let textarea_blockquote = append_node(arena, output, NodeValue::BlockQuote);
-                    append_markdown(arena, textarea_blockquote, &attributes.value);
+                    append_markdown_inline(arena, textarea_blockquote, &attributes.value);
                 }
                 TemplateItem::Dropdown {
                     attributes,
@@ -175,9 +175,10 @@ impl YamlTemplate {
                     };
                     let list = append_node(arena, output, NodeValue::List(list_cfg));
                     for list_option in &attributes.options {
-                        let list_item = append_node(arena, list, NodeValue::TaskItem(None));
-                        append_markdown(arena, list_item, &list_option);
+                        let list_item = append_node(arena, list, task_item(None));
+                        append_markdown_inline(arena, list_item, &list_option);
                     }
+                    append_node(arena, output, comrak::nodes::NodeValue::Raw("\n".into()));
                 }
                 TemplateItem::Checkboxes { attributes, .. } => {
                     append_header(arena, output, 3, &attributes.label);
@@ -192,21 +193,21 @@ impl YamlTemplate {
                     let list = append_node(arena, output, NodeValue::List(list_cfg));
                     for list_option in &attributes.options {
                         if list_option.visible.form {
-                            let list_item = append_node(arena, list, NodeValue::TaskItem(None));
+                            let list_item = append_node(arena, list, task_item(None));
                             let label = if list_option.required {
                                 &format!("{FIELD_CHECKBOX_REQUIRED}{}", list_option.label)
                             } else {
                                 &list_option.label
                             };
-                            append_markdown(arena, list_item, label);
+                            append_markdown_inline(arena, list_item, label);
                         }
                     }
+                    append_node(arena, output, comrak::nodes::NodeValue::Raw("\n".into()));
                 }
             }
         }
-        let mut output_buf = Vec::new();
-        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_buf)?;
-        let output_str = String::from_utf8(output_buf)?;
+        let mut output_str = String::new();
+        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_str)?;
         Ok(output_str)
     }
 
@@ -257,21 +258,24 @@ impl YamlTemplate {
 
                     let node_data = node.data.borrow();
                     match &node_data.value {
-                        NodeValue::CodeBlock(NodeCodeBlock {
-                            fenced: true,
-                            fence_char: b'~',
-                            // fence_length: Intentionally not checked for
-                            // in case the user needs to extend the fence
-                            info,
-                            literal,
-                            ..
-                        }) if info == render => {
+                        NodeValue::CodeBlock(block)
+                            if matches!(
+                                **block,
+                                NodeCodeBlock {
+                                    fenced: true,
+                                    fence_char: b'~',
+                                    // fence_length: Intentionally not checked for
+                                    // in case the user needs to extend the fence
+                                    ..
+                                }
+                            ) && block.info == render =>
+                        {
                             ensure_at!(
                                 @node_data,
-                                !(validations.required && literal.is_empty()),
+                                !(validations.required && block.literal.is_empty()),
                                 "missing required field",
                             );
-                            output.push(Some(FieldValue::Input(literal.to_owned())));
+                            output.push(Some(FieldValue::Input(block.literal.to_owned())));
                         }
 
                         _ => bail_at!(@node_data, "expected `{render}` codeblock"),
@@ -314,9 +318,8 @@ impl YamlTemplate {
                         new_doc.append(child);
                     }
 
-                    let mut body = Vec::new();
+                    let mut body = String::new();
                     comrak::format_commonmark(new_doc, &*MD_OPTIONS, &mut body)?;
-                    let mut body = String::from_utf8(body)?;
                     if body.ends_with("\r\n") {
                         body.pop();
                         body.pop();
@@ -374,7 +377,7 @@ impl YamlTemplate {
                         let child = children.next().ok_or_eyre("unexpected end of list")?;
                         let child_data = child.data.borrow();
                         let is_ticked = match child_data.value {
-                            NodeValue::TaskItem(fill_char) => fill_char.is_some(),
+                            NodeValue::TaskItem(item) => item.symbol.is_some(),
                             _ => bail_at!(@child_data, "expected task list"),
                         };
                         validate_contents(arena, child, option).wrap_err("dropdown")?;
@@ -419,7 +422,7 @@ impl YamlTemplate {
                             let child = children.next().ok_or_eyre("unexpected end of list")?;
                             let child_data = child.data.borrow();
                             let is_ticked = match child_data.value {
-                                NodeValue::TaskItem(fill_char) => fill_char.is_some(),
+                                NodeValue::TaskItem(item) => item.symbol.is_some(),
                                 _ => bail_at!(@child_data, "expected task list"),
                             };
                             let label = if option.required {
@@ -477,12 +480,12 @@ impl YamlTemplate {
                                 append_node(
                                     arena,
                                     output,
-                                    NodeValue::CodeBlock(NodeCodeBlock {
+                                    NodeValue::CodeBlock(Box::new(NodeCodeBlock {
                                         fenced: true,
                                         info: render.into(),
                                         literal: body,
                                         ..Default::default()
-                                    }),
+                                    })),
                                 );
                             } else {
                                 append_node(arena, output, NodeValue::Raw(body));
@@ -540,26 +543,22 @@ impl YamlTemplate {
                     let ticked_iter = ticked.into_iter().chain(std::iter::repeat(false));
                     for (option, is_ticked) in attributes.options.iter().zip(ticked_iter) {
                         if option.visible.content {
-                            let list_item = append_node(
-                                arena,
-                                list,
-                                NodeValue::TaskItem(is_ticked.then_some('x')),
-                            );
+                            let list_item =
+                                append_node(arena, list, task_item(is_ticked.then_some('x')));
                             append_node(arena, list_item, NodeValue::Raw(option.label.clone()));
                         }
                     }
                 }
             }
         }
-        let mut output_buf = Vec::new();
-        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_buf)?;
-        let output_str = String::from_utf8(output_buf)?;
+        let mut output_str = String::new();
+        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_str)?;
         Ok(output_str)
     }
 }
 
 fn append_node<'a>(
-    arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
+    arena: &'a comrak::Arena<'a>,
     parent: &'a comrak::nodes::AstNode<'a>,
     value: comrak::nodes::NodeValue,
 ) -> &'a comrak::nodes::AstNode<'a> {
@@ -569,18 +568,28 @@ fn append_node<'a>(
 }
 
 fn append_markdown<'a>(
-    arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
+    arena: &'a comrak::Arena<'a>,
     parent: &'a comrak::nodes::AstNode<'a>,
     md: &str,
 ) {
-    let parsed = comrak::parse_document(arena, md, &*MD_OPTIONS);
-    for child in parsed.children() {
-        parent.append(child);
+    append_markdown_inline(arena, parent, md);
+    if md.ends_with("\n") {
+        append_node(arena, parent, comrak::nodes::NodeValue::Raw("\n".into()));
+    } else {
+        append_node(arena, parent, comrak::nodes::NodeValue::Raw("\n\n".into()));
     }
 }
 
+fn append_markdown_inline<'a>(
+    arena: &'a comrak::Arena<'a>,
+    parent: &'a comrak::nodes::AstNode<'a>,
+    md: &str,
+) {
+    append_node(arena, parent, comrak::nodes::NodeValue::Raw(md.into()));
+}
+
 fn validate_contents<'a>(
-    arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
+    arena: &'a comrak::Arena<'a>,
     parent: &'a comrak::nodes::AstNode<'a>,
     md: &str,
 ) -> eyre::Result<()> {
@@ -590,7 +599,7 @@ fn validate_contents<'a>(
 }
 
 fn validate_description<'a>(
-    arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
+    arena: &'a comrak::Arena<'a>,
     form: &mut comrak::arena_tree::Children<'a, std::cell::RefCell<comrak::nodes::Ast>>,
     md: &str,
 ) -> eyre::Result<()> {
@@ -603,7 +612,7 @@ fn validate_description<'a>(
 }
 
 fn append_header<'a>(
-    arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
+    arena: &'a comrak::Arena<'a>,
     parent: &'a comrak::nodes::AstNode<'a>,
     level: u8,
     content: &str,
@@ -615,13 +624,14 @@ fn append_header<'a>(
         NodeValue::Heading(NodeHeading {
             level,
             setext: false,
+            closed: true,
         }),
     );
     append_node(arena, header, NodeValue::Raw(content.into()));
 }
 
 fn validate_header<'a>(
-    arena: &'a comrak::Arena<comrak::nodes::AstNode<'a>>,
+    arena: &'a comrak::Arena<'a>,
     form: &mut comrak::arena_tree::Children<'a, std::cell::RefCell<comrak::nodes::Ast>>,
     level: u8,
     content: &str,
@@ -632,7 +642,8 @@ fn validate_header<'a>(
         form,
         NodeValue::Heading(NodeHeading {
             level,
-            setext: false
+            setext: false,
+            closed: false,
         }),
         "expected header"
     );
@@ -668,6 +679,13 @@ fn children_eq<'a>(a: &'a comrak::nodes::AstNode<'a>, b: &'a comrak::nodes::AstN
         }
     }
     true
+}
+
+fn task_item(symbol: Option<char>) -> comrak::nodes::NodeValue {
+    comrak::nodes::NodeValue::TaskItem(comrak::nodes::NodeTaskItem {
+        symbol,
+        symbol_sourcepos: (0, 0, 0, 0).into(),
+    })
 }
 
 pub enum FieldValue {
