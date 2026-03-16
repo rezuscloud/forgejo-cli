@@ -134,9 +134,7 @@ async fn prompt_bool(msg: &str, default_answer: bool) -> eyre::Result<bool> {
 }
 
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
-    let editor = std::path::PathBuf::from(
-        std::env::var_os("EDITOR").ok_or_else(|| eyre!("unable to locate editor"))?,
-    );
+    let (editor, flags) = get_editor_and_flags().ok_or_else(|| eyre!("unable to locate editor"))?;
 
     let (mut file, path) = tempfile(ext).await?;
     file.write_all(contents.as_bytes()).await?;
@@ -146,7 +144,6 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     // on errors
     let res = async {
         eprint!("waiting on editor\r");
-        let flags = get_editor_flags(&editor);
         let status = tokio::process::Command::new(editor)
             .args(flags)
             .arg(&path)
@@ -168,6 +165,37 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     Ok(())
 }
 
+fn get_editor_and_flags() -> Option<(PathBuf, Vec<String>)> {
+    let editor_str = git2::Repository::discover(".")
+        .and_then(|repo| repo.config())
+        .and_then(|cfg| cfg.get_string("core.editor"))
+        .ok()?;
+
+    let mut args = shlex::split(&editor_str)?;
+
+    let editor = PathBuf::from(args.remove(0));
+    let flags = if args.is_empty() {
+        if let Some(editor_flags) = get_default_editor_flags(&editor) {
+            editor_flags
+        } else {
+            args
+        }
+    } else {
+        args
+    };
+
+    Some((editor, flags))
+}
+
+fn get_default_editor_flags(editor_path: &std::path::Path) -> Option<Vec<String>> {
+    let name = editor_path.file_stem().and_then(|s| s.to_str())?;
+
+    match name {
+        "code" | "code-oss" | "codium" | "zed" | "gram" => Some(vec!["--wait".to_string()]),
+        _ => None,
+    }
+}
+
 // Read a filename, unless “-” is given, in which case, stdin is read and returned
 async fn read_file_or_stdin(path: &PathBuf) -> eyre::Result<String> {
     if *path == PathBuf::from("-") {
@@ -180,18 +208,6 @@ async fn read_file_or_stdin(path: &PathBuf) -> eyre::Result<String> {
         tokio::fs::read_to_string(&path)
             .await
             .wrap_err_with(|| eyre::eyre!("Error reading file `{}`", path.to_string_lossy()))
-    }
-}
-
-fn get_editor_flags(editor_path: &std::path::Path) -> &'static [&'static str] {
-    let editor_name = match editor_path.file_stem().and_then(|s| s.to_str()) {
-        Some(name) => name,
-        None => return &[],
-    };
-
-    match editor_name {
-        "code" | "code-oss" | "codium" | "zed" | "gram" => &["--wait"],
-        _ => &[],
     }
 }
 
