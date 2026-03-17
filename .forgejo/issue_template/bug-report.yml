@@ -24,6 +24,10 @@ body:
       label: "`fj` Version"
       description: If possible, share the output of `fj version --verbose`.
       render: "text"
+  - type: input
+    attributes:
+      label: "Forgejo Version"
+      description: The version number of the Forgejo instance you were using.
   - type: checkboxes
     attributes:
       label: Code of Conduct
