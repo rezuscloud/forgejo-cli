@@ -1,6 +1,5 @@
 name: Other
 about: If there's something that doesn't fit the other categories, use this.
-title: 'other: '
 body:
   - type: textarea
     attributes:

@@ -1,6 +1,5 @@
 name: Feature Request
 about: If there's functionality you're missing, use this.
-title: 'feat: '
 labels:
   - Kind/Feature
 body:

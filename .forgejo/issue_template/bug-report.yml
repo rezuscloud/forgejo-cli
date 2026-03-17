@@ -1,6 +1,5 @@
 name: Bug Report
 about: If you've found incorrect behavior or crashes, use this.
-title: 'bug: '
 labels:
   - Kind/Bug
 body:
