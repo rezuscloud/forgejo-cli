@@ -6,10 +6,11 @@ body:
   - type: textarea
     attributes:
       label: Feature description
-      description: |
-        Please describe what you would like to be able to accomplish using `forgejo-cli`, and the new functionality you would like.
-
-        Keep this to only your high-level goals, and not e.g. specific commands. That'll be part of the design discussion!
+      description: Please describe the functionality you would like to see added.
+  - type: textarea
+    attributes:
+      label: Motivation
+      description: Please lay out why you'd like to see this, e.g. what it is this functionality would allow you to do.
   - type: checkboxes
     attributes:
       label: Code of Conduct
