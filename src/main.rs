@@ -139,7 +139,7 @@ async fn prompt_bool(msg: &str, default_answer: bool) -> eyre::Result<bool> {
 }
 
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
-    let (editor, flags) = get_editor_and_flags().ok_or_else(|| eyre!("unable to locate editor"))?;
+    let (editor, flags) = get_editor_and_flags().with_context(|| "unable to locate editor")?;
 
     let (mut file, path) = tempfile(ext).await?;
     file.write_all(contents.as_bytes()).await?;
@@ -170,26 +170,22 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
     Ok(())
 }
 
-fn get_editor_and_flags() -> Option<(PathBuf, Vec<String>)> {
+fn get_editor_and_flags() -> eyre::Result<(PathBuf, Vec<String>)> {
     let editor_str = git2::Repository::discover(".")
         .and_then(|repo| repo.config())
-        .and_then(|cfg| cfg.get_string("core.editor"))
-        .ok()?;
+        .and_then(|cfg| cfg.get_string("core.editor"))?;
 
-    let mut args = shlex::split(&editor_str)?;
+    let mut args =
+        shlex::split(&editor_str).ok_or_else(|| eyre!("core.editor contains erroneous command"))?;
 
     let editor = PathBuf::from(args.remove(0));
     let flags = if args.is_empty() {
-        if let Some(editor_flags) = get_default_editor_flags(&editor) {
-            editor_flags
-        } else {
-            args
-        }
+        get_default_editor_flags(&editor).unwrap_or(args)
     } else {
         args
     };
 
-    Some((editor, flags))
+    Ok((editor, flags))
 }
 
 fn get_default_editor_flags(editor_path: &std::path::Path) -> Option<Vec<String>> {
