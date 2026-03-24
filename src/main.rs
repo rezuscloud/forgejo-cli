@@ -171,16 +171,25 @@ async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
 }
 
 fn get_editor_and_flags() -> eyre::Result<(PathBuf, Vec<String>)> {
-    let editor_str = git2::Repository::discover(".")
+    let git_editor = git2::Repository::discover(".")
         .and_then(|repo| repo.config())
-        .and_then(|cfg| cfg.get_string("core.editor"))?;
+        .and_then(|cfg| cfg.get_string("core.editor"));
+
+    let editor_str = match git_editor {
+        Ok(value) => value,
+        Err(err) => match err.code() {
+            // fall back to the $EDITOR variable when git's `core.editor` isn't set
+            git2::ErrorCode::NotFound => std::env::var("EDITOR")?,
+            _ => eyre::bail!(err),
+        },
+    };
 
     let mut args =
         shlex::split(&editor_str).ok_or_else(|| eyre!("core.editor contains erroneous command"))?;
 
     let editor = PathBuf::from(args.remove(0));
     let flags = if args.is_empty() {
-        get_default_editor_flags(&editor).unwrap_or(args)
+        get_default_editor_flags(&editor)
     } else {
         args
     };
@@ -188,12 +197,15 @@ fn get_editor_and_flags() -> eyre::Result<(PathBuf, Vec<String>)> {
     Ok((editor, flags))
 }
 
-fn get_default_editor_flags(editor_path: &std::path::Path) -> Option<Vec<String>> {
-    let name = editor_path.file_stem().and_then(|s| s.to_str())?;
+fn get_default_editor_flags(editor_path: &std::path::Path) -> Vec<String> {
+    let name = editor_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
 
     match name {
-        "code" | "code-oss" | "codium" | "zed" | "gram" => Some(vec!["--wait".to_string()]),
-        _ => None,
+        "code" | "code-oss" | "codium" | "zed" | "gram" => vec!["--wait".to_string()],
+        _ => vec![],
     }
 }
 
