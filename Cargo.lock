@@ -593,6 +593,7 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "sha2",
+ "shlex",
  "soft_assert",
  "ssh2-config",
  "time",
