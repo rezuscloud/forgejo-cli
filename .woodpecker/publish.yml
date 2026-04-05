@@ -1,7 +1,7 @@
 when:
   - event: tag
 steps:
-  compile-linux:
+  compile-linux-x86_64:
     image: rust:latest
     environment:
       BUILD_TYPE: "release ci"
@@ -9,6 +9,17 @@ steps:
       - rustup target add x86_64-unknown-linux-gnu
       - cargo build --target=x86_64-unknown-linux-gnu --release --features update-check
       - strip target/x86_64-unknown-linux-gnu/release/fj
+  compile-linux-aarch64:
+    image: rust:latest
+    environment:
+      BUILD_TYPE: "release ci"
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: "aarch64-linux-gnu-gcc"
+    commands:
+      - rustup target add aarch64-unknown-linux-gnu
+      - apt update
+      - apt install gcc-aarch64-linux-gnu -y
+      - cargo build --target=aarch64-unknown-linux-gnu --release --features update-check,git2/vendored-openssl
+      - aarch64-linux-gnu-strip target/aarch64-unknown-linux-gnu/release/fj
   compile-windows:
     image: rust:latest
     environment:
@@ -26,6 +37,7 @@ steps:
       - zip ../../../forgejo-cli-x86_64-windows.zip fj.exe
       - cd ../../..
       - tar -czf forgejo-cli-x86_64-linux.tar.gz -C target/x86_64-unknown-linux-gnu/release fj
+      - tar -czf forgejo-cli-aarch64-linux.tar.gz -C target/aarch64-unknown-linux-gnu/release fj
   publish-container:
     image: code.cartoon-aa.xyz/ci/plugin-kaniko:2.1.0
     settings:
@@ -47,5 +59,6 @@ steps:
       - fj --host $CI_FORGE_URL auth add-key $CI_REPO_OWNER $TOKEN
       - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-x86_64-windows.zip
       - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-x86_64-linux.tar.gz
+      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-aarch64-linux.tar.gz
       - fj auth logout $FORGE_HOST
 
