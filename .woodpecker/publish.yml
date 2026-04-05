@@ -23,9 +23,9 @@ steps:
     image: code.cartoon-aa.xyz/ci/alpine-zip:3.22
     commands:
       - cd target/x86_64-pc-windows-gnu/release
-      - zip ../../../forgejo-cli-windows.zip fj.exe
+      - zip ../../../forgejo-cli-x86_64-windows.zip fj.exe
       - cd ../../..
-      - tar -czf forgejo-cli-linux.tar.gz -C target/x86_64-unknown-linux-gnu/release fj
+      - tar -czf forgejo-cli-x86_64-linux.tar.gz -C target/x86_64-unknown-linux-gnu/release fj
   publish-container:
     image: code.cartoon-aa.xyz/ci/plugin-kaniko:2.1.0
     settings:
@@ -45,7 +45,7 @@ steps:
     commands:
       - export FORGE_HOST=$(echo $CI_FORGE_URL | sed -E 's_^https?://__')
       - fj --host $CI_FORGE_URL auth add-key $CI_REPO_OWNER $TOKEN
-      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-windows.zip
-      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-linux.tar.gz
+      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-x86_64-windows.zip
+      - fj release --repo $CI_REPO_URL asset create $CI_COMMIT_TAG forgejo-cli-x86_64-linux.tar.gz
       - fj auth logout $FORGE_HOST
 
