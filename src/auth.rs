@@ -221,7 +221,7 @@ async fn oauth_login(
         ("code_challenge", &code_challenge),
         ("state", &state),
     ]);
-    open::that(auth_url.as_str()).unwrap();
+    open::that_detached(auth_url.as_str()).unwrap();
 
     let (handle, mut rx) = auth_server();
     let res = rx.recv().await.unwrap();
