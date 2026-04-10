@@ -1,6 +1,11 @@
 ## `fj`, a CLI client for Forgejo
 
+[<img src="https://repology.org/badge/vertical-allrepos/forgejo-cli.svg" alt="Packaging status" align="right">](https://repology.org/project/forgejo-cli/versions)
+
 ... akin to `gh`, `glab`, or `tea`!
+
+[![Matrix chat badge](https://img.shields.io/badge/chat-on_matrix-brightgreen)](https://matrix.to/#/#fj-cli:cartoon-aa.xyz)
+[![Liberapay receiving badge](https://img.shields.io/liberapay/receives/forgejo-cli)](https://liberapay.com/forgejo-cli/)
 
 You can...
 
