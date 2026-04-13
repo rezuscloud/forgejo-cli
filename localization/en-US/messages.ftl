@@ -36,3 +36,10 @@ msg-auth-use_ssh-already_disabled = already not using SSH for {host} by default
 msg-auth-add_key-already_exists = key for {$host} already exists
 
 msg-auth-list-none = No logins.
+
+msg-actions-variable-create-already_exists = variable already exists, pass --force to replace it.
+msg-actions-variable-create-already_exists_forced = variable already exists, updating.
+
+msg-actions-variable-delete-success = Variable {$name} deleted.
+
+msg-actions-dispatch-success = Dispatched workflow {name} in {ref} with {n_inputs} input(s).

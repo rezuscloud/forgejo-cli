@@ -208,3 +208,27 @@ macro_rules! ftl_eprintln {
         }
     }
 }
+
+#[macro_export]
+macro_rules! ftl_eyre {
+    ($msg_id:expr) => {
+        $crate::ftl_eyre!($msg_id,)
+    };
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+        {
+            eyre::eyre!("{}", $crate::ftl_format!($msg_id, $($var_name $(= $var_val)*),*))
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! ftl_bail {
+    ($msg_id:expr) => {
+        $crate::ftl_bail!($msg_id,)
+    };
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+        {
+            eyre::bail!("{}", $crate::ftl_format!($msg_id, $($var_name $(= $var_val)*),*))
+        }
+    }
+}
