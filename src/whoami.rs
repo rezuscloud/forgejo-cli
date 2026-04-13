@@ -1,7 +1,7 @@
 use clap::{self, Args};
 use eyre::{Context, OptionExt};
 
-use crate::{repo::RepoInfo, KeyInfo};
+use crate::{ftl_println, repo::RepoInfo, KeyInfo};
 
 #[derive(Args, Clone, Debug)]
 pub struct WhoAmICommand {
@@ -17,11 +17,7 @@ impl WhoAmICommand {
             .clone();
         let name = keys.get_login(&url).ok_or_eyre("not logged in")?.username();
         let host = crate::host_name(&url);
-        if url.path() == "/" || url.path().is_empty() {
-            println!("currently signed in to {name}@{host}");
-        } else {
-            println!("currently signed in to {name}@{host}{}", url.path());
-        };
+        ftl_println!("msg-whoami", name = name, host = host);
         Ok(())
     }
 }
