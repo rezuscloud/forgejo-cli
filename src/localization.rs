@@ -12,13 +12,25 @@ pub mod bundles {
                 let mut bundle = Bundle::new_concurrent(vec![langid!($id)]);
                 let resource = FluentResource::try_new(
                     include_str!(concat!("../localization/", $id, "/messages.ftl")).into(),
-                )
-                .expect(concat!("Failed to init ", $id, " locale"));
-                bundle.add_resource(resource).expect(concat!(
-                    "Failed to add ",
-                    $id,
-                    " locale resource"
-                ));
+                );
+                let resource = match resource {
+                    Ok(r) => r,
+                    Err((_, errs)) => {
+                        for err in errs {
+                            eprintln!("ftl error: {err}");
+                        }
+                        panic!("Failed to init {} locale", $id);
+                    }
+                };
+                match bundle.add_resource(resource) {
+                    Ok(()) => (),
+                    Err(errs) => {
+                        for err in errs {
+                            eprintln!("ftl error: {err}");
+                        }
+                        panic!("Failed to add {} locale", $id);
+                    }
+                }
                 bundle
             });
         };
