@@ -62,11 +62,21 @@ pub mod bundles {
 }
 
 #[macro_export]
+macro_rules! ftl_arg {
+    ($args:ident, $var_name:ident) => {
+        $args.set(stringify!($var_name), $var_name);
+    };
+    ($args:ident, $var_name:ident, $var_value:expr) => {
+        $args.set(stringify!($var_name), $var_value);
+    };
+}
+
+#[macro_export]
 macro_rules! ftl_args {
     ($msg_id:expr) => {
         $crate::ftl_args!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             $crate::localization::bundles::locale()
                 .into_iter()
@@ -76,7 +86,7 @@ macro_rules! ftl_args {
                     #[allow(unused_mut)]
                     let mut args = fluent_bundle::FluentArgs::new();
                     $(
-                        args.set(stringify!($var_name), $var_val);
+                        $crate::ftl_arg!(args, $var_name$(, $var_val)*);
                     )*
                     (bundle, pattern, args)
                 })
@@ -89,9 +99,9 @@ macro_rules! ftl_format {
     ($msg_id:expr) => {
         $crate::ftl_format!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
-            let args = $crate::ftl_args!($msg_id, $($var_name = $var_val),*);
+            let args = $crate::ftl_args!($msg_id, $($var_name $(= $var_val)*),*);
             if let Some((bundle, pattern, args)) = args {
                 let mut errors = Vec::new();
                 let out = bundle.format_pattern(pattern, Some(&args), &mut errors);
@@ -115,10 +125,10 @@ macro_rules! ftl_write {
     ($writer:expr, $msg_id:expr) => {
         $crate::ftl_write!($writer, $msg_id,)
     };
-    ($writer:expr, $msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
+    ($writer:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             use std::fmt::Write;
-            let args = $crate::ftl_args!($msg_id, $($var_name = $var_val),*);
+            let args = $crate::ftl_args!($msg_id, $($var_name $(= $var_val)*),*);
             if let Some((bundle, pattern, args)) = args {
                 let mut errors = Vec::new();
                 bundle.write_pattern($writer, pattern, Some(&args), &mut errors).expect("failed to write localized text");
@@ -148,10 +158,10 @@ macro_rules! ftl_print {
     ($msg_id:expr) => {
         $crate::ftl_print!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             let mut stdout = $crate::localization::WriterCompat(std::io::stdout());
-            $crate::ftl_write!(&mut stdout, $msg_id, $($var_name = $var_val),*);
+            $crate::ftl_write!(&mut stdout, $msg_id, $($var_name $(= $var_val)*),*);
         }
     }
 }
@@ -161,11 +171,11 @@ macro_rules! ftl_println {
     ($msg_id:expr) => {
         $crate::ftl_println!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             use std::fmt::Write;
             let mut stdout = $crate::localization::WriterCompat(std::io::stdout());
-            $crate::ftl_write!(&mut stdout, $msg_id, $($var_name = $var_val),*);
+            $crate::ftl_write!(&mut stdout, $msg_id, $($var_name $(= $var_val)*),*);
             writeln!(&mut stdout).expect("failed to write newline");
         }
     }
@@ -176,10 +186,10 @@ macro_rules! ftl_eprint {
     ($msg_id:expr) => {
         $crate::ftl_eprint!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             let mut stderr = $crate::localization::WriterCompat(std::io::stderr());
-            $crate::ftl_write!(&mut stderr, $msg_id, $($var_name = $var_val),*);
+            $crate::ftl_write!(&mut stderr, $msg_id, $($var_name $(= $var_val)*),*);
         }
     }
 }
@@ -189,11 +199,11 @@ macro_rules! ftl_eprintln {
     ($msg_id:expr) => {
         $crate::ftl_eprintln!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             use std::fmt::Write;
             let mut stderr = $crate::localization::WriterCompat(std::io::stderr());
-            $crate::ftl_write!(&mut stderr, $msg_id, $($var_name = $var_val),*);
+            $crate::ftl_write!(&mut stderr, $msg_id, $($var_name $(= $var_val)*),*);
             writeln!(&mut stderr).expect("failed to write newline");
         }
     }

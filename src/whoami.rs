@@ -17,7 +17,7 @@ impl WhoAmICommand {
             .clone();
         let name = keys.get_login(&url).ok_or_eyre("not logged in")?.username();
         let host = crate::host_name(&url);
-        ftl_println!("msg-whoami", name = name, host = host);
+        ftl_println!("msg-whoami", name, host);
         Ok(())
     }
 }

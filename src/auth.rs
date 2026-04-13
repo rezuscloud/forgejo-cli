@@ -51,19 +51,15 @@ impl AuthCommand {
 
                     ftl_eprintln!(
                         "msg-auth-login-oauth_unsupported",
-                        host_domain = host_domain,
-                        applications_url = applications_url
+                        host_domain,
+                        applications_url
                     );
                 }
             }
             AuthCommand::Logout { host } => {
                 let info_opt = keys.hosts.remove(&host);
                 if let Some(info) = info_opt {
-                    ftl_println!(
-                        "msg-auth_logout-success",
-                        username = info.username(),
-                        host = host
-                    );
+                    ftl_println!("msg-auth_logout-success", username = info.username(), host);
                     keys.save().await?;
                 } else {
                     ftl_println!("msg-auth_logout-already_signed_out", host = host);
@@ -86,30 +82,30 @@ impl AuthCommand {
                     keys.hosts.insert(host.to_owned(), login);
                     keys.save().await?;
                 } else {
-                    ftl_eprintln!("msg-auth-add_key-already_exists", host = host);
+                    ftl_eprintln!("msg-auth-add_key-already_exists", host);
                 }
             }
             AuthCommand::UseSsh { use_ssh } => {
                 let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
                 let host = crate::host_name(&repo_info.host_url());
                 if !keys.hosts.contains_key(host) {
-                    ftl_eprintln!("msg-auth-use_ssh-not_logged_in", host = host);
+                    ftl_eprintln!("msg-auth-use_ssh-not_logged_in", host);
                 } else {
                     if use_ssh.unwrap_or(true) {
                         let already_present = keys.default_ssh.insert(host.to_string());
                         if already_present {
-                            ftl_println!("msg-auth-use_ssh-enabled", host = host);
+                            ftl_println!("msg-auth-use_ssh-enabled", host);
                             keys.save().await?;
                         } else {
-                            ftl_println!("msg-auth-use_ssh-already_enabled", host = host);
+                            ftl_println!("msg-auth-use_ssh-already_enabled", host);
                         }
                     } else {
                         let was_present = keys.default_ssh.remove(host);
                         if was_present {
-                            ftl_println!("msg-auth-use_ssh-disabled", host = host);
+                            ftl_println!("msg-auth-use_ssh-disabled", host);
                             keys.save().await?;
                         } else {
-                            ftl_println!("msg-auth-use_ssh-already_disabled", host = host);
+                            ftl_println!("msg-auth-use_ssh-already_disabled", host);
                         }
                     }
                 }
