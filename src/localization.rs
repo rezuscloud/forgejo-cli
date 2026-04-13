@@ -63,10 +63,10 @@ pub mod bundles {
 
 #[macro_export]
 macro_rules! ftl_args {
-    ($msg_id:literal) => {
+    ($msg_id:expr) => {
         $crate::ftl_args!($msg_id,)
     };
-    ($msg_id:literal, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
         {
             $crate::localization::bundles::locale()
                 .into_iter()
@@ -86,10 +86,10 @@ macro_rules! ftl_args {
 
 #[macro_export]
 macro_rules! ftl_format {
-    ($msg_id:literal) => {
+    ($msg_id:expr) => {
         $crate::ftl_format!($msg_id,)
     };
-    ($msg_id:literal, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
         {
             let args = $crate::ftl_args!($msg_id, $($var_name = $var_val),*);
             if let Some((bundle, pattern, args)) = args {
@@ -112,10 +112,10 @@ macro_rules! ftl_format {
 
 #[macro_export]
 macro_rules! ftl_write {
-    ($writer:expr, $msg_id:literal) => {
+    ($writer:expr, $msg_id:expr) => {
         $crate::ftl_write!($writer, $msg_id,)
     };
-    ($writer:expr, $msg_id:literal, $($var_name:ident = $var_val:expr),*) => {
+    ($writer:expr, $msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
         {
             use std::fmt::Write;
             let args = $crate::ftl_args!($msg_id, $($var_name = $var_val),*);
@@ -145,10 +145,10 @@ impl<W: std::io::Write> std::fmt::Write for WriterCompat<W> {
 
 #[macro_export]
 macro_rules! ftl_print {
-    ($msg_id:literal) => {
+    ($msg_id:expr) => {
         $crate::ftl_print!($msg_id,)
     };
-    ($msg_id:literal, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
         {
             let mut stdout = $crate::localization::WriterCompat(std::io::stdout());
             $crate::ftl_write!(&mut stdout, $msg_id, $($var_name = $var_val),*);
@@ -158,10 +158,10 @@ macro_rules! ftl_print {
 
 #[macro_export]
 macro_rules! ftl_println {
-    ($msg_id:literal) => {
+    ($msg_id:expr) => {
         $crate::ftl_println!($msg_id,)
     };
-    ($msg_id:literal, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
         {
             use std::fmt::Write;
             let mut stdout = $crate::localization::WriterCompat(std::io::stdout());
@@ -173,10 +173,10 @@ macro_rules! ftl_println {
 
 #[macro_export]
 macro_rules! ftl_eprint {
-    ($msg_id:literal) => {
+    ($msg_id:expr) => {
         $crate::ftl_eprint!($msg_id,)
     };
-    ($msg_id:literal, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
         {
             let mut stderr = $crate::localization::WriterCompat(std::io::stderr());
             $crate::ftl_write!(&mut stderr, $msg_id, $($var_name = $var_val),*);
@@ -186,10 +186,10 @@ macro_rules! ftl_eprint {
 
 #[macro_export]
 macro_rules! ftl_eprintln {
-    ($msg_id:literal) => {
+    ($msg_id:expr) => {
         $crate::ftl_eprintln!($msg_id,)
     };
-    ($msg_id:literal, $($var_name:ident = $var_val:expr),*) => {
+    ($msg_id:expr, $($var_name:ident = $var_val:expr),*) => {
         {
             use std::fmt::Write;
             let mut stderr = $crate::localization::WriterCompat(std::io::stderr());
