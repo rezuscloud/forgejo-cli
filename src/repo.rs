@@ -1521,26 +1521,40 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
 }
 
 async fn view_repo_readme(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
-    let query = forgejo_api::structs::RepoGetRawFileQuery { r#ref: None };
-    let file = api
-        .repo_get_raw_file(repo.owner(), repo.name(), "README.md", query)
-        .await;
-    if let Ok(readme) = file {
-        let readme_str = String::from_utf8_lossy(&readme);
-        println!("{}", crate::markdown(&readme_str));
-        return Ok(());
+    let query = forgejo_api::structs::RepoGetContentsListQuery::default();
+    let files = api
+        .repo_get_contents_list(repo.owner(), repo.name(), query)
+        .await?;
+
+    let readme = files
+        .iter()
+        .filter(|file| file.r#type.as_deref().is_some_and(|t| t == "file"))
+        .filter_map(|file| {
+            file.name.as_deref().filter(|name| {
+                name.split_once(".")
+                    .map(|(s, _)| s)
+                    .unwrap_or(name)
+                    .eq_ignore_ascii_case("readme")
+            })
+        })
+        .next()
+        .ok_or_eyre("Repo does not have a README")?;
+    let is_md = readme
+        .rsplit_once(".")
+        .is_some_and(|(_, s)| s.eq_ignore_ascii_case("md"));
+
+    let query = forgejo_api::structs::RepoGetRawFileQuery::default();
+    let body = api
+        .repo_get_raw_file(repo.owner(), repo.name(), &readme, query)
+        .await?;
+    let body = String::from_utf8_lossy(body.as_ref());
+
+    if is_md {
+        println!("{}", crate::markdown(&body));
     } else {
-        let query = forgejo_api::structs::RepoGetRawFileQuery { r#ref: None };
-        let file = api
-            .repo_get_raw_file(repo.owner(), repo.name(), "README.txt", query)
-            .await;
-        if let Ok(readme) = file {
-            let readme_str = String::from_utf8_lossy(&readme);
-            println!("{}", crate::render_text(&readme_str));
-            return Ok(());
-        }
+        println!("{}", crate::render_text(&body));
     }
-    eyre::bail!("Repo does not have README.md or README.txt");
+    Ok(())
 }
 
 async fn cmd_clone_repo(
