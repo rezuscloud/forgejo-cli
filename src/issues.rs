@@ -70,6 +70,18 @@ pub enum IssueSubcommand {
         #[clap(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
     },
+    /// Assign users to an issue
+    Assign {
+        issue: IssueId,
+        /// The usernames of the users to assign to this issue
+        users: Vec<String>,
+    },
+    /// Unassign users from an issue
+    Unassign {
+        issue: IssueId,
+        /// The usernames of the users to unassign from this issue
+        users: Vec<String>,
+    },
     /// Close an issue
     Close {
         issue: IssueId,
@@ -264,6 +276,10 @@ impl IssueCommand {
                     crate::edit_labels(repo, &api, issue.number, add, rm).await?;
                 }
             },
+            Assign { issue, users } => assign_to_issue(repo, &api, issue.number, users).await?,
+            Unassign { issue, users } => {
+                unassign_from_issue(repo, &api, issue.number, users).await?
+            }
             Close { issue, with_msg } => close_issue(repo, &api, issue.number, with_msg).await?,
             Browse { id } => browse_issue(repo, &api, id.number).await?,
             Comment {
@@ -281,6 +297,8 @@ impl IssueCommand {
             Create { repo, .. } | Search { repo, .. } | Templates { repo } => repo.as_ref(),
             View { id: issue, .. }
             | Edit { issue, .. }
+            | Assign { issue, .. }
+            | Unassign { issue, .. }
             | Close { issue, .. }
             | Comment { issue, .. }
             | Browse { id: issue, .. } => issue.repo.as_ref(),
@@ -295,6 +313,8 @@ impl IssueCommand {
             }
             View { id: issue, .. }
             | Edit { issue, .. }
+            | Assign { issue, .. }
+            | Unassign { issue, .. }
             | Close { issue, .. }
             | Comment { issue, .. }
             | Browse { id: issue, .. } => eyre::eyre!(
@@ -880,6 +900,128 @@ pub async fn edit_comment(
         },
     )
     .await?;
+    Ok(())
+}
+
+pub async fn assign_to_issue(
+    repo: &RepoName,
+    api: &Forgejo,
+    index: i64,
+    users: Vec<String>,
+) -> eyre::Result<()> {
+    let num_to_add = users.len();
+    let issue = api
+        .issue_get_issue(repo.owner(), repo.name(), index)
+        .await?;
+    let mut assignees = issue
+        .assignees
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|user| user.login)
+        .collect::<Vec<_>>();
+    let assigned_before = assignees.len();
+    assignees.extend(users);
+    assignees.sort_unstable();
+    assignees.dedup();
+    let assigned_after = assignees.len();
+    let opt = forgejo_api::structs::EditIssueOption {
+        assignee: None,
+        assignees: Some(assignees),
+        body: None,
+        due_date: None,
+        milestone: None,
+        r#ref: None,
+        state: None,
+        title: None,
+        unset_due_date: None,
+        updated_at: None,
+    };
+    api.issue_edit_issue(repo.owner(), repo.name(), index, opt)
+        .await?;
+    let num_added = assigned_after - assigned_before;
+    let num_duplicate = num_to_add - num_added;
+    print!("assigned ");
+    if num_added == 0 {
+        print!("0 users");
+    } else if num_added == 1 {
+        print!("1 user");
+    } else {
+        print!("{num_added} users");
+    }
+    print!(" to {}/{}#{index}", repo.owner(), repo.name());
+    if num_duplicate == 0 {
+        println!();
+    } else if num_duplicate == num_to_add {
+        if num_to_add == 1 {
+            println!(" (user was already assigned)")
+        } else {
+            println!(" (all users were already assigned)")
+        }
+    } else if num_duplicate == 1 {
+        println!(" (1 user was already assigned)")
+    } else {
+        println!(" ({num_duplicate} users was already assigned)")
+    }
+    Ok(())
+}
+
+pub async fn unassign_from_issue(
+    repo: &RepoName,
+    api: &Forgejo,
+    index: i64,
+    users: Vec<String>,
+) -> eyre::Result<()> {
+    let num_to_remove = users.len();
+    let issue = api
+        .issue_get_issue(repo.owner(), repo.name(), index)
+        .await?;
+    let mut assignees = issue
+        .assignees
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|user| user.login)
+        .collect::<Vec<_>>();
+    let assigned_before = assignees.len();
+    assignees.retain(|name| !users.contains(name));
+    let assigned_after = assignees.len();
+    let opt = forgejo_api::structs::EditIssueOption {
+        assignee: None,
+        assignees: Some(assignees),
+        body: None,
+        due_date: None,
+        milestone: None,
+        r#ref: None,
+        state: None,
+        title: None,
+        unset_due_date: None,
+        updated_at: None,
+    };
+    api.issue_edit_issue(repo.owner(), repo.name(), index, opt)
+        .await?;
+    let num_removed = assigned_before - assigned_after;
+    let num_duplicate = num_to_remove - num_removed;
+    print!("unassigned ");
+    if num_removed == 0 {
+        print!("0 users");
+    } else if num_removed == 1 {
+        print!("1 user");
+    } else {
+        print!("{num_removed} users");
+    }
+    print!(" from {}/{}#{index}", repo.owner(), repo.name());
+    if num_duplicate == 0 {
+        println!();
+    } else if num_duplicate == num_to_remove {
+        if num_to_remove == 1 {
+            println!(" (user was already not assigned)")
+        } else {
+            println!(" (all users were already not assigned)")
+        }
+    } else if num_duplicate == 1 {
+        println!(" (1 user was already not assigned)")
+    } else {
+        println!(" ({num_duplicate} users was already not assigned)")
+    }
     Ok(())
 }
 
