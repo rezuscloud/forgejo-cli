@@ -41,6 +41,7 @@ impl AuthCommand {
                 let client_info = get_client_info_for(host_url).await?;
                 if let Some(client_id) = &client_info {
                     oauth_login(keys, host_url, client_id).await?;
+                    keys.save().await?;
                 } else {
                     let host_domain = crate::host_name(&host_url);
                     let applications_url =
@@ -56,6 +57,7 @@ impl AuthCommand {
                 let info_opt = keys.hosts.remove(&host);
                 if let Some(info) = info_opt {
                     eprintln!("signed out of {}@{}", &info.username(), host);
+                    keys.save().await?;
                 } else {
                     eprintln!("already not signed in to {host}");
                 }
@@ -75,6 +77,7 @@ impl AuthCommand {
                     };
                     add_ssh_alias(&mut login, host_url, keys).await;
                     keys.hosts.insert(host.to_owned(), login);
+                    keys.save().await?;
                 } else {
                     println!("key for {host} already exists");
                 }
@@ -89,6 +92,7 @@ impl AuthCommand {
                         let already_present = keys.default_ssh.insert(host.to_string());
                         if already_present {
                             println!("now will use SSH for {host} by default");
+                            keys.save().await?;
                         } else {
                             println!("already using SSH for {host} by default");
                         }
@@ -96,6 +100,7 @@ impl AuthCommand {
                         let was_present = keys.default_ssh.remove(host);
                         if was_present {
                             println!("will no longer use SSH for {host} by default");
+                            keys.save().await?;
                         } else {
                             println!("already not using SSH for {host} by default");
                         }
