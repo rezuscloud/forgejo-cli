@@ -129,6 +129,20 @@ pub enum PrSubcommand {
         #[clap(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
     },
+    /// Assign users to a pull request
+    Assign {
+        #[clap(long, short)]
+        pr: Option<IssueId>,
+        /// The usernames of the users to assign to this PR
+        users: Vec<String>,
+    },
+    /// Unassign users from an issue
+    Unassign {
+        #[clap(long, short)]
+        pr: Option<IssueId>,
+        /// The usernames of the users to unassign from this PR
+        users: Vec<String>,
+    },
     /// Edit the contents of a pull request
     Edit {
         /// The pull request to edit.
@@ -369,6 +383,14 @@ impl PrCommand {
                 state,
                 repo: _,
             } => view_prs(repo, &api, query, labels, creator, assignee, state).await?,
+            Assign { pr, users } => {
+                let (repo, pr) = try_get_pr_number(repo, &api, pr.map(|pr| pr.number)).await?;
+                crate::issues::assign_to_issue(&repo, &api, pr, users).await?
+            }
+            Unassign { pr, users } => {
+                let (repo, pr) = try_get_pr_number(repo, &api, pr.map(|pr| pr.number)).await?;
+                crate::issues::unassign_from_issue(&repo, &api, pr, users).await?
+            }
             Edit { pr, command } => {
                 let pr = pr.map(|pr| pr.number);
                 match command {
@@ -429,6 +451,8 @@ impl PrCommand {
             View { id: pr, .. }
             | Status { id: pr, .. }
             | Comment { pr, .. }
+            | Assign { pr, .. }
+            | Unassign { pr, .. }
             | Edit { pr, .. }
             | Close { pr, .. }
             | Merge { pr, .. }
@@ -452,6 +476,8 @@ impl PrCommand {
             View { id: pr, .. }
             | Status { id: pr, .. }
             | Comment { pr, .. }
+            | Assign { pr, .. }
+            | Unassign { pr, .. }
             | Edit { pr, .. }
             | Close { pr, .. }
             | Merge { pr, .. }

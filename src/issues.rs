@@ -921,6 +921,9 @@ pub async fn assign_to_issue(
         .collect::<Vec<_>>();
     let assigned_before = assignees.len();
     assignees.extend(users);
+    assignees
+        .iter_mut()
+        .for_each(|name| name.make_ascii_lowercase());
     assignees.sort_unstable();
     assignees.dedup();
     let assigned_after = assignees.len();
@@ -941,9 +944,7 @@ pub async fn assign_to_issue(
     let num_added = assigned_after - assigned_before;
     let num_duplicate = num_to_add - num_added;
     print!("assigned ");
-    if num_added == 0 {
-        print!("0 users");
-    } else if num_added == 1 {
+    if num_added == 1 {
         print!("1 user");
     } else {
         print!("{num_added} users");
@@ -960,7 +961,7 @@ pub async fn assign_to_issue(
     } else if num_duplicate == 1 {
         println!(" (1 user was already assigned)")
     } else {
-        println!(" ({num_duplicate} users was already assigned)")
+        println!(" ({num_duplicate} users were already assigned)")
     }
     Ok(())
 }
@@ -982,7 +983,7 @@ pub async fn unassign_from_issue(
         .filter_map(|user| user.login)
         .collect::<Vec<_>>();
     let assigned_before = assignees.len();
-    assignees.retain(|name| !users.contains(name));
+    assignees.retain(|a| users.iter().any(|b| a.eq_ignore_ascii_case(b)));
     let assigned_after = assignees.len();
     let opt = forgejo_api::structs::EditIssueOption {
         assignee: None,
@@ -1001,9 +1002,7 @@ pub async fn unassign_from_issue(
     let num_removed = assigned_before - assigned_after;
     let num_duplicate = num_to_remove - num_removed;
     print!("unassigned ");
-    if num_removed == 0 {
-        print!("0 users");
-    } else if num_removed == 1 {
+    if num_removed == 1 {
         print!("1 user");
     } else {
         print!("{num_removed} users");
@@ -1020,7 +1019,7 @@ pub async fn unassign_from_issue(
     } else if num_duplicate == 1 {
         println!(" (1 user was already not assigned)")
     } else {
-        println!(" ({num_duplicate} users was already not assigned)")
+        println!(" ({num_duplicate} users were already not assigned)")
     }
     Ok(())
 }
