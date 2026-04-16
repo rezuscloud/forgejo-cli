@@ -63,7 +63,14 @@ impl KeyInfo {
 
     pub async fn get_api(&mut self, url: &Url) -> eyre::Result<Forgejo> {
         match self.get_login(url) {
-            Some(login) => login.api_for(url).await,
+            Some(login) => {
+                let was_refreshed = login.refresh(url).await?;
+                let api = login.api_for(url).await?;
+                if was_refreshed {
+                    self.save().await?;
+                }
+                Ok(api)
+            }
             None => Forgejo::with_user_agent(Auth::None, url.clone(), crate::USER_AGENT)
                 .map_err(Into::into),
         }
@@ -108,43 +115,47 @@ impl LoginInfo {
         }
     }
 
-    pub async fn api_for(&mut self, url: &Url) -> eyre::Result<Forgejo> {
+    async fn refresh(&mut self, url: &Url) -> eyre::Result<bool> {
+        if let LoginInfo::OAuth {
+            token,
+            refresh_token,
+            expires_at,
+            ..
+        } = self
+        {
+            if time::OffsetDateTime::now_utc() >= *expires_at {
+                let api = Forgejo::with_user_agent(Auth::None, url.clone(), crate::USER_AGENT)?;
+                let client_id = crate::auth::get_client_info_for(url)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Can't refresh token: no client info for {url}."))?;
+                let response = api
+                    .oauth_get_access_token(forgejo_api::structs::OAuthTokenRequest::Refresh {
+                        refresh_token,
+                        client_id: &client_id,
+                        client_secret: "",
+                    })
+                    .await?;
+                *token = response.access_token;
+                *refresh_token = response.refresh_token;
+                // A minute less, in case any weirdness happens at the exact moment it
+                // expires. Better to refresh slightly too soon than slightly too late.
+                let expires_in =
+                    std::time::Duration::from_secs(response.expires_in.saturating_sub(60) as u64);
+                *expires_at = time::OffsetDateTime::now_utc() + expires_in;
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub async fn api_for(&self, url: &Url) -> eyre::Result<Forgejo> {
         match self {
             LoginInfo::Application { token, .. } => {
                 let api =
                     Forgejo::with_user_agent(Auth::Token(token), url.clone(), crate::USER_AGENT)?;
                 Ok(api)
             }
-            LoginInfo::OAuth {
-                token,
-                refresh_token,
-                expires_at,
-                ..
-            } => {
-                if time::OffsetDateTime::now_utc() >= *expires_at {
-                    let api = Forgejo::with_user_agent(Auth::None, url.clone(), crate::USER_AGENT)?;
-                    let client_id =
-                        crate::auth::get_client_info_for(url)
-                            .await?
-                            .ok_or_else(|| {
-                                eyre::eyre!("Can't refresh token: no client info for {url}.")
-                            })?;
-                    let response = api
-                        .oauth_get_access_token(forgejo_api::structs::OAuthTokenRequest::Refresh {
-                            refresh_token,
-                            client_id: &client_id,
-                            client_secret: "",
-                        })
-                        .await?;
-                    *token = response.access_token;
-                    *refresh_token = response.refresh_token;
-                    // A minute less, in case any weirdness happens at the exact moment it
-                    // expires. Better to refresh slightly too soon than slightly too late.
-                    let expires_in = std::time::Duration::from_secs(
-                        response.expires_in.saturating_sub(60) as u64,
-                    );
-                    *expires_at = time::OffsetDateTime::now_utc() + expires_in;
-                }
+            LoginInfo::OAuth { token, .. } => {
                 let api =
                     Forgejo::with_user_agent(Auth::Token(token), url.clone(), crate::USER_AGENT)?;
                 Ok(api)

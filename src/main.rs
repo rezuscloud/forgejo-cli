@@ -95,9 +95,7 @@ async fn main() -> eyre::Result<()> {
     let _ = SPECIAL_RENDER.set(SpecialRender::new(args.style.unwrap_or_default()));
 
     let mut keys = KeyInfo::load().await?;
-    let r = args.command.run(&mut keys, args.host.as_deref()).await;
-    keys.save().await?;
-    r?;
+    args.command.run(&mut keys, args.host.as_deref()).await?;
 
     Ok(())
 }
