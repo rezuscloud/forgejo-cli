@@ -1,8 +1,12 @@
+use fluent_bundle::{FluentArgs, FluentValue};
+
 pub mod bundles {
     use fluent_bundle::{concurrent::FluentBundle, FluentResource};
     use std::sync::LazyLock;
     use std::sync::OnceLock;
     use unic_langid::langid;
+
+    use super::functions::*;
 
     type Bundle = FluentBundle<FluentResource>;
 
@@ -10,18 +14,11 @@ pub mod bundles {
         ($var:ident = $id:literal) => {
             pub static $var: LazyLock<Bundle> = LazyLock::new(|| {
                 let mut bundle = Bundle::new_concurrent(vec![langid!($id)]);
+                // .ftl files are checked at compile time in `build.rs`
                 let resource = FluentResource::try_new(
                     include_str!(concat!("../localization/", $id, "/messages.ftl")).into(),
-                );
-                let resource = match resource {
-                    Ok(r) => r,
-                    Err((_, errs)) => {
-                        for err in errs {
-                            eprintln!("ftl error: {err}");
-                        }
-                        panic!("Failed to init {} locale", $id);
-                    }
-                };
+                )
+                .unwrap();
                 match bundle.add_resource(resource) {
                     Ok(()) => (),
                     Err(errs) => {
