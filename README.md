@@ -25,7 +25,7 @@ It handles all the Forgejo-specific things that `git` doesn't.
 
 ### Installation
 
-Pre-built binaries are available for `x86_64` Windows and Linux (GNU) on the
+Pre-built binaries are available for `x86_64` Windows and `x86_64` & `aarch64` Linux (GNU) on the
 [releases tab](https://codeberg.org/forgejo-contrib/forgejo-cli/releases/latest).
 
 See [the wiki page on installation](https://codeberg.org/forgejo-contrib/forgejo-cli/wiki/Installation) for more options.
