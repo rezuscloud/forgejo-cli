@@ -365,7 +365,8 @@ pub enum RepoCommand {
     Migrate {
         /// URL of the repo to migrate
         repo: String,
-        /// Name of the new mirror
+        /// Name of the new mirror, and optionally which org/user should own it.
+        #[clap(id = "[OWNER]/NAME")]
         name: String,
         /// Whether to mirror the repo instead of migrating it
         #[clap(long, short)]
@@ -1376,6 +1377,11 @@ async fn migrate_repo(
         None
     };
 
+    let (owner, name) = name
+        .rsplit_once("/")
+        .map(|(o, n)| (Some(o.to_owned()), n.to_owned()))
+        .unwrap_or((None, name));
+
     let migrate_options = forgejo_api::structs::MigrateRepoOptions {
         auth_password: password,
         auth_username: username,
@@ -1393,7 +1399,7 @@ async fn migrate_repo(
         pull_requests: Some(include.prs),
         releases: Some(include.releases),
         repo_name: name,
-        repo_owner: None,
+        repo_owner: owner,
         service: Some(service.to_api_type()),
         uid: None,
         wiki: Some(include.wiki),
