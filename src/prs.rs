@@ -1236,6 +1236,11 @@ async fn create_pr(
                                 git_config.set_str("push.default", "upstream")?;
                                 git_config.set_str(&merge_setting_name, &topic_setting)?;
                                 git_config.set_str(&remote_setting_name, remote)?;
+                                let crate::SpecialRender { bold, reset, .. } =
+                                    crate::special_render();
+                                println!("{bold}Note:{reset}");
+                                println!("  `git push --force[-with-lease]` is not supported for AGit PRs.");
+                                println!("  You can use `git push -o force=true` instead.");
                                 break;
                             }
                             "?" | "h" | "H" | "help" => {
