@@ -472,6 +472,7 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result
     } = crate::special_render();
 
     let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
+    let repo_info = api.repo_get(repo.owner(), repo.name()).await?;
 
     // if it's a pull request, display it as one instead
     if issue.pull_request.is_some() {
@@ -514,6 +515,8 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result
         }
     }
     println!();
+
+    crate::repo::archived_warning(&repo_info)?;
 
     if comments == 1 {
         println!("1 comment");

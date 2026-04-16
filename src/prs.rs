@@ -485,6 +485,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
     let pr = try_get_pr(repo, api, id).await?;
     let id = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
+    let repo_info = api.repo_get(repo.owner(), repo.name()).await?;
 
     let mut additions = 0;
     let mut deletions = 0;
@@ -577,6 +578,9 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
         }
     }
     println!();
+
+    crate::repo::archived_warning(&repo_info)?;
+
     if comments == 1 {
         println!("1 comment");
     } else {
