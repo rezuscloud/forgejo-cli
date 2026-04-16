@@ -1426,8 +1426,7 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
         reset,
         ..
     } = crate::special_render();
-
-    println!("{}", repo.full_name.ok_or_eyre("no full name")?);
+    println!("{}", repo.full_name.as_deref().ok_or_eyre("no full name")?);
 
     if let Some(parent) = &repo.parent {
         println!(
@@ -1451,6 +1450,8 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
         }
     }
     println!();
+
+    archived_warning(&repo)?;
 
     let lang = repo.language.as_deref().unwrap_or_default();
     if !lang.is_empty() {
@@ -1523,6 +1524,28 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
         println!("View online at {html_url}");
     }
 
+    Ok(())
+}
+
+pub fn archived_warning(repo: &forgejo_api::structs::Repository) -> eyre::Result<()> {
+    let SpecialRender {
+        bright_yellow,
+        reset,
+        ..
+    } = crate::special_render();
+    if repo.archived.unwrap_or_default() {
+        let date_format = time::macros::format_description!("[month repr:long] [day], [year]");
+        let archived_at = repo
+            .archived_at
+            .as_ref()
+            .ok_or_eyre("archived_on not present")?;
+        println!(
+            "{bright_yellow}Repo archived since {}",
+            archived_at.format(&date_format)?
+        );
+        println!("You may view this repo, but interactions are disabled{reset}");
+        println!();
+    }
     Ok(())
 }
 
