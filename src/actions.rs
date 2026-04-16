@@ -160,7 +160,11 @@ async fn view_tasks(repo: &RepoName, api: &Forgejo, page: u32) -> eyre::Result<(
     // We don't iterate this to collect all tasks (not just the ones on the first page) like the
     // issue search subcommand will do, because it's unlikely someone wants to see *all* tasks.
     let res = api
-        .list_action_tasks(repo.owner(), repo.name())
+        .list_action_tasks(
+            repo.owner(),
+            repo.name(),
+            forgejo_api::structs::ListActionTasksQuery::default(),
+        )
         .page(page)
         .page_size(20)
         .await?;
