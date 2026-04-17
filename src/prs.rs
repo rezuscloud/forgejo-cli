@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::{io::Write, str::FromStr};
 
@@ -5,8 +6,8 @@ use clap::{Args, Subcommand};
 use eyre::{Context, OptionExt};
 use forgejo_api::{
     structs::{
-        CreatePullRequestOption, MergePullRequestOption, RepoGetPullRequestCommitsQuery,
-        RepoGetPullRequestFilesQuery, StateType,
+        CreatePullRequestOption, MergePullRequestOption, PullReview, PullReviewComment,
+        RepoGetPullRequestCommitsQuery, RepoGetPullRequestFilesQuery, StateType,
     },
     Forgejo,
 };
@@ -182,6 +183,13 @@ pub enum PrSubcommand {
         /// The pull request to open in your browser.
         id: Option<IssueId>,
     },
+    /// View the review on a pull request
+    Review {
+        /// The pull request to view.
+        id: Option<IssueId>,
+        #[clap(subcommand)]
+        command: Option<ReviewCommand>,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -297,6 +305,19 @@ pub enum ViewCommand {
         /// View one commit per line
         #[clap(long, short)]
         oneline: bool,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum ReviewCommand {
+    /// List reviews on a pull request.
+    List {
+        /// List inline comments in reviews on a pull request.
+        #[clap(long, short)]
+        comments: bool,
+        /// Include all reviews, including stale and dismissed ones.
+        #[clap(long, short)]
+        all: bool,
     },
 }
 
@@ -439,6 +460,17 @@ impl PrCommand {
                 let (repo, pr) = try_get_pr_number(repo, &api, pr.map(|pr| pr.number)).await?;
                 crate::issues::add_comment(&repo, &api, pr, body, body_file).await?
             }
+            Review { id, command } => {
+                let id = id.map(|id| id.number);
+                match command.unwrap_or(ReviewCommand::List {
+                    comments: false,
+                    all: false,
+                }) {
+                    ReviewCommand::List { comments, all } => {
+                        view_pr_reviews(repo, &api, id, comments, all).await?
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -456,7 +488,8 @@ impl PrCommand {
             | Edit { pr, .. }
             | Close { pr, .. }
             | Merge { pr, .. }
-            | Browse { id: pr } => pr.as_ref().and_then(|x| x.repo.as_ref()),
+            | Browse { id: pr }
+            | Review { id: pr, .. } => pr.as_ref().and_then(|x| x.repo.as_ref()),
         }
     }
 
@@ -481,7 +514,8 @@ impl PrCommand {
             | Edit { pr, .. }
             | Close { pr, .. }
             | Merge { pr, .. }
-            | Browse { id: pr, .. } => match pr {
+            | Browse { id: pr, .. }
+            | Review { id: pr, .. } => match pr {
                 Some(pr) => eyre::eyre!(
                     "can't figure out what repo to access, try specifying with `{{owner}}/{{repo}}#{}`",
                     pr.number
@@ -818,6 +852,155 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+fn print_pr_review(review: &PullReview) -> eyre::Result<()> {
+    let crate::SpecialRender {
+        bold,
+        bright_green,
+        bright_red,
+        bright_yellow,
+        dark_grey,
+        light_grey,
+        reset,
+        ..
+    } = crate::special_render();
+
+    let reviewer = review
+        .user
+        .as_ref()
+        .and_then(|u| u.login.as_deref())
+        .or_else(|| review.team.as_ref().and_then(|t| t.name.as_deref()))
+        .unwrap_or("???");
+
+    let state_label = review.state.as_deref().unwrap_or("???");
+    match state_label {
+        "APPROVED" => print!("{bright_green}{state_label}{reset}"),
+        "REQUEST_CHANGES" => print!("{bright_red}CHANGES REQUESTED{reset}"),
+        "COMMENT" => print!("{bright_yellow}{state_label}{reset}"),
+        "PENDING" => print!("{light_grey}{state_label}{reset}"),
+        _ => print!("{state_label}"),
+    };
+
+    println!(" by {bold}{reviewer}{reset}");
+
+    print!("{dark_grey}");
+
+    let comments_count = review.comments_count.unwrap_or_default();
+    if comments_count == 1 {
+        print!("1 code comment");
+    } else {
+        print!("{comments_count} code comments");
+    }
+
+    print!(", ");
+
+    let review_ts = review.updated_at.or(review.submitted_at);
+    if let Some(ts) = review_ts {
+        let timestamp = ts.format(&time::format_description::well_known::Rfc2822)?;
+        print!("made on {timestamp}");
+    }
+
+    let review_label = if review.stale.unwrap_or(false) {
+        "stale"
+    } else if review.dismissed.unwrap_or(false) {
+        "dismissed"
+    } else {
+        ""
+    };
+
+    if !review_label.is_empty() {
+        print!(" {bold}{light_grey}({review_label}){reset}");
+    }
+
+    println!("{reset}");
+
+    if let Some(body) = &review.body {
+        if !body.trim().is_empty() {
+            println!("{}", crate::markdown(body));
+        }
+    }
+
+    Ok(())
+}
+
+fn print_pr_reviews_comments(comments: &[PullReviewComment]) -> eyre::Result<()> {
+    // Group comments by file and position:
+    let comments_by_file = comments
+        .iter()
+        .map(|c| {
+            (
+                match (c.path.as_deref(), c.position) {
+                    // If the comment is on a specific line in a specific file, group by that.
+                    // Otherwise, group all comments with unknown position together.
+                    (Some(path), position) => (
+                        path,
+                        position.unwrap_or(c.original_position.unwrap_or_default()),
+                    ),
+                    _ => ("???", 0),
+                },
+                c,
+            )
+        })
+        .fold(BTreeMap::new(), |mut m, (k, v)| {
+            m.entry(k).or_insert_with(Vec::new).push(v);
+            m
+        });
+
+    for comment_group in comments_by_file {
+        print_pr_reviews_comment(comment_group)?;
+    }
+    Ok(())
+}
+
+fn print_pr_reviews_comment(
+    ((path, position), comments): ((&str, u64), Vec<&PullReviewComment>),
+) -> eyre::Result<()> {
+    let crate::SpecialRender {
+        bold,
+        dark_grey,
+        bright_cyan,
+        reset,
+        ..
+    } = crate::special_render();
+
+    let mut first = true;
+
+    for comment in comments {
+        let body = comment.body.as_deref().unwrap_or("").trim();
+
+        if body.is_empty() {
+            continue;
+        }
+
+        // Only print the file and position for the first non-empty comment in a
+        // group of comments on the same file and position.
+        if first {
+            first = false;
+            println!("---");
+            println!("In {bold}{path}:{position}{reset}:");
+            if let Some(diff_hunk) = &comment.diff_hunk {
+                println!("{dark_grey}{diff_hunk}{reset}");
+            }
+        }
+
+        let user = comment
+            .user
+            .as_ref()
+            .and_then(|u| u.login.as_deref())
+            .unwrap_or("???");
+
+        let resolver = comment.resolver.as_ref().and_then(|u| u.login.as_deref());
+
+        print!("{bold}{bright_cyan}{user}{reset} commented");
+        if let Some(resolver) = resolver {
+            print!(" (resolved by {resolver})");
+        }
+        println!(":");
+        println!("{}", crate::markdown(body));
+    }
+
     Ok(())
 }
 
@@ -1680,6 +1863,61 @@ async fn view_pr_commits(
             println!();
         }
     }
+    Ok(())
+}
+
+pub async fn view_pr_reviews(
+    repo: &RepoName,
+    api: &Forgejo,
+    pr: Option<i64>,
+    comments: bool,
+    include_stale: bool,
+) -> eyre::Result<()> {
+    let pr = try_get_pr(repo, api, pr).await?;
+    let pr_number = pr.number.ok_or_eyre("pr does not have number")?;
+    let repo = repo_name_from_pr(&pr)?;
+    let reviews = api
+        .repo_list_pull_reviews(repo.owner(), repo.name(), pr_number)
+        .all()
+        .await?;
+
+    if reviews.is_empty() {
+        println!("No reviews.");
+        return Ok(());
+    }
+
+    let mut first = false;
+
+    for review in &reviews {
+        // skip request review reviews, since they are usually not relevant
+        if (!include_stale && (review.stale.unwrap_or(false) || review.dismissed.unwrap_or(false)))
+            || (review.state.as_deref() == Some("REQUEST_REVIEW"))
+        {
+            continue;
+        }
+        if !first {
+            first = true;
+        } else {
+            println!("---");
+        }
+        print_pr_review(review)?;
+        if comments {
+            let review_id = match review.id {
+                Some(id) => id,
+                None => return Ok(()),
+            };
+            let review_comments = api
+                .repo_get_pull_review_comments(repo.owner(), repo.name(), pr_number, review_id)
+                .await?;
+            print_pr_reviews_comments(&review_comments)?;
+        }
+    }
+
+    // if first is still false, that means all reviews were stale or dismissed and nothing was printed.
+    if !first {
+        println!("Only stale or dismissed reviews, use -a to display them.");
+    }
+
     Ok(())
 }
 
