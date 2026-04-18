@@ -204,7 +204,7 @@ impl RepoInfo {
 
 If you're trying to operate on a repository in the current directory, try adding a remote
 referencing the forgejo instance. If you have multiple remotes, try setting one as upstream to the
-current branch. You may also specify a host explictly using the `--host` argument."
+current branch. You may also specify a host explicitly using the `--host` argument."
             ),
         };
 

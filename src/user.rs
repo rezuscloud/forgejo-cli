@@ -151,13 +151,13 @@ pub enum EditCommand {
     Activity {
         /// The visibility of your activity.
         #[clap(long, short)]
-        visibility: VisbilitySetting,
+        visibility: VisibilitySetting,
     },
     /// Manage the email addresses associated with your account
     Email {
         /// Set the visibility of your email address.
         #[clap(long, short)]
-        visibility: Option<VisbilitySetting>,
+        visibility: Option<VisibilitySetting>,
         /// Add a new email address
         #[clap(long, short)]
         add: Vec<String>,
@@ -264,7 +264,7 @@ pub enum GpgCommand {
 }
 
 #[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
-pub enum VisbilitySetting {
+pub enum VisibilitySetting {
     Hidden,
     Public,
 }
@@ -848,7 +848,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
                 .as_deref()
                 .ok_or_eyre("repo does not have full name")?;
             let content = content?;
-            println!("{bold}{actor_name}{reset} transfered repository {bold}{yellow}{content}{reset} to {bold}{yellow}{full_name}{reset}");
+            println!("{bold}{actor_name}{reset} transferred repository {bold}{yellow}{content}{reset} to {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::PushTag => {
             let repo = repo?;
@@ -1057,9 +1057,9 @@ async fn edit_location(
     Ok(())
 }
 
-async fn edit_activity(api: &Forgejo, visibility: VisbilitySetting) -> eyre::Result<()> {
+async fn edit_activity(api: &Forgejo, visibility: VisibilitySetting) -> eyre::Result<()> {
     let opt = forgejo_api::structs::UserSettingsOptions {
-        hide_activity: Some(visibility == VisbilitySetting::Hidden),
+        hide_activity: Some(visibility == VisibilitySetting::Hidden),
         ..default_settings_opt()
     };
     api.update_user_settings(opt).await?;
@@ -1068,13 +1068,13 @@ async fn edit_activity(api: &Forgejo, visibility: VisbilitySetting) -> eyre::Res
 
 async fn edit_email(
     api: &Forgejo,
-    visibility: Option<VisbilitySetting>,
+    visibility: Option<VisibilitySetting>,
     add: Vec<String>,
     rm: Vec<String>,
 ) -> eyre::Result<()> {
     if let Some(vis) = visibility {
         let opt = forgejo_api::structs::UserSettingsOptions {
-            hide_activity: Some(vis == VisbilitySetting::Hidden),
+            hide_activity: Some(vis == VisibilitySetting::Hidden),
             ..default_settings_opt()
         };
         api.update_user_settings(opt).await?;
