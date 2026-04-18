@@ -14,6 +14,9 @@ pub mod bundles {
         ($var:ident = $id:literal) => {
             pub static $var: LazyLock<Bundle> = LazyLock::new(|| {
                 let mut bundle = Bundle::new_concurrent(vec![langid!($id)]);
+                bundle.add_builtins().unwrap();
+                bundle.add_function("STYLE", style).unwrap();
+                bundle.add_function("IS_MINIMAL", is_minimal).unwrap();
                 // .ftl files are checked at compile time in `build.rs`
                 let resource = FluentResource::try_new(
                     include_str!(concat!("../localization/", $id, "/messages.ftl")).into(),
@@ -56,6 +59,59 @@ pub mod bundles {
     }
 
     pub static LOCALE: OnceLock<&[&LazyLock<Bundle>]> = OnceLock::new();
+}
+
+mod functions {
+    use fluent_bundle::{FluentArgs, FluentValue};
+
+    pub fn style<'a>(positional: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
+        let special = crate::special_render();
+        let mut out = String::new();
+        for arg in positional {
+            let FluentValue::String(style) = arg else {
+                continue;
+            };
+            let ansi = match style.as_ref() {
+                "red" => special.red,
+                "bright-red" => special.bright_red,
+                "green" => special.green,
+                "bright-green" => special.bright_green,
+                "blue" => special.blue,
+                "bright-blue" => special.bright_blue,
+                "cyan" => special.cyan,
+                "bright-cyan" => special.bright_cyan,
+                "yellow" => special.yellow,
+                "bright-yellow" => special.bright_yellow,
+                "magenta" => special.magenta,
+                "bright-magenta" => special.bright_magenta,
+                "black" => special.black,
+                "dark-grey" | "dark-gray" => special.dark_grey,
+                "dark-grey-bg" | "dark-gray-bg" => special.dark_grey_bg,
+                "light-grey" | "light-gray" => special.light_grey,
+                "white" => special.white,
+                "no_fg" => special.no_fg,
+                "no_bg" => special.no_bg,
+                "reset" => special.reset,
+
+                "italic" => special.italic,
+                "bold" => special.bold,
+                "strike" => special.strike,
+                "no-italic-bold" => special.no_italic_bold,
+                "no-strike" => special.no_strike,
+                _ => return FluentValue::Error,
+            };
+            out.push_str(ansi);
+        }
+        out.into()
+    }
+
+    pub fn is_minimal<'a>(_: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
+        if crate::special_render().fancy {
+            "no".into()
+        } else {
+            "yes".into()
+        }
+    }
 }
 
 #[macro_export]
