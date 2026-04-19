@@ -784,8 +784,8 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                         println!("{light_grey}Draft{reset} {dash} Can't merge draft PR")
                     } else {
                         print!("{bright_green}Open{reset} {dash} ");
-                        let mergable = pr.mergeable.ok_or_eyre("pr does not have mergable")?;
-                        if mergable {
+                        let mergeable = pr.mergeable.ok_or_eyre("pr does not have mergeable")?;
+                        if mergeable {
                             println!("Can be merged");
                         } else {
                             println!("{bright_red}Merge conflicts{reset}");
@@ -1373,10 +1373,10 @@ async fn checkout_pr(
 
     let mut options = git2::StatusOptions::new();
     options.include_ignored(false);
-    let has_no_uncommited = local_repo.statuses(Some(&mut options)).unwrap().is_empty();
+    let has_no_uncommitted = local_repo.statuses(Some(&mut options)).unwrap().is_empty();
     eyre::ensure!(
-        has_no_uncommited,
-        "Cannot checkout PR, working directory has uncommited changes"
+        has_no_uncommitted,
+        "Cannot checkout PR, working directory has uncommitted changes"
     );
 
     let remote_repo = match pr {

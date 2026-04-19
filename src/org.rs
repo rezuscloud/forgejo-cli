@@ -322,7 +322,7 @@ async fn create_org(api: &Forgejo, name: String, options: OrgOptions) -> eyre::R
     while let Some(c) = chars.next() {
         // because of the prior check, if it isn't alphanumeric, it's definitely one of - _ or .
         if !c.is_alphanumeric() && !chars.peek().is_some_and(|c| c.is_alphanumeric()) {
-            eyre::bail!("Organization names can't have consecutive non-alphanumberic characters.\n  If you want that in the name, try setting the --full-name flag");
+            eyre::bail!("Organization names can't have consecutive non-alphanumeric characters.\n  If you want that in the name, try setting the --full-name flag");
         }
     }
     let opt = CreateOrgOption {

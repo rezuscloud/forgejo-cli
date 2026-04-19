@@ -31,7 +31,7 @@ pub enum ReleaseSubcommand {
     Create {
         name: String,
         #[clap(long, short = 'T')]
-        /// Create a new cooresponding tag for this release. Defaults to release's name.
+        /// Create a new corresponding tag for this release. Defaults to release's name.
         create_tag: Option<Option<String>>,
         #[clap(long, short = 't')]
         /// Pre-existing tag to use
