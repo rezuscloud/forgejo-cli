@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::path::PathBuf;
 
-use crate::{ftl_eprintln, ftl_format, ftl_println};
+use crate::{ftl_eprintln, ftl_format, ftl_println, ftl_readline};
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum AuthCommand {
@@ -70,7 +70,10 @@ impl AuthCommand {
                 let host_url = repo_info.host_url();
                 let key = match key {
                     Some(key) => key,
-                    None => crate::readline("new key: ").await?.trim().to_string(),
+                    None => ftl_readline!("msg-auth-add_key-prompt")
+                        .await?
+                        .trim()
+                        .to_string(),
                 };
                 let host = crate::host_name(&host_url);
                 if !keys.hosts.contains_key(host) {

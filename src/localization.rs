@@ -126,25 +126,37 @@ macro_rules! ftl_arg {
 
 #[macro_export]
 macro_rules! ftl_args {
-    ($msg_id:expr) => {
-        $crate::ftl_args!($msg_id,)
-    };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    () => {
         {
-            $crate::localization::bundles::locale()
-                .into_iter()
-                .filter_map(|l| Some((l, l.get_message($msg_id)?.value()?)))
-                .next()
-                .map(|(bundle, pattern)| {
-                    #[allow(unused_mut)]
-                    let mut args = fluent_bundle::FluentArgs::new();
-                    $(
-                        $crate::ftl_arg!(args, $var_name$(, $var_val)*);
-                    )*
-                    (bundle, pattern, args)
-                })
+            fluent_bundle::FluentArgs::new()
         }
     };
+    ($($var_name:ident $(= $var_val:expr)?),*) => {
+        {
+            let mut args = fluent_bundle::FluentArgs::new();
+            $(
+                $crate::ftl_arg!(args, $var_name$(, $var_val)*);
+            )*
+            args
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! ftl_message {
+    ($msg_id:expr) => {{
+        $crate::localization::bundles::locale()
+            .into_iter()
+            .filter_map(|b| Some((b, b.get_message($msg_id)?)))
+            .next()
+    }};
+}
+
+#[macro_export]
+macro_rules! ftl_pattern {
+    ($msg_id:expr) => {{
+        $crate::ftl_message!($msg_id).and_then(|(b, m)| Some((b, m.value()?)))
+    }};
 }
 
 #[macro_export]
@@ -154,23 +166,35 @@ macro_rules! ftl_format {
     };
     ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
-            let args = $crate::ftl_args!($msg_id, $($var_name $(= $var_val)*),*);
-            if let Some((bundle, pattern, args)) = args {
-                let mut errors = Vec::new();
-                let out = bundle.format_pattern(pattern, Some(&args), &mut errors);
-                if !errors.is_empty() {
-                    for error in errors {
-                        eprintln!("{error}");
-                    }
-                    panic!("failed to format localized text");
-                }
-                out
+            if let Some((bundle, pattern)) = $crate::ftl_pattern!($msg_id) {
+                let args = $crate::ftl_args!($($var_name $(= $var_val)*),*);
+                $crate::localization::format_pattern(&***bundle, pattern, Some(&args))
             } else {
                 std::borrow::Cow::from($msg_id)
             }
 
         }
     }
+}
+
+pub fn handle_pattern_errors(errors: Vec<fluent_bundle::FluentError>) {
+    if !errors.is_empty() {
+        for error in errors {
+            eprintln!("{error}");
+        }
+        panic!("failed to format localized text");
+    }
+}
+
+pub fn format_pattern<'b>(
+    bundle: &'b fluent_bundle::concurrent::FluentBundle<fluent_bundle::FluentResource>,
+    pattern: &'b fluent_syntax::ast::Pattern<&'static str>,
+    args: Option<&fluent_bundle::FluentArgs<'_>>,
+) -> std::borrow::Cow<'b, str> {
+    let mut errors = Vec::new();
+    let out = bundle.format_pattern(pattern, args, &mut errors);
+    handle_pattern_errors(errors);
+    out
 }
 
 #[macro_export]
@@ -181,21 +205,27 @@ macro_rules! ftl_write {
     ($writer:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             use std::fmt::Write;
-            let args = $crate::ftl_args!($msg_id, $($var_name $(= $var_val)*),*);
-            if let Some((bundle, pattern, args)) = args {
-                let mut errors = Vec::new();
-                bundle.write_pattern($writer, pattern, Some(&args), &mut errors).expect("failed to write localized text");
-                if !errors.is_empty() {
-                    for error in errors {
-                        eprintln!("{error}");
-                    }
-                    panic!("failed to format localized text");
-                }
+            if let Some((bundle, pattern)) = $crate::ftl_pattern!($msg_id) {
+                let args = $crate::ftl_args!($($var_name $(= $var_val)*),*);
+                $crate::localization::write_pattern($writer, bundle, pattern, Some(&args));
             } else {
                 write!($writer, "{}", $msg_id).expect("failed to write text message id");
             }
         }
     }
+}
+
+pub fn write_pattern<'b>(
+    writer: &mut impl std::fmt::Write,
+    bundle: &'b fluent_bundle::concurrent::FluentBundle<fluent_bundle::FluentResource>,
+    pattern: &'b fluent_syntax::ast::Pattern<&'static str>,
+    args: Option<&fluent_bundle::FluentArgs<'_>>,
+) {
+    let mut errors = Vec::new();
+    bundle
+        .write_pattern(writer, pattern, args, &mut errors)
+        .expect("failed to write localized text");
+    handle_pattern_errors(errors);
 }
 
 pub struct WriterCompat<W>(pub W);
@@ -282,6 +312,45 @@ macro_rules! ftl_bail {
     ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
             eyre::bail!("{}", $crate::ftl_format!($msg_id, $($var_name $(= $var_val)*),*))
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! ftl_readline {
+    ($msg_id:expr) => {
+        $crate::ftl_readline!($msg_id,)
+    };
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+        {
+            use std::io::Write;
+            $crate::ftl_print!($msg_id, $($var_name $(= $var_val)*),*);
+            std::io::stdout().flush().expect("failed to flush stdout");
+            $crate::readline()
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! ftl_prompt {
+    ($msg_id:expr) => {
+        $crate::ftl_prompt!($msg_id,)
+    };
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+        {
+            crate::prompt($msg_id, &$crate::ftl_args!($($var_name $(= $var_val)*),*)).await
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! ftl_prompt_bool {
+    (default $default:expr; $msg_id:expr) => {
+        $crate::ftl_prompt_bool!(default $default; $msg_id,)
+    };
+    (default $default:expr; $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+        {
+            crate::ftl_prompt!($msg_id, $($var_name $(= $var_val)*),*).map(|o| o.map(|r| r == "yes").unwrap_or($default))
         }
     }
 }

@@ -102,10 +102,7 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn readline(msg: &str) -> eyre::Result<String> {
-    use std::io::Write;
-    print!("{msg}");
-    std::io::stdout().flush()?;
+async fn readline() -> eyre::Result<String> {
     tokio::task::spawn_blocking(|| {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
@@ -114,28 +111,46 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     .await?
 }
 
-async fn prompt_bool(msg: &str, default_answer: bool) -> eyre::Result<bool> {
-    let msg = if default_answer {
-        format!("{msg} [Y/n]: ")
+async fn prompt<'b>(
+    msg_id: &str,
+    args: &fluent_bundle::FluentArgs<'_>,
+) -> eyre::Result<Option<&'static str>> {
+    use std::io::Write;
+    let (bundle, message) =
+        ftl_message!(msg_id).ok_or_eyre("cannot prompt for bool: invalid fluent message id")?;
+
+    let mut stdout = std::io::stdout();
+
+    if let Some(pattern) = message.value() {
+        let mut errors = Vec::new();
+        bundle.write_pattern(
+            &mut localization::WriterCompat(&mut stdout),
+            pattern,
+            Some(&args),
+            &mut errors,
+        )?;
+        if !errors.is_empty() {
+            for error in errors {
+                eprintln!("{error}");
+            }
+            panic!("failed to format localized text");
+        }
     } else {
-        format!("{msg} [y/N]: ")
-    };
+        write!(&mut stdout, "{}", std::borrow::Cow::from(msg_id))?;
+    }
 
-    loop {
-        let input = readline(&msg).await?;
-        let input = input.trim();
-
-        if input.is_empty() {
-            return Ok(default_answer);
-        }
-
-        if input.eq_ignore_ascii_case("y") {
-            return Ok(true);
-        }
-        if input.eq_ignore_ascii_case("n") {
-            return Ok(false);
+    let response = readline().await?;
+    let response = response.trim();
+    for attr in message.attributes() {
+        if let Some(opt) = attr.id().strip_prefix("option-") {
+            let attr_value = localization::format_pattern(bundle, attr.value(), None);
+            if response == attr_value {
+                return Ok(Some(opt));
+            }
         }
     }
+
+    Ok(None)
 }
 
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {

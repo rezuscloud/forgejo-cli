@@ -1193,41 +1193,45 @@ async fn upload_key(
 
     let is_stdin = matches!(file.as_deref(), Some("-"));
 
-    let file =
-        if let Some(file) = file {
-            std::path::PathBuf::from(file)
-        } else {
-            let ssh_dir = directories::UserDirs::new().ok_or_eyre(
+    let file = if let Some(file) = file {
+        std::path::PathBuf::from(file)
+    } else {
+        let ssh_dir = directories::UserDirs::new()
+            .ok_or_eyre(
                 "Couldn't locate home directory. Please provide an explicit path for the key file.",
-            )?.home_dir().join(".ssh");
+            )?
+            .home_dir()
+            .join(".ssh");
 
-            let mut dirstream = tokio::fs::read_dir(ssh_dir).await?;
+        let mut dirstream = tokio::fs::read_dir(ssh_dir).await?;
 
-            loop {
-                let Some(entry) = dirstream.next_entry().await? else {
-                    eyre::bail!("No keys found.");
-                };
+        loop {
+            let Some(entry) = dirstream.next_entry().await? else {
+                eyre::bail!("No keys found.");
+            };
 
-                if !entry.file_type().await?.is_file() {
-                    continue;
-                }
-
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if !name.starts_with("id_") || !name.ends_with(".pub") {
-                    continue;
-                }
-
-                let path = entry.path();
-                println!("Guessed key file: {}", path.display());
-
-                eyre::ensure!(
-                    crate::prompt_bool("Does this look good?", false).await?,
-                    "User didn't confirm guessed key file.",
-                );
-
-                break path;
+            if !entry.file_type().await?.is_file() {
+                continue;
             }
-        };
+
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.starts_with("id_") || !name.ends_with(".pub") {
+                continue;
+            }
+
+            let path = entry.path();
+            eyre::ensure!(
+                crate::ftl_prompt_bool!(
+                    default false;
+                    "msg-user-key-upload-confirm_key_file_prompt",
+                    path = path.to_string_lossy()
+                )?,
+                "User didn't confirm guessed key file.",
+            );
+
+            break path;
+        }
+    };
 
     eyre::ensure!(
         force || is_stdin || file.extension().map(|e| e == "pub").unwrap_or_default(),
@@ -1237,10 +1241,6 @@ async fn upload_key(
         ),
         file.display(),
     );
-
-    let SpecialRender {
-        bright_cyan, reset, ..
-    } = *crate::special_render();
 
     let content = if is_stdin {
         let mut key_content = String::new();
@@ -1273,9 +1273,12 @@ async fn upload_key(
             );
         };
 
-        println!("Guessed title: {bright_cyan}{guess}{reset}");
         eyre::ensure!(
-            crate::prompt_bool("Does this look good?", false).await?,
+            crate::ftl_prompt_bool!(
+                default false;
+                "msg-user-key-upload-confirm_key_title_prompt",
+                title = guess
+            )?,
             "User didn't confirm guessed title.",
         );
 
@@ -1407,10 +1410,8 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
 }
 
 async fn delete_gpg(api: &Forgejo, id: i64, force: bool) -> eyre::Result<()> {
-    let prompt =
-        "Deleting a GPG key will cause all commits signed by that key to become unverified! Continue?";
     eyre::ensure!(
-        force || crate::prompt_bool(prompt, false).await?,
+        force || crate::ftl_prompt_bool!(default false; "msg-user-key-delete-confirmation_prompt")?,
         "User aborted process.",
     );
 

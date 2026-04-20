@@ -1364,15 +1364,24 @@ async fn migrate_repo(
         url::Url::parse(&repo).or_else(|_| url::Url::parse(&format!("https://{repo}")))?;
 
     let (username, password) = if login {
-        let username = crate::readline("Username: ").await?.trim().to_owned();
-        let password = crate::readline("Password: ").await?.trim().to_owned();
+        let username = crate::ftl_readline!("msg-repo-migrate-username_prompt")
+            .await?
+            .trim()
+            .to_owned();
+        let password = crate::ftl_readline!("msg-repo-migrate-password_prompt")
+            .await?
+            .trim()
+            .to_owned();
         (Some(username), Some(password))
     } else {
         (None, None)
     };
 
     let auth_token = if token {
-        let auth_token = crate::readline("Token: ").await?.trim().to_owned();
+        let auth_token = crate::ftl_readline!("msg-repo-migrate-token_prompt")
+            .await?
+            .trim()
+            .to_owned();
         Some(auth_token.trim().to_owned())
     } else {
         None
@@ -1724,14 +1733,12 @@ pub fn load_ssh_keys(
 }
 
 async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
-    print!(
-        "Are you sure you want to delete {}/{}? (y/N) ",
-        name.owner(),
-        name.name()
-    );
-    let user_response = crate::readline("").await?;
-    let yes = matches!(user_response.trim(), "y" | "Y" | "yes" | "Yes");
-    if yes {
+    let confirmation = crate::ftl_prompt_bool!(
+        default false; "msg-repo-delete-confirmation_prompt",
+        owner = name.owner(),
+        name = name.name()
+    )?;
+    if confirmation {
         api.repo_delete(name.owner(), name.name()).await?;
         println!("Deleted {}/{}", name.owner(), name.name());
     } else {

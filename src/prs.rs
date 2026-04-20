@@ -1412,9 +1412,9 @@ async fn create_pr(
                     println!("Would you like to set the needed git config");
                     println!("items so that `git push` works for this pr?");
                     loop {
-                        let response = crate::readline("(y/N/?) ").await?;
-                        match response.trim() {
-                            "y" | "Y" | "yes" | "Yes" => {
+                        let response = crate::ftl_prompt!("msg-pr-create-agit_push_cfg_prompt")?;
+                        match response {
+                            Some("yes") => {
                                 let remote = remote_name.unwrap_or(clone_url.as_str());
                                 git_config.set_str("push.default", "upstream")?;
                                 git_config.set_str(&merge_setting_name, &topic_setting)?;
@@ -1426,12 +1426,12 @@ async fn create_pr(
                                 println!("  You can use `git push -o force=true` instead.");
                                 break;
                             }
-                            "?" | "h" | "H" | "help" => {
+                            Some("help") => {
                                 println!("This would set the following config options:");
                                 println!("  push.default = upstream");
                                 println!("  branch.{current_branch_name}.merge = {topic_setting}");
                             }
-                            _ => break,
+                            Some("no") | _ => break,
                         }
                     }
                 }

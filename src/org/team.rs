@@ -8,7 +8,7 @@ use forgejo_api::{
 };
 use futures::{future, TryStreamExt};
 
-use crate::SpecialRender;
+use crate::{ftl_prompt_bool, SpecialRender};
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamSubcommand {
@@ -421,10 +421,10 @@ async fn edit_team(
 }
 
 async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<()> {
-    let SpecialRender { bold, reset, .. } = crate::special_render();
-    println!("Are you sure you want to delete {bold}{org}/{name}{reset}?");
-    let confirmation = crate::readline("(y/N) ").await?.to_lowercase();
-    if matches!(confirmation.trim(), "y" | "yes") {
+    let confirmation = ftl_prompt_bool!(
+        default false; "msg-org-team-delete-confirmation", org = &org, name = &name
+    )?;
+    if confirmation {
         let id = find_team_by_name(api, &org, &name)
             .await?
             .id
