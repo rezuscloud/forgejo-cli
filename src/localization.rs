@@ -17,6 +17,7 @@ pub mod bundles {
                 bundle.add_builtins().unwrap();
                 bundle.add_function("STYLE", style).unwrap();
                 bundle.add_function("IS_MINIMAL", is_minimal).unwrap();
+                bundle.add_function("IS_NONE", is_none).unwrap();
                 // .ftl files are checked at compile time in `build.rs`
                 let resource = FluentResource::try_new(
                     include_str!(concat!("../localization/", $id, "/messages.ftl")).into(),
@@ -112,6 +113,17 @@ mod functions {
             "yes".into()
         }
     }
+
+    pub fn is_none<'a>(positional: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
+        let Some(value) = positional.first() else {
+            return FluentValue::Error;
+        };
+        match value {
+            FluentValue::None => FluentValue::String("none".into()),
+            FluentValue::Error => FluentValue::Error,
+            _ => FluentValue::String("some".into()),
+        }
+    }
 }
 
 #[macro_export]
@@ -177,6 +189,7 @@ macro_rules! ftl_format {
     }
 }
 
+#[track_caller]
 pub fn handle_pattern_errors(errors: Vec<fluent_bundle::FluentError>) {
     if !errors.is_empty() {
         for error in errors {
@@ -186,6 +199,7 @@ pub fn handle_pattern_errors(errors: Vec<fluent_bundle::FluentError>) {
     }
 }
 
+#[track_caller]
 pub fn format_pattern<'b>(
     bundle: &'b fluent_bundle::concurrent::FluentBundle<fluent_bundle::FluentResource>,
     pattern: &'b fluent_syntax::ast::Pattern<&'static str>,
@@ -215,6 +229,7 @@ macro_rules! ftl_write {
     }
 }
 
+#[track_caller]
 pub fn write_pattern<'b>(
     writer: &mut impl std::fmt::Write,
     bundle: &'b fluent_bundle::concurrent::FluentBundle<fluent_bundle::FluentResource>,
