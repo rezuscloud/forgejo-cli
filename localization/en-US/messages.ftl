@@ -214,3 +214,27 @@ msg-user-key-delete-confirmation_prompt =
     .option-no = N
     .option-no = n
 
+msg-release-create-must_specify_tag = must select tag with `--tag` or `--create-tag`
+msg-release-create-tag_flags_conflict =`--tag` and `--create-tag` are mutually exclusive; please pick just one 
+msg-release-create-success = Created release {$name}
+
+msg-release-list-entry = {$name} {$state ->
+       *[neither] {""}
+        [draft] (draft)
+        [prerelease] (prerelease)
+        [both] (draft, prerelease)
+    }
+
+msg-release-view-header = {$name}
+    By {$author} on {DATETIME($created_at, dateStyle: "long")}
+
+msg-release-asset-create-success = Added attachment `{$asset}` to {$release}
+
+msg-release-asset-delete-success = Added attachment `{$asset}` to {$release}
+
+msg-release-asset-download-success = { IS_NONE($file) ->
+       *[none] Downloaded {$asset}
+        [some] Downloaded {$asset} into {$file}
+    }
+
+

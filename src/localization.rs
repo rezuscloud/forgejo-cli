@@ -2,6 +2,7 @@ use fluent_bundle::{FluentArgs, FluentValue};
 
 pub mod bundles {
     use fluent_bundle::{concurrent::FluentBundle, FluentResource};
+    use fluent_datetime::BundleExt;
     use std::sync::LazyLock;
     use std::sync::OnceLock;
     use unic_langid::langid;
@@ -15,6 +16,7 @@ pub mod bundles {
             pub static $var: LazyLock<Bundle> = LazyLock::new(|| {
                 let mut bundle = Bundle::new_concurrent(vec![langid!($id)]);
                 bundle.add_builtins().unwrap();
+                bundle.add_datetime_support().unwrap();
                 bundle.add_function("STYLE", style).unwrap();
                 bundle.add_function("IS_MINIMAL", is_minimal).unwrap();
                 bundle.add_function("IS_NONE", is_none).unwrap();
@@ -126,13 +128,42 @@ mod functions {
     }
 }
 
+pub trait AsFluent {
+    type FluentType;
+    fn ftl(self) -> Self::FluentType;
+}
+
+impl AsFluent for time::OffsetDateTime {
+    type FluentType = fluent_datetime::FluentDateTime;
+
+    fn ftl(self) -> Self::FluentType {
+        let date = icu_calendar::Date::try_new_iso(self.year(), self.month() as u8, self.day())
+            .expect(
+            "icu_calendar::Date and time::Date share the same range restraints so this can't panic",
+        );
+        let time = icu_time::Time::new(
+            self.hour().try_into().expect("same as above"),
+            self.minute().try_into().expect("same as above"),
+            self.second().try_into().expect("same as above"),
+            self.nanosecond().try_into().expect("same as above"),
+        );
+        fluent_datetime::FluentDateTime::from(icu_time::DateTime { date, time })
+    }
+}
+
 #[macro_export]
 macro_rules! ftl_arg {
     ($args:ident, $var_name:ident) => {
-        $args.set(stringify!($var_name), $var_name);
+        $args.set(
+            stringify!($var_name),
+            fluent_bundle::FluentValue::from($var_name),
+        );
     };
     ($args:ident, $var_name:ident, $var_value:expr) => {
-        $args.set(stringify!($var_name), $var_value);
+        $args.set(
+            stringify!($var_name),
+            fluent_bundle::FluentValue::from($var_value),
+        );
     };
 }
 
