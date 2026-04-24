@@ -4,6 +4,8 @@ use forgejo_api::Forgejo;
 
 use crate::{repo::RepoInfo, SpecialRender};
 
+use std::borrow::Cow;
+
 #[derive(Args, Clone, Debug)]
 pub struct UserCommand {
     /// The local git remote that points to the repo to operate on.
@@ -753,16 +755,22 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
         .as_deref()
         .ok_or_eyre("repo does not have full name");
 
-    fn issue_name<'a, 'b>(
-        repo: &'a forgejo_api::structs::Repository,
-        content: &'b str,
-    ) -> eyre::Result<(&'a str, &'b str)> {
-        let full_name = repo
-            .full_name
+    fn repo_name(repo: &forgejo_api::structs::Repository) -> eyre::Result<&str> {
+        repo.full_name
             .as_deref()
-            .ok_or_eyre("repo does not have full name")?;
-        let (issue_id, _issue_name) = content.split_once("|").unwrap_or((content, ""));
-        Ok((full_name, issue_id))
+            .ok_or_eyre("repo does not have full name")
+    }
+    // The first item of the returned tuple is the ID of the issue. It isn't
+    // parsed to a number, since it only ever gets printed out.
+    // string -> number -> string seems like a waste
+    //
+    // The second item is the "associated content" with the issue-related
+    // activity. When opening or closing an issue, it's the name of the issue.
+    // When commenting, it's a snippet of the comment's content.
+    fn issue_content(content: &str) -> eyre::Result<(Cow<'_, str>, Cow<'_, str>)> {
+        Ok(serde_json::from_str::<(Cow<'_, str>, Cow<'_, str>)>(
+            content,
+        )?)
     }
 
     print!("");
@@ -770,15 +778,9 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
     match op_type {
         ActivityOpType::CreateRepo => {
             let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo)?;
             if let Some(parent) = &repo.parent {
-                let parent_full_name = parent
-                    .full_name
-                    .as_deref()
-                    .ok_or_eyre("parent repo does not have full name")?;
+                let parent_full_name = repo_name(parent)?;
                 println!("{bold}{actor_name}{reset} forked repository {bold}{yellow}{parent_full_name}{reset} to {bold}{yellow}{full_name}{reset}");
             } else if repo.mirror.is_some_and(|b| b) {
                 println!(
@@ -791,40 +793,24 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
             }
         }
         ActivityOpType::RenameRepo => {
-            let repo = repo?;
             let content = content?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             println!("{bold}{actor_name}{reset} renamed repository from {bold}{yellow}\"{content}\"{reset} to {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::StarRepo => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             println!(
                 "{bold}{actor_name}{reset} starred repository {bold}{yellow}{full_name}{reset}"
             );
         }
         ActivityOpType::WatchRepo => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             println!(
                 "{bold}{actor_name}{reset} watched repository {bold}{yellow}{full_name}{reset}"
             );
         }
         ActivityOpType::CommitRepo => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             let ref_name = ref_name?;
             let branch = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             if !content?.is_empty() {
@@ -832,82 +818,74 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
             }
         }
         ActivityOpType::CreateIssue => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!("{bold}{actor_name}{reset} opened issue {bold}{yellow}{name}#{id}{reset}");
         }
         ActivityOpType::CreatePullRequest => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!(
                 "{bold}{actor_name}{reset} created pull request {bold}{yellow}{name}#{id}{reset}"
             );
         }
         ActivityOpType::TransferRepo => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             let content = content?;
             println!("{bold}{actor_name}{reset} transferred repository {bold}{yellow}{content}{reset} to {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::PushTag => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             let ref_name = ref_name?;
             let tag = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             println!("{bold}{actor_name}{reset} pushed tag {bold}{bright_cyan}{tag}{reset} to {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::CommentIssue => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!(
                 "{bold}{actor_name}{reset} commented on issue {bold}{yellow}{name}#{id}{reset}"
             );
         }
         ActivityOpType::MergePullRequest | ActivityOpType::AutoMergePullRequest => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!(
                 "{bold}{actor_name}{reset} merged pull request {bold}{yellow}{name}#{id}{reset}"
             );
         }
         ActivityOpType::CloseIssue => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!("{bold}{actor_name}{reset} closed issue {bold}{yellow}{name}#{id}{reset}");
         }
         ActivityOpType::ReopenIssue => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!("{bold}{actor_name}{reset} reopened issue {bold}{yellow}{name}#{id}{reset}");
         }
         ActivityOpType::ClosePullRequest => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!(
                 "{bold}{actor_name}{reset} closed pull request {bold}{yellow}{name}#{id}{reset}"
             );
         }
         ActivityOpType::ReopenPullRequest => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!(
                 "{bold}{actor_name}{reset} reopened pull request {bold}{yellow}{name}#{id}{reset}"
             );
         }
         ActivityOpType::DeleteTag => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             let ref_name = ref_name?;
             let tag = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             println!("{bold}{actor_name}{reset} deleted tag {bold}{bright_cyan}{tag}{reset} from {bold}{yellow}{full_name}{reset}");
         }
         ActivityOpType::DeleteBranch => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             let ref_name = ref_name?;
             let branch = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             println!("{bold}{actor_name}{reset} deleted branch {bold}{bright_cyan}{branch}{reset} from {bold}{yellow}{full_name}{reset}");
@@ -916,25 +894,24 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
         ActivityOpType::MirrorSyncCreate => {}
         ActivityOpType::MirrorSyncDelete => {}
         ActivityOpType::ApprovePullRequest => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!("{bold}{actor_name}{reset} approved {bold}{yellow}{name}#{id}{reset}");
         }
         ActivityOpType::RejectPullRequest => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!(
                 "{bold}{actor_name}{reset} suggested changes for {bold}{yellow}{name}#{id}{reset}"
             );
         }
         ActivityOpType::CommentPull => {
-            let (name, id) = issue_name(repo?, content?)?;
+            let name = repo_name(repo?)?;
+            let (id, _) = issue_content(content?)?;
             println!("{bold}{actor_name}{reset} commented on pull request {bold}{yellow}{name}#{id}{reset}");
         }
         ActivityOpType::PublishRelease => {
-            let repo = repo?;
-            let full_name = repo
-                .full_name
-                .as_deref()
-                .ok_or_eyre("repo does not have full name")?;
+            let full_name = repo_name(repo?)?;
             let content = content?;
             println!("{bold}{actor_name}{reset} created release {bold}{bright_cyan}\"{content}\"{reset} to {bold}{yellow}{full_name}{reset}");
         }
