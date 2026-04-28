@@ -362,6 +362,7 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
+    /// Migrate or mirror an existing repository
     Migrate {
         /// URL of the repo to migrate
         repo: String,
