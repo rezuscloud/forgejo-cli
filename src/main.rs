@@ -238,9 +238,7 @@ async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std:
         options.mode(0o600);
     }
 
-    let file = tokio::fs::OpenOptions::from(options)
-        .open(&path)
-        .await?;
+    let file = tokio::fs::OpenOptions::from(options).open(&path).await?;
     Ok((file, path))
 }
 
