@@ -228,12 +228,17 @@ async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std:
     if let Some(ext) = ext {
         path.set_extension(ext);
     }
-    let file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(&path)
-        .await?;
+
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).read(true).write(true);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+
+    let file = tokio::fs::OpenOptions::from(options).open(&path).await?;
     Ok((file, path))
 }
 
