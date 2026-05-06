@@ -1,3 +1,5 @@
+#[cfg(feature = "update-check")]
+use crate::ftl_println;
 use clap::Args;
 #[cfg(feature = "update-check")]
 use eyre::OptionExt;
@@ -19,6 +21,7 @@ const BUILD_TYPE: &str = match option_env!("BUILD_TYPE") {
 
 impl VersionCommand {
     pub async fn run(self) -> eyre::Result<()> {
+        // This is intentionally left unlocalized, since it's more for the maintainers than the user.
         println!("{} v{}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION"));
         if self.verbose {
             println!("user agent: {}", crate::USER_AGENT);
@@ -57,21 +60,24 @@ impl VersionCommand {
 
             match current_ver.cmp(&latest_ver) {
                 Ordering::Less => {
-                    let latest_url = latest
+                    let url = latest
                         .html_url
                         .ok_or_eyre("latest release does not have url")?;
-                    println!("New version available: {latest_ver}");
-                    println!("Get it at {}", latest_url);
+                    ftl_println!(
+                        "msg-version-update_check-behind",
+                        new_version = latest_ver.to_string(),
+                        url = url.as_str()
+                    );
                 }
                 Ordering::Equal => {
-                    println!("Up to date!");
+                    ftl_println!("msg-version-update_check-current");
                 }
                 Ordering::Greater => {
-                    println!("You are ahead of the latest published version");
+                    ftl_println!("msg-version-update_check-ahead");
                 }
             }
         } else {
-            println!("Check for a new version with `fj version --check`");
+            ftl_println!("msg-version-update_check-hint");
         }
         Ok(())
     }

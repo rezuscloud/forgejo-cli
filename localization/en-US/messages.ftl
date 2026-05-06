@@ -240,3 +240,11 @@ msg-release-asset-download-success = { IS_NONE($file) ->
 msg-tag-create-success = created tag {$name}
 
 msg-tag-delete-success = created tag {$name}
+
+msg-version-update_check-hint = Check for a new version with `fj version --check`
+msg-version-update_check-current = Up to date!
+msg-version-update_check-behind =
+    New version available: {$new_version}
+    Get it at {$url}
+msg-version-update_check-ahead = You are ahead of the latest published version
+
