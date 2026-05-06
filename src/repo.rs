@@ -1617,12 +1617,13 @@ async fn cmd_clone_repo(
 
     let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}")));
 
-    let local_repo = clone_repo(repo_full_name, clone_url, &path, identity_file.as_deref())?;
+    let local_repo = clone_repo(clone_url, &path, identity_file.as_deref())?;
 
     if let Some(parent) = repo_data.parent.as_deref() {
         local_repo.remote("upstream", git_url(&parent, ssh)?.as_str())?;
     }
 
+    println!("Cloned {} into {}", repo_full_name, path.display());
     Ok(())
 }
 
@@ -1639,7 +1640,6 @@ pub fn git_url(repo: &forgejo_api::structs::Repository, ssh: bool) -> eyre::Resu
 }
 
 pub fn clone_repo(
-    repo_name: &str,
     url: &url::Url,
     path: &std::path::Path,
     identity_file: Option<&std::path::Path>,
@@ -1710,7 +1710,6 @@ pub fn clone_repo(
     if fancy {
         print!("{clear_line}{show_cursor}\r");
     }
-    println!("Cloned {} into {}", repo_name, path.display());
     Ok(local_repo)
 }
 

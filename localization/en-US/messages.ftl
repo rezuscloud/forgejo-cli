@@ -248,3 +248,6 @@ msg-version-update_check-behind =
     Get it at {$url}
 msg-version-update_check-ahead = You are ahead of the latest published version
 
+msg-wiki-clone-success = Cloned {$repo}'s wiki into {$path}
+
+
