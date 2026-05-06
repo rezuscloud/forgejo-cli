@@ -237,4 +237,6 @@ msg-release-asset-download-success = { IS_NONE($file) ->
         [some] Downloaded {$asset} into {$file}
     }
 
+msg-tag-create-success = created tag {$name}
 
+msg-tag-delete-success = created tag {$name}
