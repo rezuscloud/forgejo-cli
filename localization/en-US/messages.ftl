@@ -150,6 +150,84 @@ msg-org-team-member-add-success =
 msg-org-team-member-rm-success =
     Removed {STYLE("bold", "bright-cyan")}{$org}/{$repo}{STYLE("reset")} from team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 
+msg-issue-create-no_templates = {$owner}/{$repo} does not have any issue templates
+msg-issue-create-templates_required =
+    {$owner}/{$repo} requires using a template.
+    Please choose one with `--template <NAME>`
+msg-issue-create-templates_enabled =
+    {$owner}/{$repo} uses issue templates.
+    Please choose one with `--template <NAME>`,
+    or use `--no-template` to write one from scratch",
+msg-issue-create-success = created issue #{$number}: {$title}
+
+msg-issue-view-header = 
+    {STYLE("yellow")}{$title} {STYLE("dark-grey")}#{$number}{STYLE("reset")}"
+    By {STYLE("white")}{$author}{STYLE("reset")} {-dash} {$state ->
+        [open] {STYLE("bright-green")}Open{STYLE("reset")}
+        [closed] {STYLE("bright-red")}Closed{STYLE("reset")}
+       *[other] $state
+    }
+msg-issue-view-comment_count = { $comments ->
+        [one] 1 comments
+       *[other] {$comments} comments
+    }
+
+msg-issue-search-total = { $issues ->
+        [one] 1 issue
+       *[other] {$issues} issues
+    }
+msg-issue-search-entry = #{$number}: {$title} (by {$author})
+
+msg-issue-templates-none = No issue templates or contact info.
+msg-issue-templates-blank_allowed = '--no-template' is allowed
+msg-issue-templates-blank_not_allowed = '--no-template' is not allowed
+
+msg-issue-view-comments-comment_header = { IS_NONE($full_name) ->
+       *[none] {STYLE("bold", "bright-cyan")}{$username}{STYLE("reset")} said:
+        [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("dark-gray")}({$username}){STYLE("reset")} said:
+    }
+msg-issue-view-comments-attachments = { $attachments ->
+        [one] 1 attachment
+       *[other] {$attachments} attachments
+    }
+
+msg-issue-edit-title-empty = title cannot be empty
+msg-issue-edit-title-no_newlines = title cannot contain newlines
+
+msg-issue-assign-success =
+    assigned {$added ->
+        [one] 1 user
+       *[other] {$added} users
+    } to {$owner}/{$repo}#{$number} {$duplicate ->
+        [0] {""}
+        [one] {$added ->
+            [0] (user was already assigned)
+           *[other] (1 user was already assigned)
+        }
+       *[other] {$added ->
+            [0] (all users were already assigned)
+           *[other] ({$duplicate} users were already assigned)
+        }
+    }
+
+msg-issue-unassign-success =
+    unassigned {$removed ->
+        [one] 1 user
+       *[other] {$removed} users
+    } from {$owner}/{$repo}#{$number} {$duplicate ->
+        [0] {""}
+        [one] {$removed ->
+            [0] (user was already not assigned)
+           *[other] (1 user was already not assigned)
+        }
+       *[other] {$removed ->
+            [0] (all users were already not assigned)
+           *[other] ({$duplicate} users were already not assigned)
+        }
+    }
+
+msg-issue-close-success = Closed issue #{$number}: "{$title}"
+
 msg-pr-create-agit_push_cfg_prompt = (y/N/?) 
     .option-yes = Yes
     .option-yes = yes

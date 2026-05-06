@@ -363,6 +363,18 @@ macro_rules! ftl_bail {
 }
 
 #[macro_export]
+macro_rules! ftl_ensure {
+    ($cond:expr, $msg_id:expr) => {
+        $crate::ftl_ensure!($msg_id,)
+    };
+    ($cond:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+        {
+            eyre::ensure!($cond, "{}", $crate::ftl_format!($msg_id, $($var_name $(= $var_val)*),*))
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! ftl_readline {
     ($msg_id:expr) => {
         $crate::ftl_readline!($msg_id,)
