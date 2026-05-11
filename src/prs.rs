@@ -13,8 +13,10 @@ use forgejo_api::{
 };
 use futures::stream::{StreamExt, TryStreamExt};
 
+use crate::{ftl_bail, ftl_ensure, ftl_eprintln, ftl_eyre, ftl_format, ftl_println};
 use crate::{
     issues::IssueId,
+    localization::AsFluent,
     repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
@@ -529,19 +531,6 @@ impl PrCommand {
 }
 
 pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::Result<()> {
-    let crate::SpecialRender {
-        dash,
-
-        bright_red,
-        bright_green,
-        bright_magenta,
-        yellow,
-        dark_grey,
-        light_grey,
-        white,
-        reset,
-        ..
-    } = crate::special_render();
     let pr = try_get_pr(repo, api, id).await?;
     let id = pr.number.ok_or_eyre("pr does not have number")?;
     let repo = repo_name_from_pr(&pr)?;
@@ -576,10 +565,10 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
         .ok_or_else(|| eyre::eyre!("pr does not have state"))?;
     let is_merged = pr.merged.unwrap_or_default();
     let state = match state {
-        StateType::Open if is_draft => format!("{light_grey}Draft{reset}"),
-        StateType::Open => format!("{bright_green}Open{reset}"),
-        StateType::Closed if is_merged => format!("{bright_magenta}Merged{reset}"),
-        StateType::Closed => format!("{bright_red}Closed{reset}"),
+        StateType::Open if is_draft => "draft",
+        StateType::Open => "open",
+        StateType::Closed if is_merged => "merged",
+        StateType::Closed => "closed",
     };
     let base = pr.base.as_ref().ok_or_eyre("pr does not have base")?;
     let base_repo = base
@@ -619,15 +608,23 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
         .as_ref()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
     let comments = pr.comments.unwrap_or_default();
-    println!("{yellow}{title}{reset} {dark_grey}#{id}{reset}");
-    println!(
-        "By {white}{username}{reset} {dash} {state} {dash} {bright_green}+{additions} {bright_red}-{deletions}{reset}"
-    );
-    if head_name.is_empty() {
-        println!("Into `{base_name}`");
+
+    let head_branch = if head_name.is_empty() {
+        None
     } else {
-        println!("From `{head_name}` into `{base_name}`");
-    }
+        Some(head_name)
+    };
+    ftl_println!(
+        "msg-pr-view-header",
+        title,
+        number = id,
+        username,
+        state,
+        additions,
+        deletions,
+        head_branch,
+        base_branch = base_name
+    );
 
     crate::render_label_list(pr.labels.as_deref().unwrap_or_default())?;
 
@@ -641,11 +638,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
 
     crate::repo::archived_warning(&repo_info)?;
 
-    if comments == 1 {
-        println!("1 comment");
-    } else {
-        println!("{comments} comments");
-    }
+    ftl_println!("msg-pr-view-comment_count", comments);
     Ok(())
 }
 
@@ -784,27 +777,11 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                 .as_deref()
                 .ok_or_eyre("pr merger does not have login")?;
             let merged_at = pr.merged_at.ok_or_eyre("pr does not have merge date")?;
-            let date_format = time::macros::format_description!(
-                "on [month repr:long] [day], [year], at [hour repr:12]:[minute] [period]"
+            ftl_println!(
+                "msg-pr-status-merged",
+                merged_by,
+                merged_at = merged_at.ftl()
             );
-            let tz_format = time::macros::format_description!(
-                "[offset_hour padding:zero sign:mandatory]:[offset_minute]"
-            );
-            let (merged_at, show_tz) =
-                if let Ok(local_offset) = time::UtcOffset::current_local_offset() {
-                    let merged_at = merged_at.to_offset(local_offset);
-                    (merged_at, false)
-                } else {
-                    (merged_at, true)
-                };
-            print!(
-                "{bright_magenta}Merged{reset} by {merged_by} {}",
-                merged_at.format(date_format)?
-            );
-            if show_tz {
-                print!("{}", merged_at.format(tz_format)?);
-            }
-            println!();
         }
         PrStatus::Open {
             pr,
@@ -812,22 +789,17 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
         } => {
             let state = pr.state.ok_or_eyre("pr does not have state")?;
             let is_draft = pr.title.as_deref().is_some_and(|s| s.starts_with("WIP:"));
-            match state {
-                StateType::Open => {
-                    if is_draft {
-                        println!("{light_grey}Draft{reset} {dash} Can't merge draft PR")
-                    } else {
-                        print!("{bright_green}Open{reset} {dash} ");
-                        let mergeable = pr.mergeable.ok_or_eyre("pr does not have mergeable")?;
-                        if mergeable {
-                            println!("Can be merged");
-                        } else {
-                            println!("{bright_red}Merge conflicts{reset}");
-                        }
-                    }
-                }
-                StateType::Closed => println!("{bright_red}Closed{reset} {dash} Reopen to merge"),
-            }
+            let state = match state {
+                StateType::Open if is_draft => "draft",
+                StateType::Open => "open",
+                StateType::Closed => "closed",
+            };
+            let mergeable = pr.mergeable.ok_or_eyre("pr does not have mergeable")?;
+            ftl_println!(
+                "msg-pr-status-header",
+                state,
+                mergeable = if mergeable { "yes" } else { "no" }
+            );
 
             use forgejo_api::structs::CommitStatusState;
 
@@ -841,14 +813,14 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                     .as_deref()
                     .ok_or_eyre("status does not have context")?;
                 print!("{bullet} ");
-                match state {
-                    CommitStatusState::Success => print!("{bright_green}Success{reset}"),
-                    CommitStatusState::Pending => print!("{yellow}Pending{reset}"),
-                    CommitStatusState::Warning => print!("{bright_yellow}Warning{reset}"),
-                    CommitStatusState::Failure => print!("{bright_red}Failure{reset}"),
-                    CommitStatusState::Error => print!("{bright_red}Error{reset}"),
+                let state = match state {
+                    CommitStatusState::Success => "success",
+                    CommitStatusState::Pending => "pending",
+                    CommitStatusState::Warning => "warning",
+                    CommitStatusState::Failure => "failure",
+                    CommitStatusState::Error => "error",
                 };
-                println!(" {dash} {context}");
+                ftl_println!("msg-pr-status-entry", state, context);
             }
         }
     }
@@ -856,17 +828,6 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
 }
 
 fn print_pr_review(review: &PullReview) -> eyre::Result<()> {
-    let crate::SpecialRender {
-        bold,
-        bright_green,
-        bright_red,
-        bright_yellow,
-        dark_grey,
-        light_grey,
-        reset,
-        ..
-    } = crate::special_render();
-
     let reviewer = review
         .user
         .as_ref()
@@ -874,35 +835,17 @@ fn print_pr_review(review: &PullReview) -> eyre::Result<()> {
         .or_else(|| review.team.as_ref().and_then(|t| t.name.as_deref()))
         .unwrap_or("???");
 
-    let state_label = review.state.as_deref().unwrap_or("???");
-    match state_label {
-        "APPROVED" => print!("{bright_green}{state_label}{reset}"),
-        "REQUEST_CHANGES" => print!("{bright_red}CHANGES REQUESTED{reset}"),
-        "COMMENT" => print!("{bright_yellow}{state_label}{reset}"),
-        "PENDING" => print!("{light_grey}{state_label}{reset}"),
-        _ => print!("{state_label}"),
+    let review_type = match review.state.as_deref() {
+        Some("APPROVED") => "approved",
+        Some("REQUEST_CHANGES") => "changes-requested",
+        Some("COMMENT") => "comment",
+        Some("PENDING") => "pending",
+        _ => "other",
     };
 
-    println!(" by {bold}{reviewer}{reset}");
-
-    print!("{dark_grey}");
-
     let comments_count = review.comments_count.unwrap_or_default();
-    if comments_count == 1 {
-        print!("1 code comment");
-    } else {
-        print!("{comments_count} code comments");
-    }
-
-    print!(", ");
-
     let review_ts = review.updated_at.or(review.submitted_at);
-    if let Some(ts) = review_ts {
-        let timestamp = ts.format(&time::format_description::well_known::Rfc2822)?;
-        print!("made on {timestamp}");
-    }
-
-    let review_label = if review.stale.unwrap_or(false) {
+    let state = if review.stale.unwrap_or(false) {
         "stale"
     } else if review.dismissed.unwrap_or(false) {
         "dismissed"
@@ -910,11 +853,14 @@ fn print_pr_review(review: &PullReview) -> eyre::Result<()> {
         ""
     };
 
-    if !review_label.is_empty() {
-        print!(" {bold}{light_grey}({review_label}){reset}");
-    }
-
-    println!("{reset}");
+    ftl_println!(
+        "msg-pr-review-list-review_header",
+        review_type,
+        reviewer,
+        comments = comments_count,
+        timestamp = review_ts.map(|ts| ts.ftl()),
+        state
+    );
 
     if let Some(body) = &review.body {
         if !body.trim().is_empty() {
@@ -978,8 +924,8 @@ fn print_pr_reviews_comment(
         // group of comments on the same file and position.
         if first {
             first = false;
-            println!("---");
-            println!("In {bold}{path}:{position}{reset}:");
+            println!();
+            ftl_println!("msg-pr-review-list-comment_position", path, position);
             if let Some(diff_hunk) = &comment.diff_hunk {
                 println!("{dark_grey}{diff_hunk}{reset}");
             }
@@ -992,12 +938,11 @@ fn print_pr_reviews_comment(
             .unwrap_or("???");
 
         let resolver = comment.resolver.as_ref().and_then(|u| u.login.as_deref());
-
-        print!("{bold}{bright_cyan}{user}{reset} commented");
-        if let Some(resolver) = resolver {
-            print!(" (resolved by {resolver})");
-        }
-        println!(":");
+        ftl_println!(
+            "msg-pr-review-list-comment_position",
+            commenter = user,
+            resolver
+        );
         println!("{}", crate::markdown(body));
     }
 
@@ -1111,11 +1056,11 @@ async fn create_pr(
                     .ok_or_eyre("repo does not have ssh url")?,
             );
 
-            eyre::ensure!(
+            ftl_ensure!(
                 remote_host == repo_http_host || remote_host == repo_ssh_host,
-                "cannot create pull request across instances; base is on {}, while head is tracking {}",
-                repo_http_host,
-                remote_host,
+                "msg-pr-create-cross_instance",
+                base_instance = repo_http_host,
+                head_instance = remote_host
             );
 
             let remote_head_name =
@@ -1284,7 +1229,7 @@ async fn create_pr(
                     .title
                     .as_ref()
                     .ok_or_else(|| eyre::eyre!("pr does not have title"))?;
-                println!("created pull request #{}: {}", number, title);
+                ftl_println!("msg-pr-create-success", number, title);
             }
             // no head means agit
             None => {
@@ -1395,7 +1340,7 @@ async fn create_pr(
                 // needed so the mutable reference later is valid
                 drop(push_options);
 
-                println!("created new PR: \"{title}\"");
+                ftl_println!("msg-pr-create-agit_success", title);
 
                 let merge_setting_name = format!("branch.{current_branch_name}.merge");
                 let remote_setting_name = format!("branch.{current_branch_name}.remote");
@@ -1409,8 +1354,6 @@ async fn create_pr(
                 let branch_merge_is_agit = cfg_branch_merge.is_some_and(|s| s == topic_setting);
                 let branch_remote_is_agit = cfg_branch_remote.is_some_and(|s| s == topic_setting);
                 if !default_is_upstream || !branch_merge_is_agit || !branch_remote_is_agit {
-                    println!("Would you like to set the needed git config");
-                    println!("items so that `git push` works for this pr?");
                     loop {
                         let response = crate::ftl_prompt!("msg-pr-create-agit_push_cfg_prompt")?;
                         match response {
@@ -1421,13 +1364,11 @@ async fn create_pr(
                                 git_config.set_str(&remote_setting_name, remote)?;
                                 let crate::SpecialRender { bold, reset, .. } =
                                     crate::special_render();
-                                println!("{bold}Note:{reset}");
-                                println!("  `git push --force[-with-lease]` is not supported for AGit PRs.");
-                                println!("  You can use `git push -o force=true` instead.");
+                                ftl_println!("msg-pr-create-agit_force_push_warning");
                                 break;
                             }
                             Some("help") => {
-                                println!("This would set the following config options:");
+                                ftl_println!("msg-pr-create-agit_push_cfg_warning");
                                 println!("  push.default = upstream");
                                 println!("  branch.{current_branch_name}.merge = {topic_setting}");
                             }
@@ -1506,7 +1447,13 @@ async fn merge_pr(
             _ => (),
         }
     }
-    let default_message = || format!("Reviewed-on: {pr_html_url}");
+    let default_message = || {
+        ftl_format!(
+            "msg-pr-merge-default_message",
+            pr_url = pr_html_url.as_str()
+        )
+        .into_owned()
+    };
     let message = match message {
         Some(Some(s)) => s,
         Some(None) => {
@@ -1527,20 +1474,20 @@ async fn merge_pr(
         head_commit_id: None,
         merge_when_checks_succeed: None,
     };
-    let pr_number = pr_info.number.ok_or_eyre("pr does not have number")?;
-    api.repo_merge_pull_request(repo.owner(), repo.name(), pr_number, request)
+    let number = pr_info.number.ok_or_eyre("pr does not have number")?;
+    api.repo_merge_pull_request(repo.owner(), repo.name(), number, request)
         .await?;
 
-    let pr_title = pr_info
+    let title = pr_info
         .title
         .as_deref()
         .ok_or_eyre("pr does not have title")?;
     let pr_base = pr_info.base.as_ref().ok_or_eyre("pr does not have base")?;
-    let base_label = pr_base
+    let base_branch = pr_base
         .label
         .as_ref()
         .ok_or_eyre("base does not have label")?;
-    println!("Merged PR #{pr_number} \"{pr_title}\" into `{base_label}`");
+    ftl_println!("msg-pr-merge-success", number, title, base_branch);
     Ok(())
 }
 
@@ -1557,10 +1504,7 @@ async fn checkout_pr(
     let mut options = git2::StatusOptions::new();
     options.include_ignored(false);
     let has_no_uncommitted = local_repo.statuses(Some(&mut options)).unwrap().is_empty();
-    eyre::ensure!(
-        has_no_uncommitted,
-        "Cannot checkout PR, working directory has uncommitted changes"
-    );
+    ftl_ensure!(has_no_uncommitted, "msg-pr-checkout-dirty");
 
     let remote_repo = match pr {
         PrNumber::Parent(_) => {
@@ -1569,7 +1513,7 @@ async fn checkout_pr(
             *this_repo
                 .parent
                 .take()
-                .ok_or_else(|| eyre::eyre!("cannot get parent repo, {name} is not a fork"))?
+                .ok_or_else(|| ftl_eyre!("msg-pr-checkout-not_fork", repo = name))?
         }
         PrNumber::This(_) => api.repo_get(repo.owner(), repo.name()).await?,
     };
@@ -1633,13 +1577,14 @@ async fn checkout_pr(
         .checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
         .unwrap();
 
-    let pr_title = pull_data.title.as_deref().ok_or_eyre("pr has no title")?;
-    println!("Checked out PR #{}: {pr_title}", pr.number());
-    if branch_is_new {
-        println!("On new branch {branch_name}");
-    } else {
-        println!("Updated branch to latest commit");
-    }
+    let title = pull_data.title.as_deref().ok_or_eyre("pr has no title")?;
+    ftl_println!(
+        "msg-pr-checkout-success",
+        number = pr.number(),
+        title,
+        new_branch = if branch_is_new { "yes" } else { "no" },
+        branch_name
+    );
 
     Ok(())
 }
@@ -1672,11 +1617,7 @@ async fn view_prs(
     let (_, prs) = api
         .issue_list_issues(repo.owner(), repo.name(), query)
         .await?;
-    if prs.len() == 1 {
-        println!("1 pull request");
-    } else {
-        println!("{} pull requests", prs.len());
-    }
+    ftl_println!("msg-pr-search-count", pull_requests = prs.len());
     for pr in prs {
         let number = pr
             .number
@@ -1689,11 +1630,11 @@ async fn view_prs(
             .user
             .as_ref()
             .ok_or_else(|| eyre::eyre!("pr does not have creator"))?;
-        let username = user
+        let author = user
             .login
             .as_ref()
             .ok_or_else(|| eyre::eyre!("user does not have login"))?;
-        println!("#{}: {} (by {})", number, title, username);
+        ftl_println!("msg-pr-search-entry", number, title, author);
     }
     Ok(())
 }
@@ -1722,7 +1663,7 @@ async fn view_diff(
         let mut view = diff.clone();
         crate::editor(&mut view, Some(diff_type)).await?;
         if view != diff {
-            println!("changes made to the diff will not persist");
+            ftl_eprintln!("msg-pr-view-diff-volatile");
         }
     } else {
         println!("{diff}");
@@ -1882,7 +1823,7 @@ pub async fn view_pr_reviews(
         .await?;
 
     if reviews.is_empty() {
-        println!("No reviews.");
+        ftl_println!("msg-pr-review-list-none");
         return Ok(());
     }
 
@@ -1898,7 +1839,7 @@ pub async fn view_pr_reviews(
         if !first {
             first = true;
         } else {
-            println!("---");
+            println!();
         }
         print_pr_review(review)?;
         if comments {
@@ -1915,7 +1856,7 @@ pub async fn view_pr_reviews(
 
     // if first is still false, that means all reviews were stale or dismissed and nothing was printed.
     if !first {
-        println!("Only stale or dismissed reviews, use -a to display them.");
+        ftl_println!("msg-pr-review-list-only_stale");
     }
 
     Ok(())
@@ -1943,7 +1884,7 @@ async fn try_get_pr_number(
         None => {
             let pr = guess_pr(repo, api)
                 .await
-                .wrap_err("could not guess pull request number, please specify")?;
+                .wrap_err_with(|| ftl_format!("msg-pr-couldnt_guess"))?;
             let number = pr.number.ok_or_eyre("pr does not have number")?;
             let repo = repo_name_from_pr(&pr)?;
             (repo, number)
@@ -1964,7 +1905,7 @@ async fn try_get_pr(
         }
         None => guess_pr(repo, api)
             .await
-            .wrap_err("could not guess pull request number, please specify")?,
+            .wrap_err_with(|| ftl_format!("msg-pr-couldnt_guess"))?,
     };
     Ok(pr)
 }
@@ -2055,7 +1996,7 @@ async fn guess_pr(
         }
     }
 
-    eyre::bail!("could not find PR");
+    ftl_bail!("msg-pr-not_found");
 }
 
 async fn find_pr_from_branch(

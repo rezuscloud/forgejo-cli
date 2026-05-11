@@ -228,6 +228,75 @@ msg-issue-unassign-success =
 
 msg-issue-close-success = Closed issue #{$number}: "{$title}"
 
+msg-pr-couldnt_guess = could not guess pull request number, please specify
+msg-pr-not_found = could not find PR
+
+msg-pr-view-header =
+    {STYLE("yellow")}{$title} {STYLE("dark-grey")}#{$number}{STYLE("reset")}
+    By {STYLE("white")}{$username}{STYLE("reset")} {-dash} {$state ->
+        [draft] {STYLE("light-grey")}Draft{STYLE("reset")}
+        [open] {STYLE("bright-green")}Open{STYLE("reset")}
+        [merged] {STYLE("bright-magenta")}Merged{STYLE("reset")}
+        [closed] {STYLE("bright-red")}Closed{STYLE("reset")}
+       *[other] $state
+    } {-dash} {STYLE("bright-green")}+{$additions} {STYLE("bright-red")}-{$deletions}{STYLE("reset")}
+    {IS_NONE($head_branch) ->
+       *[none] Into `{$base_branch}`
+        [some] From `{$head_branch}` into `{$base_branch}`
+    }
+msg-pr-view-comment_count = { $comments ->
+        [one] 1 comments
+       *[other] {$comments} comments
+    }
+
+msg-pr-status-merged = {STYLE("bright-magenta")}Merged{STYLE("reset")} by {$merged_by} on {DATETIME($created_at, dateStyle: "long", timeStyle: "long")}
+msg-pr-status-header = {$state ->
+        [draft] {STYLE("light-grey")}Draft{STYLE("reset")} {-dash} Can't merge draft PR
+        [open] {STYLE("bright_green")}Open{STYLE("reset")} {-dash} {$mergeable ->
+           *[yes] Can be merged
+            [no] {STYLE("bright-red")}Merge conflicts{STYLE("reset")}
+        }
+        [closed] {STYLE("bright-red")}Closed{STYLE("reset")} {-dash} Reopen to merge
+       *[other] Unknown
+    }
+msg-pr-status-entry = {$state ->
+        [success] {STYLE("bright_green")}Success{STYLE("reset")}
+        [pending] {STYLE("yellow")}Pending{STYLE("reset")}
+        [warning] {STYLE("bright_yellow")}Warning{STYLE("reset")}
+        [failure] {STYLE("bright_red")}Failure{STYLE("reset")}
+        [error] {STYLE("bright_red")}Error{STYLE("reset")}
+       *[other] Unknown
+    } {-dash} {$context}
+
+msg-pr-review-list-none = No reviews.
+msg-pr-review-list-only_stale = Only stale or dismissed reviews, use --all to display them.
+msg-pr-review-list-review_header = {$review_type ->
+        [approved] {STYLE("bright-green")}Approved{STYLE("reset")}
+        [changes-requested] {STYLE("bright-yellow")}Changes requested{STYLE("reset")}
+        [comment] {STYLE("bright-yellow")}Comment{STYLE("reset")}
+        [pending] {STYLE("light-grey")}Pending Review{STYLE("reset")}
+       *[other] Unknown
+    } by {STYLE("bold")}{$reviewer}{STYLE("reset")}
+    {STYLE("dark-grey")}{$comments ->
+        [one] 1 comment
+       *[other] {$comments} comments
+    }, made on {DATETIME($timestamp, dateStyle: "long", timeStyle: "short")}{STYLE("reset")} {$state ->
+        [stale] {STYLE("bold")}(stale){STYLE("reset")}
+        [dismissed] {STYLE("bold")}(dismissed){STYLE("reset")}
+       *[other] {""}
+    }
+msg-pr-review-list-comment_position = In {STYLE("bold")}{$path}:{$position}{STYLE("reset")}:
+msg-pr-review-list-comment_header = {STYLE("bold", "bright-cyan")}{$commenter}{STYLE("reset")} commented {IS_NONE($resolver) ->
+       *[none] {""}
+        [some] (resolved by {$resolver})
+    }:
+
+msg-pr-create-cross_instance = cannot create pull request across instances; base is on {$base_instance}, while head is tracking {$head_instance}
+msg-pr-create-success = created pull request #{$number}: {$title}
+msg-pr-create-agit_success = created pull request: {$title}
+msg-pr-create-agit_push_cfg_question =
+    Would you like to set the needed git config
+    items so that `git push` works for this pr?
 msg-pr-create-agit_push_cfg_prompt = (y/N/?) 
     .option-yes = Yes
     .option-yes = yes
@@ -242,6 +311,33 @@ msg-pr-create-agit_push_cfg_prompt = (y/N/?)
     .option-help = H
     .option-help = help
     .option-help = Help
+msg-pr-create-agit_force_push_warning =
+    {STYLE("bold")}Note:{STYLE("reset")}
+      `git push --force[-with-lease]` is not supported for AGit PRs.
+      You can use `git push -o force=true` instead.
+msg-pr-create-agit_push_cfg_help = This would set the following config options:
+
+msg-pr-merge-commit_title_unsupported-rebase = rebase does not support commit title
+msg-pr-merge-commit_title_unsupported-ff = ff-only does not support commit title
+msg-pr-merge-commit_title_unsupported-manual = manually merged does not support commit title
+msg-pr-merge-default_message = Reviewed-on: {$pr_url}
+msg-pr-merge-success = Merged PR #{$number} \"{$title}\" into `{$base_branch}`
+
+msg-pr-checkout-dirty = Cannot checkout PR; working directory has uncommitted changes
+msg-pr-checkout-not_fork = cannot get parent repo, {$repo} is not a fork
+msg-pr-checkout-success = Checked out PR #{$number}: {$title}
+    {$new_branch ->
+       *[yes] On new branch {$branch_name}
+        [no] Updated branch to latest commit
+    }
+
+msg-pr-search-count = {$pull_requests ->
+        [one] 1 pull request
+       *[other] {$pull_requests} pull requests
+    }
+msg-pr-search-entry = #{$number}: {$title} (by {$author})
+
+msg-pr-view-diff-volatile = changes made to the diff will not persist
 
 msg-repo-migrate-username_prompt = Username: 
 msg-repo-migrate-password_prompt = Password: 

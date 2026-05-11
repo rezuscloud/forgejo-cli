@@ -365,7 +365,7 @@ macro_rules! ftl_bail {
 #[macro_export]
 macro_rules! ftl_ensure {
     ($cond:expr, $msg_id:expr) => {
-        $crate::ftl_ensure!($msg_id,)
+        $crate::ftl_ensure!($cond, $msg_id,)
     };
     ($cond:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
