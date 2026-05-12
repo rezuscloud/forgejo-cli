@@ -344,9 +344,74 @@ msg-pr-search-entry = #{$number}: {$title} (by {$author})
 
 msg-pr-view-diff-volatile = changes made to the diff will not persist
 
+msg-repo-no_host_given = cannot find repo, no host specified
+msg-repo-no_info_given =
+    no repo info specified
+
+    If you're trying to operate on a repository in the current directory, try adding a remote
+    referencing the forgejo instance. If you have multiple remotes, try setting one as upstream to the
+    current branch. You may also specify a host explicitly using the `--host` argument.
+
+msg-repo-fallback_host-invalid_url = warn: `FJ_FALLBACK_HOST` is not set to a valid url
+
+msg-repo-arg_no_owner = repo name should be in the format [HOST/]OWNER/NAME
+
+msg-repo-name_needed = couldn't get repo name, please specify
+
+msg-repo-create-remote_exists = A remote named \"{$remote_name}\" already exists
+msg-repo-create-success = created new repo at {$url}
+msg-repo-create-detached_head = HEAD is not on a branch; cannot push to remote
+msg-repo-create-branch_invalid_utf8 = branch name invalid utf-8
+
+msg-repo-fork-conflicting_hosts = conflicting hosts {$host_a} and {$host_b}. please only specify one
+msg-repo-fork-success = Forked {$parent_owner}/{$parent_name} into {$fork_name}
+
+msg-repo-migrate-git_only = Migrating from a `git` service doesn't support migration items other than LFS. Please specify a different service or remove the included items
 msg-repo-migrate-username_prompt = Username: 
 msg-repo-migrate-password_prompt = Password: 
 msg-repo-migrate-token_prompt = Token: 
+msg-repo-migrate-migrating = Migrating...
+msg-repo-migrate-success = Done! View online at {$url}
+
+msg-repo-view-name = {$repo_name}
+msg-repo-view-is_fork = Fork of {$parent}
+msg-repo-view-is_mirror = Mirror of {$mirror_of}
+msg-repo-view-primary_language = Primary language is {$language}
+msg-repo-view-stars = {$stars ->
+        [one] 1 star
+       *[other] {$stars} stars
+    }
+msg-repo-view-watching = {$watching} watching
+msg-repo-view-forks = {$forks ->
+        [one] 1 fork
+       *[other] {$forks} forks
+    }
+msg-repo-view-issues = {$issues ->
+        [one] 1 issue
+       *[other] {$issues} issues
+    }
+msg-repo-view-prs = {$pull_requests ->
+        [one] 1 PR
+       *[other] {$pull_requests} PRs
+    }
+msg-repo-view-releases = {$releases ->
+        [one] 1 release
+       *[other] {$releases} releases
+    }
+msg-repo-view-external_tracker = Issue tracker is at {$url}
+msg-repo-view-url = View online at {$url}
+
+msg-repo-readme-none = Repo does not have a README
+
+msg-repo-clone-preparing = {"   "}Preparing...
+msg-repo-clone-downloading = {" "}Downloading... {NUMBER($percent, maximumFractionDigits: 2)}% ({NUMBER($size, maximumFractionDigits: 2)}{$units})
+msg-repo-clone-resolving = {"   "}Resolving... {NUMBER($percent, maximumFractionDigits: 2)}%
+msg-repo-clone-finishing_up = Finishing up...
+msg-repo-clone-success = Cloned {$repo} into {$path}
+
+msg-repo-star-success = Starred {$owner}/{$repo}!
+
+msg-repo-unstar-success = Removed star from {$owner}/{$repo}!
 
 msg-repo-delete-confirmation_prompt = Are you sure you want to delete {$owner}/{$name}? (y/N) 
     .yes =
@@ -359,6 +424,11 @@ msg-repo-delete-confirmation_prompt = Are you sure you want to delete {$owner}/{
         no
         N
         n
+msg-repo-delete-success = Deleted {$owner}/{$repo}
+msg-repo-delete-cancelled = Did not delete
+
+msg-repo-label-view-archived = (archived)
+msg-repo-label-view-no_description = (no description)
 
 msg-user-search-page_zero = There is no page 0
 msg-user-search-fail = Search failed

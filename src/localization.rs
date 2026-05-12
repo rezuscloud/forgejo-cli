@@ -247,6 +247,7 @@ macro_rules! ftl_write {
     };
     ($writer:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
         {
+            #[allow(unused)]
             use std::fmt::Write;
             if let Some((bundle, pattern)) = $crate::ftl_pattern!($msg_id) {
                 let args = $crate::ftl_args!($($var_name $(= $var_val)*),*);

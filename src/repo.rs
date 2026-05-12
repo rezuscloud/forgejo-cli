@@ -6,7 +6,10 @@ use forgejo_api::{structs::CreateRepoOption, Forgejo};
 use ssh2_config::ParseRule;
 use url::Url;
 
-use crate::{DisplayOptional, SpecialRender};
+use crate::{
+    ftl_bail, ftl_eprintln, ftl_eyre, ftl_format, ftl_print, ftl_println, ftl_write,
+    DisplayOptional, SpecialRender,
+};
 
 pub struct RepoInfo {
     url: Url,
@@ -198,14 +201,8 @@ impl RepoInfo {
                 name,
                 remote_name: final_remote_name,
             },
-            (None, Some(_)) => eyre::bail!("cannot find repo, no host specified"),
-            (None, None) => eyre::bail!(
-                "no repo info specified
-
-If you're trying to operate on a repository in the current directory, try adding a remote
-referencing the forgejo instance. If you have multiple remotes, try setting one as upstream to the
-current branch. You may also specify a host explicitly using the `--host` argument."
-            ),
+            (None, Some(_)) => ftl_bail!("msg-repo-no_host_given"),
+            (None, None) => ftl_bail!("msg-repo-no_info_given"),
         };
 
         Ok(info)
@@ -228,7 +225,7 @@ fn fallback_host() -> Option<Url> {
     if let Some(envvar) = std::env::var_os("FJ_FALLBACK_HOST") {
         let out = envvar.to_str().and_then(|x| x.parse::<Url>().ok());
         if out.is_none() {
-            println!("warn: `FJ_FALLBACK_HOST` is not set to a valid url");
+            ftl_eprintln!("msg-repo-fallback_host-invalid_url");
         }
         out
     } else {
@@ -320,7 +317,8 @@ impl std::fmt::Display for RepoArgError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RepoArgError::NoOwner => {
-                write!(f, "repo name should be in the format [HOST/]OWNER/NAME")
+                ftl_write!(f, "msg-repo-arg_no_owner");
+                Ok(())
             }
         }
     }
@@ -580,7 +578,7 @@ impl RepoCommand {
                 }
                 if let (Some(a), Some(b)) = (repo.host.as_deref(), host_name) {
                     if strip(a) != strip(b) {
-                        eyre::bail!("conflicting hosts {a} and {b}. please only specify one");
+                        ftl_bail!("msg-repo-fork-conflicting_hosts", host_a = a, host_b = b);
                     }
                 }
 
@@ -589,7 +587,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo_info.host_url()).await?;
                 let repo = repo_info
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 fork_repo(&api, repo, name).await?
             }
             RepoCommand::Migrate {
@@ -625,7 +623,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 view_repo(&api, repo).await?
             }
             RepoCommand::Readme { name, remote } => {
@@ -634,7 +632,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 view_repo_readme(&api, repo).await?
             }
             RepoCommand::Clone {
@@ -658,9 +656,13 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 api.user_current_put_star(name.owner(), name.name()).await?;
-                println!("Starred {}/{}!", name.owner(), name.name());
+                ftl_println!(
+                    "msg-repo-star-success",
+                    owner = name.owner(),
+                    repo = name.name()
+                );
             }
             RepoCommand::Unstar { repo, remote } => {
                 let repo =
@@ -668,10 +670,14 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let name = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 api.user_current_delete_star(name.owner(), name.name())
                     .await?;
-                println!("Removed star from {}/{}", name.owner(), name.name());
+                ftl_println!(
+                    "msg-repo-unstar-success",
+                    owner = name.owner(),
+                    repo = name.name()
+                );
             }
             RepoCommand::Delete { repo } => {
                 let repo = RepoInfo::get_current(host_name, Some(&repo), None, &keys)?;
@@ -685,7 +691,7 @@ impl RepoCommand {
                 let mut url = repo.host_url().clone();
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 url.path_segments_mut()
                     .map_err(|_| eyre!("url invalid"))?
                     .extend([repo.owner(), repo.name()]);
@@ -700,7 +706,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 list_repo_labels(&api, &repo, archived).await?;
             }
             RepoCommand::Labels {
@@ -718,7 +724,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
                 create_repo_label(&api, &repo, name, color, description, exclusive, archived)
                     .await?;
             }
@@ -730,7 +736,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
 
                 delete_repo_label(&api, &repo, id).await?;
             }
@@ -750,7 +756,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
 
                 edit_repo_label(
                     &api,
@@ -780,7 +786,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
 
                 api.repo_edit(
                     repo.owner(),
@@ -805,7 +811,7 @@ impl RepoCommand {
                 let api = keys.get_api(repo.host_url()).await?;
                 let repo = repo
                     .name()
-                    .ok_or_eyre("couldn't get repo name, please specify")?;
+                    .ok_or_else(|| ftl_eyre!("msg-repo-name_needed"))?;
 
                 let edit_option = match cmd {
                     UnitsSubcommand::Issues { enable } => forgejo_api::structs::EditRepoOption {
@@ -1132,7 +1138,7 @@ pub async fn create_repo(
 
         let upstream = remote.as_deref().unwrap_or("origin");
         if repo.find_remote(upstream).is_ok() {
-            eyre::bail!("A remote named \"{upstream}\" already exists");
+            ftl_bail!("msg-repo-create-remote_exists", remote_name = upstream);
         }
     }
     let repo_spec = CreateRepoOption {
@@ -1158,7 +1164,7 @@ pub async fn create_repo(
         .html_url
         .as_ref()
         .ok_or_else(|| eyre::eyre!("new_repo does not have html_url"))?;
-    println!("created new repo at {}", html_url);
+    ftl_println!("msg-repo-create-success", url = html_url.as_str());
 
     if remote.is_some() || push {
         let repo = git2::Repository::discover(".")?;
@@ -1170,11 +1176,11 @@ pub async fn create_repo(
         if push {
             let head = repo.head()?;
             if !head.is_branch() {
-                eyre::bail!("HEAD is not on a branch; cannot push to remote");
+                ftl_bail!("msg-repo-create-detached_head");
             }
             let branch_shorthand = head
                 .shorthand()
-                .ok_or_else(|| eyre!("branch name invalid utf-8"))?
+                .ok_or_else(|| ftl_eyre!("msg-repo-create-branch_invalid_utf8"))?
                 .to_owned();
             let branch_name = std::str::from_utf8(head.name_bytes())?.to_owned();
 
@@ -1197,15 +1203,15 @@ async fn fork_repo(api: &Forgejo, repo: &RepoName, name: Option<String>) -> eyre
         organization: None,
     };
     let new_fork = api.create_fork(repo.owner(), repo.name(), opt).await?;
-    let fork_full_name = new_fork
+    let fork_name = new_fork
         .full_name
         .as_deref()
         .ok_or_eyre("fork does not have name")?;
-    println!(
-        "Forked {}/{} into {}",
-        repo.owner(),
-        repo.name(),
-        fork_full_name
+    ftl_println!(
+        "msg-repo-fork-success",
+        parent_owner = repo.owner(),
+        parent_name = repo.name(),
+        fork_name
     );
 
     Ok(())
@@ -1351,7 +1357,7 @@ async fn migrate_repo(
     let service = service.unwrap_or_default();
 
     if service == MigrateService::Git && include.non_base_git() {
-        eyre::bail!("Migrating from a `git` service doesn't support migration items other than LFS. Please specify a different service or remove the included items");
+        ftl_bail!("msg-repo-migrate-git_only");
     }
 
     if repo.ends_with("/") {
@@ -1415,13 +1421,13 @@ async fn migrate_repo(
         wiki: Some(include.wiki),
     };
 
-    println!("Migrating...");
+    ftl_println!("msg-repo-migrate-migrating");
     let new_repo = api.repo_migrate(migrate_options).await?;
     let new_repo_url = new_repo
         .html_url
         .as_ref()
         .ok_or_eyre("new repo doesnt have url")?;
-    println!("Done! View online at {new_repo_url}");
+    ftl_println!("msg-repo-migrate-success", url = new_repo_url.as_str());
 
     Ok(())
 }
@@ -1436,19 +1442,22 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
         reset,
         ..
     } = crate::special_render();
-    println!("{}", repo.full_name.as_deref().ok_or_eyre("no full name")?);
-
-    if let Some(parent) = &repo.parent {
-        println!(
-            "Fork of {}",
-            parent.full_name.as_ref().ok_or_eyre("no full name")?
+    ftl_println!(
+        "msg-repo-view-name",
+        repo_name = repo.full_name.as_deref().ok_or_eyre("no full name")?
+    );
+    if let Some(parent) = repo.parent.as_ref() {
+        ftl_println!(
+            "msg-repo-view-is_fork",
+            parent = parent.full_name.as_deref()
         );
     }
     if repo.mirror == Some(true) {
-        if let Some(original) = &repo.original_url {
-            println!("Mirror of {original}")
-        }
-    }
+        ftl_println!(
+            "msg-repo-view-is_fork",
+            mirror_of = repo.original_url.as_ref().map(|url| url.as_str())
+        );
+    };
     let desc = repo.description.as_deref().unwrap_or_default();
     // Don't use body::markdown, this is plain text.
     if !desc.is_empty() {
@@ -1463,75 +1472,67 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
 
     archived_warning(&repo)?;
 
-    let lang = repo.language.as_deref().unwrap_or_default();
-    if !lang.is_empty() {
-        println!("Primary language is {lang}");
+    let language = repo.language.as_deref().unwrap_or_default();
+    if !language.is_empty() {
+        ftl_println!("msg-repo-view-primary_language", language);
     }
 
-    let stars = repo.stars_count.unwrap_or_default();
-    if stars == 1 {
-        print!("{stars} star {dash} ");
-    } else {
-        print!("{stars} stars {dash} ");
-    }
-
-    let watchers = repo.watchers_count.unwrap_or_default();
-    print!("{watchers} watching {dash} ");
-
-    let forks = repo.forks_count.unwrap_or_default();
-    if forks == 1 {
-        print!("{forks} fork");
-    } else {
-        print!("{forks} forks");
-    }
+    ftl_print!(
+        "msg-repo-view-stars",
+        stars = repo.stars_count.unwrap_or_default()
+    );
+    print!(" {dash} ");
+    ftl_print!(
+        "msg-repo-view-watching",
+        watching = repo.watchers_count.unwrap_or_default()
+    );
+    print!(" {dash} ");
+    ftl_print!(
+        "msg-repo-view-forks",
+        forks = repo.forks_count.unwrap_or_default()
+    );
     println!();
 
     let mut first = true;
     if repo.has_issues.unwrap_or_default() && repo.external_tracker.is_none() {
-        let issues = repo.open_issues_count.unwrap_or_default();
-        if issues == 1 {
-            print!("{issues} issue");
-        } else {
-            print!("{issues} issues");
-        }
+        ftl_print!(
+            "msg-repo-view-issues",
+            issues = repo.open_issues_count.unwrap_or_default()
+        );
         first = false;
     }
     if repo.has_pull_requests.unwrap_or_default() {
         if !first {
             print!(" {dash} ");
         }
-        let pulls = repo.open_pr_counter.unwrap_or_default();
-        if pulls == 1 {
-            print!("{pulls} PR");
-        } else {
-            print!("{pulls} PRs");
-        }
+        ftl_print!(
+            "msg-repo-view-prs",
+            pull_requests = repo.open_pr_counter.unwrap_or_default()
+        );
         first = false;
     }
     if repo.has_releases.unwrap_or_default() {
         if !first {
             print!(" {dash} ");
         }
-        let releases = repo.release_counter.unwrap_or_default();
-        if releases == 1 {
-            print!("{releases} release");
-        } else {
-            print!("{releases} releases");
-        }
+        ftl_print!(
+            "msg-repo-view-releases",
+            releases = repo.release_counter.unwrap_or_default()
+        );
         first = false;
     }
     if !first {
         println!();
     }
     if let Some(external_tracker) = &repo.external_tracker {
-        if let Some(tracker_url) = &external_tracker.external_tracker_url {
-            println!("Issue tracker is at {tracker_url}");
+        if let Some(url) = &external_tracker.external_tracker_url {
+            ftl_println!("msg-repo-view-external_tracker", url = url.as_str());
         }
     }
 
-    if let Some(html_url) = &repo.html_url {
+    if let Some(url) = &repo.html_url {
         println!();
-        println!("View online at {html_url}");
+        ftl_println!("msg-repo-view-url", url = url.as_str());
     }
 
     Ok(())
@@ -1577,7 +1578,7 @@ async fn view_repo_readme(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
             })
         })
         .next()
-        .ok_or_eyre("Repo does not have a README")?;
+        .ok_or_else(|| ftl_eyre!("msg-repo-readme-none"))?;
     let is_md = readme
         .rsplit_once(".")
         .is_some_and(|(_, s)| s.eq_ignore_ascii_case("md"));
@@ -1623,7 +1624,11 @@ async fn cmd_clone_repo(
         local_repo.remote("upstream", git_url(&parent, ssh)?.as_str())?;
     }
 
-    println!("Cloned {} into {}", repo_full_name, path.display());
+    ftl_println!(
+        "msg-repo-clone-success",
+        repo = repo_full_name,
+        path = path.to_string_lossy()
+    );
     Ok(())
 }
 
@@ -1669,34 +1674,33 @@ pub fn clone_repo(
 
     if fancy {
         print!("{hide_cursor}");
-        print!("   Preparing...");
+        ftl_print!("msg-repo-clone-preparing");
         let _ = std::io::stdout().flush();
 
         callbacks.transfer_progress(|progress| {
             print!("{clear_line}\r");
             if progress.received_objects() == progress.total_objects() {
                 if progress.indexed_deltas() == progress.total_deltas() {
-                    print!("Finishing up...");
+                    ftl_print!("msg-repo-clone-finishing_up");
                 } else {
                     let percent = 100.0 * (progress.indexed_deltas() as f64)
                         / (progress.total_deltas() as f64);
-                    print!("   Resolving... {percent:.01}%");
+                    let percent = (percent * 100.0).floor() / 100.0;
+                    ftl_print!("msg-repo-clone-resolving", percent);
                 }
             } else {
                 let bytes = progress.received_bytes();
                 let percent = 100.0 * (progress.received_objects() as f64)
                     / (progress.total_objects() as f64);
-                print!(" Downloading... {percent:.01}%");
-                match bytes {
-                    0..=1023 => print!(" ({}b)", bytes),
-                    1024..=1048575 => print!(" ({:.01}kb)", (bytes as f64) / 1024.0),
-                    1048576..=1073741823 => {
-                        print!(" ({:.01}mb)", (bytes as f64) / 1048576.0)
-                    }
-                    1073741824.. => {
-                        print!(" ({:.01}gb)", (bytes as f64) / 1073741824.0)
-                    }
-                }
+                let (size, units) = match bytes {
+                    0..=1023 => (bytes as f64, "b"),
+                    1024..=1048575 => ((bytes as f64) / 1024.0, "kb"),
+                    1048576..=1073741823 => ((bytes as f64) / 1048576.0, "mb"),
+                    1073741824.. => ((bytes as f64) / 1073741824.0, "gb"),
+                };
+                let percent = (percent * 100.0).floor() / 100.0;
+                let size = (size * 100.0).floor() / 100.0;
+                ftl_print!("msg-repo-clone-downloading", percent, size, units);
             }
             let _ = std::io::stdout().flush();
             true
@@ -1739,9 +1743,13 @@ async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
     )?;
     if confirmation {
         api.repo_delete(name.owner(), name.name()).await?;
-        println!("Deleted {}/{}", name.owner(), name.name());
+        ftl_println!(
+            "msg-repo-delete-success",
+            owner = name.owner(),
+            repo = name.name()
+        );
     } else {
-        println!("Did not delete");
+        ftl_println!("msg-repo-delete-cancelled");
     }
     Ok(())
 }
@@ -1761,13 +1769,13 @@ async fn list_repo_labels(api: &Forgejo, repo: &RepoName, archived: bool) -> eyr
             "{label_str} {}{}\n  {}\n",
             DisplayOptional(label.id, "?"),
             if label.is_archived.unwrap_or_default() {
-                " (archived)"
+                ftl_format!("msg-repo-label-view-archived")
             } else {
-                ""
+                "".into()
             },
             match label.description.as_deref() {
-                None | Some("") => "(no description)",
-                Some(x) => x,
+                None | Some("") => ftl_format!("msg-repo-label-view-no_description"),
+                Some(x) => x.into(),
             },
         );
     }
@@ -1800,9 +1808,9 @@ async fn create_repo_label(
         )
         .await?;
 
-    println!(
-        "Successfully created label {}",
-        crate::render_label(&label)?,
+    ftl_println!(
+        "msg-repo-label-create-success",
+        label = crate::render_label(&label)?
     );
     Ok(())
 }
@@ -1813,7 +1821,7 @@ async fn delete_repo_label(api: &Forgejo, repo: &RepoName, name: String) -> eyre
     api.issue_delete_label(repo.owner(), repo.name(), id)
         .await?;
 
-    println!("Successfully deleted label {name}.");
+    ftl_println!("msg-repo-label-delete-success", label = &name);
     Ok(())
 }
 
@@ -1844,7 +1852,10 @@ async fn edit_repo_label(
         )
         .await?;
 
-    println!("Edited label: {}", crate::render_label(&label)?);
+    ftl_println!(
+        "msg-repo-label-edit-success",
+        label = crate::render_label(&label)?
+    );
 
     Ok(())
 }
