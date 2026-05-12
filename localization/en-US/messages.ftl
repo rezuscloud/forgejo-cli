@@ -34,7 +34,10 @@ msg-actions-variable-create-already_exists_forced = variable already exists, upd
 
 msg-actions-variable-delete-success = Variable {$name} deleted.
 
-msg-actions-dispatch-success = Dispatched workflow {name} in {ref} with {n_inputs} input(s).
+msg-actions-dispatch-success = Dispatched workflow {$name} in {$ref} with {$n_inputs ->
+        [one] 1 input
+       *[other] {$n_inputs} inputs
+    }.
 
 msg-org-list-no_results = No results.
 msg-org-list-page_number = Page {$page} of {$total}
