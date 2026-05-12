@@ -38,7 +38,6 @@ pub mod bundles {
     }
 
     bundle!(EN_US = "en-US");
-    bundle!(TOK = "tok");
 
     pub fn locale() -> &'static [&'static LazyLock<Bundle>] {
         LOCALE.get_or_init(init_from_env)
@@ -54,7 +53,6 @@ pub mod bundles {
     pub fn init_to(s: &str) -> &'static [&'static LazyLock<Bundle>] {
         match s {
             "en-US" => const { &[&EN_US] },
-            "tok" => const { &[&TOK, &EN_US] },
             _ => const { &[&EN_US] },
         }
     }
