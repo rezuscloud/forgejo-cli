@@ -17,7 +17,7 @@ pub mod bundles {
                 bundle.add_datetime_support().unwrap();
                 bundle.add_function("STYLE", style).unwrap();
                 bundle.add_function("IS_MINIMAL", is_minimal).unwrap();
-                bundle.add_function("IS_NONE", is_none).unwrap();
+                bundle.add_function("OPT", opt).unwrap();
                 // .ftl files are checked at compile time in `build.rs`
                 let resource = FluentResource::try_new(
                     include_str!(concat!("../localization/", $id, "/messages.ftl")).into(),
@@ -114,7 +114,7 @@ mod functions {
         }
     }
 
-    pub fn is_none<'a>(positional: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
+    pub fn opt<'a>(positional: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
         let Some(value) = positional.first() else {
             return FluentValue::Error;
         };

@@ -39,7 +39,7 @@ msg-actions-dispatch-success = Dispatched workflow {name} in {ref} with {n_input
 msg-org-list-no_results = No results.
 msg-org-list-page_number = Page {$page} of {$total}
 
-msg-org-view-org_name = { IS_NONE($full_name) ->
+msg-org-view-org_name = { OPT($full_name) ->
        *[none] {STYLE("bold", "bright-cyan")}{$name}{STYLE("reset")}
         [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("light-gray")}({$name}){STYLE("reset")}
     }
@@ -73,14 +73,14 @@ msg-org-create-success = created new {$visibility ->
         [public] public
         [limited] limited
        *[private] private
-    } org { IS_NONE($full_name) ->
+    } org { OPT($full_name) ->
        *[none] {STYLE("bold", "bright-cyan")}{$name}{STYLE("reset")}
         [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("light-gray")}({$name}){STYLE("reset")}
     }
 
 msg-org-members-no_results = No results.
 msg-org-members-page_number = Page {$page} of {$total}
-msg-org-members-entry = { IS_NONE($full_name) ->
+msg-org-members-entry = { OPT($full_name) ->
        *[none] {STYLE("bold", "bright-cyan")}{$username}{STYLE("reset")}
         [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("light-gray")}({$username}){STYLE("reset")}
     }
@@ -184,7 +184,7 @@ msg-issue-templates-none = No issue templates or contact info.
 msg-issue-templates-blank_allowed = '--no-template' is allowed
 msg-issue-templates-blank_not_allowed = '--no-template' is not allowed
 
-msg-issue-view-comments-comment_header = { IS_NONE($full_name) ->
+msg-issue-view-comments-comment_header = { OPT($full_name) ->
        *[none] {STYLE("bold", "bright-cyan")}{$username}{STYLE("reset")} said:
         [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("dark-gray")}({$username}){STYLE("reset")} said:
     }
@@ -242,7 +242,7 @@ msg-pr-view-header =
         [closed] {STYLE("bright-red")}Closed{STYLE("reset")}
        *[other] $state
     } {-dash} {STYLE("bright-green")}+{$additions} {STYLE("bright-red")}-{$deletions}{STYLE("reset")}
-    {IS_NONE($head_branch) ->
+    {OPT($head_branch) ->
        *[none] Into `{$base_branch}`
         [some] From `{$head_branch}` into `{$base_branch}`
     }
@@ -288,7 +288,7 @@ msg-pr-review-list-review_header = {$review_type ->
        *[other] {""}
     }
 msg-pr-review-list-comment_position = In {STYLE("bold")}{$path}:{$position}{STYLE("reset")}:
-msg-pr-review-list-comment_header = {STYLE("bold", "bright-cyan")}{$commenter}{STYLE("reset")} commented {IS_NONE($resolver) ->
+msg-pr-review-list-comment_header = {STYLE("bold", "bright-cyan")}{$commenter}{STYLE("reset")} commented {OPT($resolver) ->
        *[none] {""}
         [some] (resolved by {$resolver})
     }:
@@ -430,6 +430,12 @@ msg-repo-delete-cancelled = Did not delete
 msg-repo-label-view-archived = (archived)
 msg-repo-label-view-no_description = (no description)
 
+msg-repo-label-create-success = Successfully created label {$label}
+
+msg-repo-label-delete-success = Successfully deleted label {$label}
+
+msg-repo-label-edit-success = Edited label: {$label}
+
 msg-user-search-page_zero = There is no page 0
 msg-user-search-fail = Search failed
 msg-user-search-none = No users matched that query
@@ -444,7 +450,7 @@ msg-user-search-footer =
        *[no] {""}
     }
 
-msg-user-view-header = {STYLE("bright-cyan", "bold")}{$username}{STYLE("reset")} {IS_NONE($pronouns) ->
+msg-user-view-header = {STYLE("bright-cyan", "bold")}{$username}{STYLE("reset")} {OPT($pronouns) ->
        *[none] {""}
         [some] {STYLE("light-grey")} {-dash} {STYLE("bold")}{$pronouns}{STYLE("reset")}
     }
@@ -452,12 +458,12 @@ msg-user-view-header = {STYLE("bright-cyan", "bold")}{$username}{STYLE("reset")}
         [one] {STYLE("bold")}1{STYLE("reset")} follower
        *[other] {STYLE("bold")}{$followers}{STYLE("reset")} followers
     } {-dash} {STYLE("bold")}{$following}{STYLE("reset")} following
-    {IS_NONE($website) ->
-       *[none] {IS_NONE($email) ->
+    {OPT($website) ->
+       *[none] {OPT($email) ->
            *[none] {""}
             [some] {STYLE("bold")}{$email}{STYLE("reset")}
         }
-        [some] {IS_NONE($email) ->
+        [some] {OPT($email) ->
            *[none] {STYLE("bold")}{$website}{STYLE("reset")}
             [some] {STYLE("bold")}{$website}{STYLE("reset")} {-dash} {STYLE("bold")}{$email}{STYLE("reset")}
         }
@@ -607,7 +613,7 @@ msg-user-gpg-list-email = {STYLE("bright-cyan")}{$email}{STYLE("reset")} {$verif
 msg-user-gpg-list-subkey = {STYLE("bold")}Subkey {STYLE("bright-magenta")}{$id}{STYLE("reset")}:
 
 msg-user-gpg-upload-exporting = Exporting key...
-msg-user-gpg-upload-export_failed = Failed to export key. {IS_NONE($status_code) ->
+msg-user-gpg-upload-export_failed = Failed to export key. {OPT($status_code) ->
        *[none] {""}
         [some] GPG status: {$status_code}
     }
@@ -615,7 +621,7 @@ msg-user-gpg-upload-success = Key successfully added!
 
 msg-user-gpg-verify-fetching_token = Fetching verification token...
 msg-user-gpg-verify-signing_token = Signing verification token with key '{$key_name}'...
-msg-user-gpg-verify-signing_failed = Failed to sign verification token. {IS_NONE($status_code) ->
+msg-user-gpg-verify-signing_failed = Failed to sign verification token. {OPT($status_code) ->
        *[none] {""}
         [some] GPG status: {$status_code}
     }
@@ -655,7 +661,7 @@ msg-release-asset-create-success = Added attachment `{$asset}` to {$release}
 
 msg-release-asset-delete-success = Added attachment `{$asset}` to {$release}
 
-msg-release-asset-download-success = { IS_NONE($file) ->
+msg-release-asset-download-success = { OPT($file) ->
        *[none] Downloaded {$asset}
         [some] Downloaded {$asset} into {$file}
     }
