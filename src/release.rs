@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use eyre::{bail, eyre, Context, OptionExt};
+use eyre::{eyre, Context, OptionExt};
 use forgejo_api::{
     structs::{RepoCreateReleaseAttachmentQuery, RepoListReleasesQuery},
     Forgejo,

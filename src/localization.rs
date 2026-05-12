@@ -1,5 +1,3 @@
-use fluent_bundle::{FluentArgs, FluentValue};
-
 pub mod bundles {
     use fluent_bundle::{concurrent::FluentBundle, FluentResource};
     use fluent_datetime::BundleExt;

@@ -683,13 +683,6 @@ async fn list_activity(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 }
 
 pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result<()> {
-    let SpecialRender {
-        bold,
-        yellow,
-        bright_cyan,
-        reset,
-        ..
-    } = *crate::special_render();
     let actor = activity
         .act_user
         .as_ref()
@@ -1039,7 +1032,6 @@ async fn list_keys(api: &Forgejo, verbose: bool) -> eyre::Result<()> {
     let SpecialRender {
         bold,
         bright_cyan,
-        bright_magenta,
         reset,
         ..
     } = *crate::special_render();
@@ -1242,7 +1234,6 @@ async fn list_gpg(api: &Forgejo, verbose: bool) -> eyre::Result<()> {
     let SpecialRender {
         bold,
         bright_cyan,
-        bright_magenta,
         reset,
         ..
     } = *crate::special_render();
@@ -1286,12 +1277,7 @@ async fn view_gpg(api: &Forgejo, id: i64) -> eyre::Result<()> {
 
 fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
     let SpecialRender {
-        bold,
-        bright_cyan,
-        bright_red,
-        bright_magenta,
-        reset,
-        ..
+        bright_red, reset, ..
     } = *crate::special_render();
 
     let indent = " ".repeat(indent_depth);

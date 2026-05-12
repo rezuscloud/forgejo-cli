@@ -754,18 +754,7 @@ async fn get_pr_status(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre:
 }
 
 fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
-    let SpecialRender {
-        bright_magenta,
-        bright_red,
-        bright_green,
-        yellow,
-        bright_yellow,
-        light_grey,
-        dash,
-        bullet,
-        reset,
-        ..
-    } = *crate::special_render();
+    let SpecialRender { bullet, .. } = *crate::special_render();
     match pr_status {
         PrStatus::Merged { pr } => {
             let merged_by = pr
@@ -904,11 +893,7 @@ fn print_pr_reviews_comment(
     ((path, position), comments): ((&str, u64), Vec<&PullReviewComment>),
 ) -> eyre::Result<()> {
     let crate::SpecialRender {
-        bold,
-        dark_grey,
-        bright_cyan,
-        reset,
-        ..
+        dark_grey, reset, ..
     } = crate::special_render();
 
     let mut first = true;
@@ -1362,8 +1347,6 @@ async fn create_pr(
                                 git_config.set_str("push.default", "upstream")?;
                                 git_config.set_str(&merge_setting_name, &topic_setting)?;
                                 git_config.set_str(&remote_setting_name, remote)?;
-                                let crate::SpecialRender { bold, reset, .. } =
-                                    crate::special_render();
                                 ftl_println!("msg-pr-create-agit_force_push_warning");
                                 break;
                             }

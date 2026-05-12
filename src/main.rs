@@ -896,28 +896,6 @@ impl<T: Display, F: Display> Display for DisplayOptional<T, F> {
     }
 }
 
-/// When formatted, show the boolean with coloring.
-struct DisplayBool(bool);
-
-impl Display for DisplayBool {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let SpecialRender {
-            bright_red,
-            bright_green,
-            reset,
-            ..
-        } = *special_render();
-
-        if self.0 {
-            write!(f, "{bright_green}true{reset}")?;
-        } else {
-            write!(f, "{bright_red}false{reset}")?;
-        }
-
-        Ok(())
-    }
-}
-
 pub fn render_label(label: &forgejo_api::structs::Label) -> eyre::Result<String> {
     use std::fmt::Write;
     let mut s = String::new();

@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fmt::Display};
 
 use clap::{Args, Subcommand};
-use eyre::{bail, OptionExt};
+use eyre::OptionExt;
 use forgejo_api::{
     structs::{
         ActionVariable, CreateOrUpdateSecretOption, CreateVariableOption, UpdateVariableOption,
