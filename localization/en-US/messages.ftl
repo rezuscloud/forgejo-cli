@@ -123,14 +123,16 @@ msg-org-team-create-success = created new {$admin ->
     } team {STYLE("bright-blue", "bold")}{$name}{STYLE("reset")} in org {STYLE("bold")}{$org}{STYLE("reset")}
 
 msg-org-team-delete-confirmation = Are you sure you want to delete {STYLE("bold")}{$org}/{$name}{STYLE("reset")}?
-    .option-yes = Yes
-    .option-yes = yes
-    .option-yes = Y
-    .option-yes = y
-    .option-no = No
-    .option-no = no
-    .option-no = N
-    .option-no = n
+    .yes =
+        Yes
+        yes
+        Y
+        y
+    .no =
+        No
+        no
+        N
+        n
 
 msg-org-team-repo-list-no_results = No results.
 msg-org-team-repo-list-page_number = Page {$page} of {$total}
@@ -298,19 +300,22 @@ msg-pr-create-agit_push_cfg_question =
     Would you like to set the needed git config
     items so that `git push` works for this pr?
 msg-pr-create-agit_push_cfg_prompt = (y/N/?) 
-    .option-yes = Yes
-    .option-yes = yes
-    .option-yes = Y
-    .option-yes = y
-    .option-no = No
-    .option-no = no
-    .option-no = N
-    .option-no = n
-    .option-help = ?
-    .option-help = h
-    .option-help = H
-    .option-help = help
-    .option-help = Help
+    .yes =
+        Yes
+        yes
+        Y
+        y
+    .no =
+        No
+        no
+        N
+        n
+    .help =
+        Help
+        help
+        H
+        h
+        ?
 msg-pr-create-agit_force_push_warning =
     {STYLE("bold")}Note:{STYLE("reset")}
       `git push --force[-with-lease]` is not supported for AGit PRs.
@@ -344,14 +349,16 @@ msg-repo-migrate-password_prompt = Password:
 msg-repo-migrate-token_prompt = Token: 
 
 msg-repo-delete-confirmation_prompt = Are you sure you want to delete {$owner}/{$name}? (y/N) 
-    .option-yes = Yes
-    .option-yes = yes
-    .option-yes = Y
-    .option-yes = y
-    .option-no = No
-    .option-no = no
-    .option-no = N
-    .option-no = n
+    .yes =
+        Yes
+        yes
+        Y
+        y
+    .no =
+        No
+        no
+        N
+        n
 
 msg-user-search-page_zero = There is no page 0
 msg-user-search-fail = Search failed
@@ -466,14 +473,16 @@ msg-user-key-upload-keys_not_found = No keys found.
 msg-user-key-upload-confirm_key_file_prompt =
         Guessed key file: {$path}
         Does this look good?
-    .option-yes = Yes
-    .option-yes = yes
-    .option-yes = Y
-    .option-yes = y
-    .option-no = No
-    .option-no = no
-    .option-no = N
-    .option-no = n
+    .yes =
+        Yes
+        yes
+        Y
+        y
+    .no =
+        No
+        no
+        N
+        n
 msg-user-key-add-file_unconfirmed = User didn't confirm guessed key file.
 msg-user-key-add-unexpected_extension = 
     '{$path}' doesn't end in '.pub'. Are you sure this isn't a private key?
@@ -485,14 +494,16 @@ msg-user-key-add-no_title = Couldn't guess key title, please provide one explici
 msg-user-key-upload-confirm_key_title_prompt =
         Guessed title: {STYLE("bright-cyan")}{$title}{STYLE("reset")}
         Does this look good?
-    .option-yes = Yes
-    .option-yes = yes
-    .option-yes = Y
-    .option-yes = y
-    .option-no = No
-    .option-no = no
-    .option-no = N
-    .option-no = n
+    .yes =
+        Yes
+        yes
+        Y
+        y
+    .no =
+        No
+        no
+        N
+        n
 msg-user-key-add-title_unconfirmed = User didn't confirm guessed title.
 msg-user-key-add-success = Key created successfully!
 
@@ -543,14 +554,16 @@ msg-user-gpg-verify-success = Verification successful!
 
 msg-user-gpg-delete-confirmation_prompt =
         Deleting a GPG key will cause all commits signed by that key to become unverified! Continue?
-    .option-yes = Yes
-    .option-yes = yes
-    .option-yes = Y
-    .option-yes = y
-    .option-no = No
-    .option-no = no
-    .option-no = N
-    .option-no = n
+    .yes =
+        Yes
+        yes
+        Y
+        y
+    .no =
+        No
+        no
+        N
+        n
 msg-user-gpg-delete-unconfirmed = User aborted process.
 msg-user-gpg-delete-success = Key with ID {id} deleted successfully.
 

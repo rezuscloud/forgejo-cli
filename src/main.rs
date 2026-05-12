@@ -139,13 +139,15 @@ async fn prompt<'b>(
         write!(&mut stdout, "{}", std::borrow::Cow::from(msg_id))?;
     }
 
+    stdout.flush()?;
+
     let response = readline().await?;
     let response = response.trim();
     for attr in message.attributes() {
-        if let Some(opt) = attr.id().strip_prefix("option-") {
-            let attr_value = localization::format_pattern(bundle, attr.value(), None);
-            if response == attr_value {
-                return Ok(Some(opt));
+        let attr_value = localization::format_pattern(bundle, attr.value(), None);
+        for line in attr_value.lines() {
+            if response == line {
+                return Ok(Some(attr.id()));
             }
         }
     }
