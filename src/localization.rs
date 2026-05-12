@@ -46,13 +46,15 @@ pub mod bundles {
     pub fn init_from_env() -> &'static [&'static LazyLock<Bundle>] {
         let lang = std::env::var("LC_MESSAGES")
             .or_else(|_| std::env::var("LANG"))
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .parse()
+            .unwrap_or_else(|_| langid!("en-US"));
         init_to(&lang)
     }
 
-    pub fn init_to(s: &str) -> &'static [&'static LazyLock<Bundle>] {
-        match s {
-            "en-US" => const { &[&EN_US] },
+    pub fn init_to(lang: &unic_langid::LanguageIdentifier) -> &'static [&'static LazyLock<Bundle>] {
+        match lang.language.as_str() {
+            "en" => const { &[&EN_US] },
             _ => const { &[&EN_US] },
         }
     }
