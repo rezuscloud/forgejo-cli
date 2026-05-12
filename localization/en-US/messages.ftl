@@ -353,6 +353,116 @@ msg-repo-delete-confirmation_prompt = Are you sure you want to delete {$owner}/{
     .option-no = N
     .option-no = n
 
+msg-user-search-page_zero = There is no page 0
+msg-user-search-fail = Search failed
+msg-user-search-none = No users matched that query
+msg-user-search-page_too_high = {$total_pages ->
+        [one] There is only 1 page
+       *[other] There are only {$total_pages} pages
+    }
+msg-user-search-footer =
+    Showing {STYLE("bold")}{$first_index}{-dash}{$last_index}{STYLE("reset")} of {STYLE("bold")}{$total_results}{STYLE("reset")} results ({$page}/{$total_pages})
+    {$more ->
+        [yes] View more with the --page flag
+       *[no] {""}
+    }
+
+msg-user-view-header = {STYLE("bright-cyan", "bold")}{$username}{STYLE("reset")} {IS_NONE($pronouns) ->
+       *[none] {""}
+        [some] {STYLE("light-grey")} {-dash} {STYLE("bold")}{$pronouns}{STYLE("reset")}
+    }
+    {$followers ->
+        [one] {STYLE("bold")}1{STYLE("reset")} follower
+       *[other] {STYLE("bold")}{$followers}{STYLE("reset")} followers
+    } {-dash} {STYLE("bold")}{$following}{STYLE("reset")} following
+    {IS_NONE($website) ->
+       *[none] {IS_NONE($email) ->
+           *[none] {""}
+            [some] {STYLE("bold")}{$email}{STYLE("reset")}
+        }
+        [some] {IS_NONE($email) ->
+           *[none] {STYLE("bold")}{$website}{STYLE("reset")}
+            [some] {STYLE("bold")}{$website}{STYLE("reset")} {-dash} {STYLE("bold")}{$email}{STYLE("reset")}
+        }
+    }
+msg-user-view-joined_on = Joined on {STYLE("bold")}{DATETIME($joined, dateStyle: "medium")}{STYLE("reset")}
+
+msg-user-follow-success = Followed {$username}
+
+msg-user-unfollow-success = Unfollowed {$username}
+
+msg-user-following-none-other = {$user} isn't following anyone
+msg-user-following-none-self = You aren't following anyone
+msg-user-following-other = {$user} is following:
+msg-user-following-self = You are following:
+
+msg-user-followers-none-other = {$user} has no followers
+msg-user-followers-none-self = You have no followers :(
+msg-user-followers-other = {$user} is followed by:
+msg-user-followers-self = You are followed by:
+
+msg-user-block-success = Blocked {$user}
+
+msg-user-unblock-success = Unblocked {$user}
+
+msg-user-repos-none-starred-other = {$name} has not starred any repos
+msg-user-repos-none-starred-self = You have not starred any repos
+msg-user-repos-none-other = {$name} does not own any repos
+msg-user-repos-none-self = You do not own any repos
+msg-user-repos-list_footer =
+    Showing {STYLE("bold")}{$first_index}{-dash}{$last_index}{STYLE("reset")} of {STYLE("bold")}{$total_results}{STYLE("reset")} results ({$page}/{$total_pages})
+    {$more ->
+        [yes] View more with the --page flag
+       *[no] {""}
+    }
+
+msg-user-orgs-none-other = {$user} is not a member of any organizations
+msg-user-orgs-none-self = You are not a member of any organizations
+msg-user-orgs-count = {$organizations ->
+        [one] 1 organization
+       *[other] {$organizations} organizations
+    }
+
+msg-activity-created_fork = {STYLE("bold")}{$actor}{STYLE("reset")} forked repository {STYLE("bold", "yellow")}{$parent_repo_name}{STYLE("reset")} to {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-created_mirror = {STYLE("bold")}{$actor}{STYLE("reset")} created mirror {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-created_repo = {STYLE("bold")}{$actor}{STYLE("reset")} created repository {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-renamed_repo = {STYLE("bold")}{$actor}{STYLE("reset")} renamed repository from {STYLE("bold", "yellow")}\"{$old_name}\"{STYLE("reset")} to {STYLE("bold", "yellow")}{$new_name}{STYLE("reset")}
+msg-activity-starred_repo = {STYLE("bold")}{$actor}{STYLE("reset")} starred repository {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-watched_repo = {STYLE("bold")}{$actor}{STYLE("reset")} watched repository {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-pushed_commit = {STYLE("bold")}{$actor}{STYLE("reset")} pushed to {STYLE("bold", "bright-cyan")}{$branch}{STYLE("reset")} on {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-created_issue = {STYLE("bold")}{$actor}{STYLE("reset")} opened issue {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-created_pr = {STYLE("bold")}{$actor}{STYLE("reset")} created pull request {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-transferred_repo = {STYLE("bold")}{$actor}{STYLE("reset")} transferred repository {STYLE("bold", "yellow")}\"{$old_name}\"{STYLE("reset")} to {STYLE("bold", "yellow")}{$new_name}{STYLE("reset")}
+msg-activity-pushed_tag = {STYLE("bold")}{$actor}{STYLE("reset")} pushed tag {STYLE("bold", "bright_cyan")}{$tag_name}{STYLE("reset")} to {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-commented_issue = {STYLE("bold")}{$actor}{STYLE("reset")} commented on issue {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-merged_pr = {STYLE("bold")}{$actor}{STYLE("reset")} merged pull request {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-closed_issue = {STYLE("bold")}{$actor}{STYLE("reset")} closed issue {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-reopened_issue = {STYLE("bold")}{$actor}{STYLE("reset")} reopened issue {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-closed_pr = {STYLE("bold")}{$actor}{STYLE("reset")} closed pr {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-reopened_pr = {STYLE("bold")}{$actor}{STYLE("reset")} reopened pr {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-deleted_tag = {STYLE("bold")}{$actor}{STYLE("reset")} deleted tag {STYLE("bold", "bright_cyan")}{$tag_name}{STYLE("reset")} from {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-deleted_branch = {STYLE("bold")}{$actor}{STYLE("reset")} deleted branch {STYLE("bold", "bright_cyan")}{$branch}{STYLE("reset")} from {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+msg-activity-approved_pr = {STYLE("bold")}{$actor}{STYLE("reset")} approved {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-rejected_pr = {STYLE("bold")}{$actor}{STYLE("reset")} suggested changes for {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-commented_pr = {STYLE("bold")}{$actor}{STYLE("reset")} commented on pull request {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
+msg-activity-created_release = {STYLE("bold")}{$actor}{STYLE("reset")} created release {STYLE("bold", "bright_cyan")}{$release_name}{STYLE("reset")} on {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
+
+msg-user-edit-name-removal_hint = Use --unset to remove your name from your profile
+msg-user-edit-pronouns-removal_hint = Use --unset to remove your pronouns from your profile
+msg-user-edit-location-removal_hint = Use --unset to remove your location from your profile
+msg-user-edit-website-removal_hint = Use --unset to remove your website from your profile
+
+msg-user-key-list-count = total keys: {$keys}
+msg-user-key-list-header = {STYLE("bold")}Key {STYLE("bright-magenta")}{$id}{STYLE("reset")}
+msg-user-key-list-title = {STYLE("bold")}Title:{STYLE("reset")}       {STYLE("bright-cyan")}{$title}{STYLE("reset")}
+msg-user-key-list-created_at = {STYLE("bold")}Created At:{STYLE("reset")}  {STYLE("bright-cyan")}{DATETIME($created_at, dateStyle: "short", timeStyle: "medium")}{STYLE("reset")}
+msg-user-key-list-type = {STYLE("bold")}Type:{STYLE("reset")}        {STYLE("bright-cyan")}{$key_type}{STYLE("reset")}
+msg-user-key-list-fingerprint = {STYLE("bold")}Fingerprint:{STYLE("reset")} {STYLE("bright-cyan")}{$fingerprint}{STYLE("reset")}
+
+msg-user-key-delete-success = successfully deleted key with ID {$id}
+
+msg-user-key-upload-home_not_found = Couldn't locate home directory. Please provide an explicit path for the key file.
+msg-user-key-upload-keys_not_found = No keys found.
 msg-user-key-upload-confirm_key_file_prompt =
         Guessed key file: {$path}
         Does this look good?
@@ -364,7 +474,14 @@ msg-user-key-upload-confirm_key_file_prompt =
     .option-no = no
     .option-no = N
     .option-no = n
-
+msg-user-key-add-file_unconfirmed = User didn't confirm guessed key file.
+msg-user-key-add-unexpected_extension = 
+    '{$path}' doesn't end in '.pub'. Are you sure this isn't a private key?
+     If you want to proceed anyways, add --force.
+msg-user-key-add-invalid_key = 
+    '{$path}' looks like a private key or invalid data!
+     If you want to proceed anyways, add --force.
+msg-user-key-add-no_title = Couldn't guess key title, please provide one explicitly and check your key file.
 msg-user-key-upload-confirm_key_title_prompt =
         Guessed title: {STYLE("bright-cyan")}{$title}{STYLE("reset")}
         Does this look good?
@@ -376,8 +493,55 @@ msg-user-key-upload-confirm_key_title_prompt =
     .option-no = no
     .option-no = N
     .option-no = n
+msg-user-key-add-title_unconfirmed = User didn't confirm guessed title.
+msg-user-key-add-success = Key created successfully!
 
-msg-user-key-delete-confirmation_prompt =
+msg-user-gpg-list-count = total keys: {$keys}
+msg-user-gpg-list-header = {STYLE("bold")}Key {STYLE("bright-magenta")}{$id}{STYLE("reset")}
+msg-user-gpg-list-key_id = {STYLE("bold")}Key ID:{STYLE("reset")}              {STYLE("bright-cyan")}{$key_id}{STYLE("reset")}
+msg-user-gpg-list-can_sign = {STYLE("bold")}Can Sign:{STYLE("reset")}            {$can_sign ->
+        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
+       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+    }
+msg-user-gpg-list-can_encrypt_comms = {STYLE("bold")}Can Encrypt Comms:{STYLE("reset")}   {$can_encrypt_comms ->
+        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
+       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+    }
+msg-user-gpg-list-can_encrypt_storage = {STYLE("bold")}Can Encrypt Storage:{STYLE("reset")} {$can_encrypt_storage ->
+        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
+       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+    }
+msg-user-gpg-list-can_certify = {STYLE("bold")}Can Certify:{STYLE("reset")}         {$can_certify ->
+        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
+       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+    }
+msg-user-gpg-list-verified = {STYLE("bold")}Verified:{STYLE("reset")}            {$verified ->
+        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
+       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+    }
+msg-user-gpg-list-email = {STYLE("bright-cyan")}{$email}{STYLE("reset")} {$verified ->
+        [yes] verified
+       *[no] not verified
+    }
+msg-user-gpg-list-subkey = {STYLE("bold")}Subkey {STYLE("bright-magenta")}{$id}{STYLE("reset")}:
+
+msg-user-gpg-upload-exporting = Exporting key...
+msg-user-gpg-upload-export_failed = Failed to export key. {IS_NONE($status_code) ->
+       *[none] {""}
+        [some] GPG status: {$status_code}
+    }
+msg-user-gpg-upload-success = Key successfully added!
+
+msg-user-gpg-verify-fetching_token = Fetching verification token...
+msg-user-gpg-verify-signing_token = Signing verification token with key '{$key_name}'...
+msg-user-gpg-verify-signing_failed = Failed to sign verification token. {IS_NONE($status_code) ->
+       *[none] {""}
+        [some] GPG status: {$status_code}
+    }
+msg-user-gpg-verify-key_to_verify = Verifying this key:
+msg-user-gpg-verify-success = Verification successful!
+
+msg-user-gpg-delete-confirmation_prompt =
         Deleting a GPG key will cause all commits signed by that key to become unverified! Continue?
     .option-yes = Yes
     .option-yes = yes
@@ -387,6 +551,8 @@ msg-user-key-delete-confirmation_prompt =
     .option-no = no
     .option-no = N
     .option-no = n
+msg-user-gpg-delete-unconfirmed = User aborted process.
+msg-user-gpg-delete-success = Key with ID {id} deleted successfully.
 
 msg-release-create-must_specify_tag = must select tag with `--tag` or `--create-tag`
 msg-release-create-tag_flags_conflict =`--tag` and `--create-tag` are mutually exclusive; please pick just one 

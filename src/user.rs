@@ -2,7 +2,10 @@ use clap::{Args, Subcommand};
 use eyre::{Context, ContextCompat, OptionExt};
 use forgejo_api::Forgejo;
 
-use crate::{repo::RepoInfo, SpecialRender};
+use crate::{
+    ftl_bail, ftl_ensure, ftl_eyre, ftl_println, localization::AsFluent, repo::RepoInfo,
+    SpecialRender,
+};
 
 use std::borrow::Cow;
 
@@ -338,7 +341,7 @@ impl UserCommand {
 async fn user_search(api: &Forgejo, query: &str, page: Option<usize>) -> eyre::Result<()> {
     let page = page.unwrap_or(1);
     if page == 0 {
-        println!("There is no page 0");
+        ftl_println!("msg-user-search-page_zero");
     }
     let query = forgejo_api::structs::UserSearchQuery {
         q: Some(query.to_owned()),
@@ -348,27 +351,23 @@ async fn user_search(api: &Forgejo, query: &str, page: Option<usize>) -> eyre::R
     let users = result.data.ok_or_eyre("search did not return data")?;
     let ok = result.ok.ok_or_eyre("search did not return ok")?;
     if !ok {
-        println!("Search failed");
+        ftl_println!("msg-user-search-fail");
         return Ok(());
     }
     if users.is_empty() {
-        println!("No users matched that query");
+        ftl_println!("msg-user-search-none");
+        println!("");
     } else {
         let SpecialRender {
             bullet,
-            dash,
             bold,
             reset,
             ..
         } = *crate::special_render();
         let page_start = (page - 1) * 20;
-        let pages_total = users.len().div_ceil(20);
+        let total_pages = users.len().div_ceil(20);
         if page_start >= users.len() {
-            if pages_total == 1 {
-                println!("There is only 1 page");
-            } else {
-                println!("There are only {pages_total} pages");
-            }
+            ftl_println!("msg-user-search-page_too_high", total_pages);
         } else {
             for user in users.iter().skip(page_start).take(20) {
                 let username = user
@@ -377,30 +376,21 @@ async fn user_search(api: &Forgejo, query: &str, page: Option<usize>) -> eyre::R
                     .ok_or_eyre("user does not have name")?;
                 println!("{bullet} {bold}{username}{reset}");
             }
-            println!(
-                "Showing {bold}{}{dash}{}{reset} of {bold}{}{reset} results ({page}/{pages_total})",
-                page_start + 1,
-                (page_start + 20).min(users.len()),
-                users.len()
+            ftl_println!(
+                "msg-user-search-footer",
+                first_index = page_start + 1,
+                last_index = (page_start + 20).min(users.len()),
+                total_results = users.len(),
+                page,
+                total_pages,
+                more = if users.len() > 20 { "yes" } else { "no" }
             );
-            if users.len() > 20 {
-                println!("View more with the --page flag");
-            }
         }
     }
     Ok(())
 }
 
 async fn view_user(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
-    let SpecialRender {
-        bold,
-        dash,
-        bright_cyan,
-        light_grey,
-        reset,
-        ..
-    } = *crate::special_render();
-
     let user_data = match user {
         Some(user) => api.user_get(user).await?,
         None => api.user_get_current().await?,
@@ -409,34 +399,18 @@ async fn view_user(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
         .login
         .as_deref()
         .ok_or_eyre("user has no username")?;
-    print!("{bright_cyan}{bold}{username}{reset}");
-    if let Some(pronouns) = user_data.pronouns.as_deref() {
-        if !pronouns.is_empty() {
-            print!("{light_grey} {dash} {bold}{pronouns}{reset}");
-        }
-    }
-    println!();
     let followers = user_data.followers_count.unwrap_or_default();
     let following = user_data.following_count.unwrap_or_default();
-    println!("{bold}{followers}{reset} followers {dash} {bold}{following}{reset} following");
-    let mut first = true;
-    if let Some(website) = user_data.website.as_deref() {
-        if !website.is_empty() {
-            print!("{bold}{website}{reset}");
-            first = false;
-        }
-    }
-    if let Some(email) = user_data.email.as_deref() {
-        if !email.is_empty() && !email.contains("noreply") {
-            if !first {
-                print!(" {dash} ");
-            }
-            print!("{bold}{email}{reset}");
-        }
-    }
-    if !first {
-        println!();
-    }
+
+    ftl_println!(
+        "msg-user-view-header",
+        username,
+        pronouns = user_data.pronouns.as_deref().filter(|s| !s.is_empty()),
+        followers,
+        following,
+        website = user_data.website.as_deref().filter(|s| !s.is_empty()),
+        email = user_data.email.as_deref().filter(|s| !s.is_empty())
+    );
 
     if let Some(desc) = user_data.description.as_deref() {
         if !desc.is_empty() {
@@ -449,8 +423,7 @@ async fn view_user(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
     let joined = user_data
         .created
         .ok_or_eyre("user does not have join date")?;
-    let date_format = time::macros::format_description!("[month repr:short] [day], [year]");
-    println!("Joined on {bold}{}{reset}", joined.format(&date_format)?);
+    ftl_println!("msg-user-view-joined_on", joined = joined.ftl());
 
     Ok(())
 }
@@ -476,15 +449,15 @@ async fn browse_user(api: &Forgejo, host_url: &url::Url, user: Option<&str>) -> 
     Ok(())
 }
 
-async fn follow_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
-    api.user_current_put_follow(user).await?;
-    println!("Followed {user}");
+async fn follow_user(api: &Forgejo, username: &str) -> eyre::Result<()> {
+    api.user_current_put_follow(username).await?;
+    ftl_println!("msg-user-follow-success", username);
     Ok(())
 }
 
-async fn unfollow_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
-    api.user_current_delete_follow(user).await?;
-    println!("Unfollowed {user}");
+async fn unfollow_user(api: &Forgejo, username: &str) -> eyre::Result<()> {
+    api.user_current_delete_follow(username).await?;
+    ftl_println!("msg-user-unfollow-success", username);
     Ok(())
 }
 
@@ -496,13 +469,13 @@ async fn list_following(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 
     if following.is_empty() {
         match user {
-            Some(name) => println!("{name} isn't following anyone"),
-            None => println!("You aren't following anyone"),
+            Some(name) => ftl_println!("msg-user-following-none-other", name),
+            None => ftl_println!("msg-user-following-none-self"),
         }
     } else {
         match user {
-            Some(name) => println!("{name} is following:"),
-            None => println!("You are following:"),
+            Some(name) => ftl_println!("msg-user-following-other", name),
+            None => ftl_println!("msg-user-following-self"),
         }
         let SpecialRender { bullet, .. } = *crate::special_render();
 
@@ -526,13 +499,13 @@ async fn list_followers(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 
     if followers.is_empty() {
         match user {
-            Some(name) => println!("{name} has no followers"),
-            None => println!("You have no followers :("),
+            Some(user) => ftl_println!("msg-user-followers-none-other", user),
+            None => ftl_println!("msg-user-followers-none-self"),
         }
     } else {
         match user {
-            Some(name) => println!("{name} is followed by:"),
-            None => println!("You are followed by:"),
+            Some(user) => ftl_println!("msg-user-followers-other", user),
+            None => ftl_println!("msg-user-followers-self"),
         }
         let SpecialRender { bullet, .. } = *crate::special_render();
 
@@ -550,13 +523,13 @@ async fn list_followers(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 
 async fn block_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
     api.user_block_user(user).await?;
-    println!("Blocked {user}");
+    ftl_println!("msg-user-block-success", user);
     Ok(())
 }
 
 async fn unblock_user(api: &Forgejo, user: &str) -> eyre::Result<()> {
     api.user_unblock_user(user).await?;
-    println!("Unblocked {user}");
+    ftl_println!("msg-user-unblock-success", user);
     Ok(())
 }
 
@@ -605,13 +578,13 @@ async fn list_repos(
     if repos.is_empty() {
         if starred {
             match user {
-                Some(user) => println!("{user} has not starred any repos"),
-                None => println!("You have not starred any repos"),
+                Some(user) => ftl_println!("msg-user-repos-none-starred-other", user),
+                None => ftl_println!("msg-user-repos-none-starred-self"),
             }
         } else {
             match user {
-                Some(user) => println!("{user} does not own any repos"),
-                None => println!("You do not own any repos"),
+                Some(user) => ftl_println!("msg-user-repos-none-other", user),
+                None => ftl_println!("msg-user-repos-none-self"),
             }
         };
     } else {
@@ -627,13 +600,7 @@ async fn list_repos(
         };
         repos.sort_unstable_by(sort_fn);
 
-        let SpecialRender {
-            bullet,
-            bold,
-            dash,
-            reset,
-            ..
-        } = *crate::special_render();
+        let SpecialRender { bullet, .. } = *crate::special_render();
         for repo in &repos {
             let name = repo
                 .full_name
@@ -647,18 +614,17 @@ async fn list_repos(
             Some(t) => t as usize,
             None => repos.len(),
         };
-        let pages_total = total_items.div_ceil(50);
+        let total_pages = total_items.div_ceil(50);
 
-        if repos.len() == 1 {
-            println!("1 repo");
-        } else {
-            println!(
-                "Showing {bold}{}{dash}{}{reset} of {bold}{}{reset} results ({page}/{pages_total})",
-                page_start + 1,
-                page_start + repos.len() as u32,
-                total_items,
-            );
-        }
+        ftl_println!(
+            "msg-user-search-footer",
+            first_index = page_start + 1,
+            last_index = (page_start + 20).min(repos.len() as u32),
+            total_results = repos.len(),
+            page,
+            total_pages,
+            more = if repos.len() > 20 { "yes" } else { "no" }
+        );
     }
 
     Ok(())
@@ -672,8 +638,8 @@ async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
 
     if orgs.is_empty() {
         match user {
-            Some(user) => println!("{user} is not a member of any organizations"),
-            None => println!("You are not a member of any organizations"),
+            Some(user) => ftl_println!("msg-user-orgs-none-other", user),
+            None => println!("msg-user-orgs-none-self"),
         }
     } else {
         orgs.sort_unstable_by(|a, b| a.name.cmp(&b.name));
@@ -691,11 +657,7 @@ async fn list_orgs(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
                 println!("{bullet} {name}");
             }
         }
-        if orgs.len() == 1 {
-            println!("1 organization");
-        } else {
-            println!("{} organizations", orgs.len());
-        }
+        ftl_println!("msg-user-orgs-count", organizations = orgs.len());
     }
     Ok(())
 }
@@ -732,7 +694,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
         .act_user
         .as_ref()
         .ok_or_eyre("activity does not have actor")?;
-    let actor_name = actor
+    let actor = actor
         .login
         .as_deref()
         .ok_or_eyre("actor does not have name")?;
@@ -755,7 +717,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
         .as_deref()
         .ok_or_eyre("repo does not have full name");
 
-    fn repo_name(repo: &forgejo_api::structs::Repository) -> eyre::Result<&str> {
+    fn get_repo_name(repo: &forgejo_api::structs::Repository) -> eyre::Result<&str> {
         repo.full_name
             .as_deref()
             .ok_or_eyre("repo does not have full name")
@@ -773,147 +735,131 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
         )?)
     }
 
-    print!("");
     use forgejo_api::structs::ActivityOpType;
     match op_type {
         ActivityOpType::CreateRepo => {
             let repo = repo?;
-            let full_name = repo_name(repo)?;
+            let repo_name = get_repo_name(repo)?;
             if let Some(parent) = &repo.parent {
-                let parent_full_name = repo_name(parent)?;
-                println!("{bold}{actor_name}{reset} forked repository {bold}{yellow}{parent_full_name}{reset} to {bold}{yellow}{full_name}{reset}");
+                let parent_repo_name = get_repo_name(parent)?;
+                ftl_println!(
+                    "msg-activity-created_fork",
+                    actor,
+                    parent_repo_name,
+                    repo_name
+                );
             } else if repo.mirror.is_some_and(|b| b) {
-                println!(
-                    "{bold}{actor_name}{reset} created mirror {bold}{yellow}{full_name}{reset}"
-                );
+                ftl_println!("msg-activity-created_mirror", actor, repo_name);
             } else {
-                println!(
-                    "{bold}{actor_name}{reset} created repository {bold}{yellow}{full_name}{reset}"
-                );
+                ftl_println!("msg-activity-created_repo", actor, repo_name);
             }
         }
         ActivityOpType::RenameRepo => {
-            let content = content?;
-            let full_name = repo_name(repo?)?;
-            println!("{bold}{actor_name}{reset} renamed repository from {bold}{yellow}\"{content}\"{reset} to {bold}{yellow}{full_name}{reset}");
+            let old_name = content?;
+            let new_name = get_repo_name(repo?)?;
+            ftl_println!("msg-activity-renamed_repo", actor, old_name, new_name);
         }
         ActivityOpType::StarRepo => {
-            let full_name = repo_name(repo?)?;
-            println!(
-                "{bold}{actor_name}{reset} starred repository {bold}{yellow}{full_name}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            ftl_println!("msg-activity-starred_repo", actor, repo_name);
         }
         ActivityOpType::WatchRepo => {
-            let full_name = repo_name(repo?)?;
-            println!(
-                "{bold}{actor_name}{reset} watched repository {bold}{yellow}{full_name}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            ftl_println!("msg-activity-watched_repo", actor, repo_name);
         }
         ActivityOpType::CommitRepo => {
-            let full_name = repo_name(repo?)?;
+            let repo_name = get_repo_name(repo?)?;
             let ref_name = ref_name?;
             let branch = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
             if !content?.is_empty() {
-                println!("{bold}{actor_name}{reset} pushed to {bold}{bright_cyan}{branch}{reset} on {bold}{yellow}{full_name}{reset}");
+                ftl_println!("msg-activity-pushed_commit", actor, branch, repo_name);
             }
         }
         ActivityOpType::CreateIssue => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!("{bold}{actor_name}{reset} opened issue {bold}{yellow}{name}#{id}{reset}");
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-created_issue", actor, repo_name, number);
         }
         ActivityOpType::CreatePullRequest => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!(
-                "{bold}{actor_name}{reset} created pull request {bold}{yellow}{name}#{id}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-created_pr", actor, repo_name, number);
         }
         ActivityOpType::TransferRepo => {
-            let full_name = repo_name(repo?)?;
-            let content = content?;
-            println!("{bold}{actor_name}{reset} transferred repository {bold}{yellow}{content}{reset} to {bold}{yellow}{full_name}{reset}");
+            let old_name = content?;
+            let new_name = get_repo_name(repo?)?;
+            ftl_println!("msg-activity-transferred_repo", actor, old_name, new_name);
         }
         ActivityOpType::PushTag => {
-            let full_name = repo_name(repo?)?;
+            let repo_name = get_repo_name(repo?)?;
             let ref_name = ref_name?;
-            let tag = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
-            println!("{bold}{actor_name}{reset} pushed tag {bold}{bright_cyan}{tag}{reset} to {bold}{yellow}{full_name}{reset}");
+            let tag_name = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
+            ftl_println!("msg-activity-pushed_tag", actor, tag_name, repo_name);
         }
         ActivityOpType::CommentIssue => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!(
-                "{bold}{actor_name}{reset} commented on issue {bold}{yellow}{name}#{id}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-commented_issue", actor, repo_name, number);
         }
         ActivityOpType::MergePullRequest | ActivityOpType::AutoMergePullRequest => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!(
-                "{bold}{actor_name}{reset} merged pull request {bold}{yellow}{name}#{id}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-merged_pr", actor, repo_name, number);
         }
         ActivityOpType::CloseIssue => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!("{bold}{actor_name}{reset} closed issue {bold}{yellow}{name}#{id}{reset}");
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-closed_issue", actor, repo_name, number);
         }
         ActivityOpType::ReopenIssue => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!("{bold}{actor_name}{reset} reopened issue {bold}{yellow}{name}#{id}{reset}");
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-reopened_issue", actor, repo_name, number);
         }
         ActivityOpType::ClosePullRequest => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!(
-                "{bold}{actor_name}{reset} closed pull request {bold}{yellow}{name}#{id}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-closed_pr", actor, repo_name, number);
         }
         ActivityOpType::ReopenPullRequest => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!(
-                "{bold}{actor_name}{reset} reopened pull request {bold}{yellow}{name}#{id}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-reopened_pr", actor, repo_name, number);
         }
         ActivityOpType::DeleteTag => {
-            let full_name = repo_name(repo?)?;
+            let repo_name = get_repo_name(repo?)?;
             let ref_name = ref_name?;
-            let tag = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
-            println!("{bold}{actor_name}{reset} deleted tag {bold}{bright_cyan}{tag}{reset} from {bold}{yellow}{full_name}{reset}");
+            let tag_name = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
+            ftl_println!("msg-activity-deleted_tag", actor, tag_name, repo_name);
         }
         ActivityOpType::DeleteBranch => {
-            let full_name = repo_name(repo?)?;
+            let repo_name = get_repo_name(repo?)?;
             let ref_name = ref_name?;
             let branch = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
-            println!("{bold}{actor_name}{reset} deleted branch {bold}{bright_cyan}{branch}{reset} from {bold}{yellow}{full_name}{reset}");
+            ftl_println!("msg-activity-deleted_branch", actor, branch, repo_name);
         }
         ActivityOpType::MirrorSyncPush => {}
         ActivityOpType::MirrorSyncCreate => {}
         ActivityOpType::MirrorSyncDelete => {}
         ActivityOpType::ApprovePullRequest => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!("{bold}{actor_name}{reset} approved {bold}{yellow}{name}#{id}{reset}");
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-approved_pr", actor, repo_name, number);
         }
         ActivityOpType::RejectPullRequest => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!(
-                "{bold}{actor_name}{reset} suggested changes for {bold}{yellow}{name}#{id}{reset}"
-            );
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-rejected_pr", actor, repo_name, number);
         }
         ActivityOpType::CommentPull => {
-            let name = repo_name(repo?)?;
-            let (id, _) = issue_content(content?)?;
-            println!("{bold}{actor_name}{reset} commented on pull request {bold}{yellow}{name}#{id}{reset}");
+            let repo_name = get_repo_name(repo?)?;
+            let (number, _) = issue_content(content?)?;
+            ftl_println!("msg-activity-commented_pr", actor, repo_name, number);
         }
         ActivityOpType::PublishRelease => {
-            let full_name = repo_name(repo?)?;
-            let content = content?;
-            println!("{bold}{actor_name}{reset} created release {bold}{bright_cyan}\"{content}\"{reset} to {bold}{yellow}{full_name}{reset}");
+            let repo_name = get_repo_name(repo?)?;
+            let release_name = content?;
+            ftl_println!("msg-activity-deleted_tag", actor, release_name, repo_name);
         }
         ActivityOpType::PullReviewDismissed => {}
         ActivityOpType::PullRequestReadyForReview => {}
@@ -977,7 +923,7 @@ async fn edit_name(api: &Forgejo, new_name: Option<String>, unset: bool) -> eyre
             };
             api.update_user_settings(opt).await?;
         }
-        _ => println!("Use --unset to remove your name from your profile"),
+        _ => ftl_println!("msg-user-edit-name-removal_hint"),
     }
     Ok(())
 }
@@ -1003,7 +949,7 @@ async fn edit_pronouns(
             };
             api.update_user_settings(opt).await?;
         }
-        _ => println!("Use --unset to remove your pronouns from your profile"),
+        _ => ftl_println!("msg-user-edit-pronouns-removal_hint"),
     }
     Ok(())
 }
@@ -1029,7 +975,7 @@ async fn edit_location(
             };
             api.update_user_settings(opt).await?;
         }
-        _ => println!("Use --unset to remove your location from your profile"),
+        _ => ftl_println!("msg-user-edit-location-removal_hint"),
     }
     Ok(())
 }
@@ -1084,7 +1030,7 @@ async fn edit_website(api: &Forgejo, new_url: Option<String>, unset: bool) -> ey
             };
             api.update_user_settings(opt).await?;
         }
-        _ => println!("Use --unset to remove your name from your profile"),
+        _ => ftl_println!("msg-user-edit-website-removal_hint"),
     }
     Ok(())
 }
@@ -1100,7 +1046,7 @@ async fn list_keys(api: &Forgejo, verbose: bool) -> eyre::Result<()> {
 
     let keys = api.user_current_list_keys(Default::default()).all().await?;
 
-    println!("total keys: {}", keys.len());
+    ftl_println!("msg-user-key-list-count", keys = keys.len());
 
     let id_length = keys
         .iter()
@@ -1119,7 +1065,8 @@ async fn list_keys(api: &Forgejo, verbose: bool) -> eyre::Result<()> {
         let id = key.id.unwrap_or(0);
 
         if verbose {
-            println!("\n{bold}Key {bright_magenta}{id}{reset}:");
+            println!();
+            ftl_println!("msg-user-key-list-header", id);
             print_key(&key, 4);
         } else {
             let title = crate::DisplayOptional(key.title, "?");
@@ -1143,31 +1090,34 @@ async fn view_key(api: &Forgejo, id: i64) -> eyre::Result<()> {
 
 fn print_key(key: &forgejo_api::structs::PublicKey, indent: usize) {
     let SpecialRender {
-        bold,
-        bright_red,
-        bright_cyan,
-        reset,
-        ..
+        bright_red, reset, ..
     } = *crate::special_render();
 
     let indent = " ".repeat(indent);
     let unknown_value = format!("{bright_red}?{reset}");
 
-    println!(
-        "{indent}{bold}Title:       {reset}{bright_cyan}{}{reset}",
-        crate::DisplayOptional(key.title.as_ref(), &unknown_value),
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-key-list-title",
+        title = key.title.as_deref().unwrap_or(&unknown_value)
     );
-    println!(
-        "{indent}{bold}Created At:  {reset}{bright_cyan}{}{reset}",
-        crate::DisplayOptional(key.created_at, &unknown_value),
+
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-key-list-created_at",
+        created_at = key.created_at.as_ref().map(|ts| ts.ftl())
     );
-    println!(
-        "{indent}{bold}Type:        {reset}{bright_cyan}{}{reset}",
-        crate::DisplayOptional(key.key_type.as_ref(), &unknown_value),
+
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-key-list-type",
+        key_type = key.key_type.as_deref().unwrap_or(&unknown_value)
     );
-    println!(
-        "{indent}{bold}Fingerprint: {reset}{bright_cyan}{}{reset}",
-        crate::DisplayOptional(key.fingerprint.as_ref(), &unknown_value),
+
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-key-list-fingerprint",
+        fingerprint = key.fingerprint.as_deref().unwrap_or(&unknown_value)
     );
 
     if let Some(key) = &key.key {
@@ -1177,8 +1127,7 @@ fn print_key(key: &forgejo_api::structs::PublicKey, indent: usize) {
 
 async fn delete_key(api: &Forgejo, id: i64) -> eyre::Result<()> {
     api.user_current_delete_key(id).await?;
-    println!("successfully deleted key with ID {id}");
-
+    ftl_println!("msg-user-key-delete-success", id);
     Ok(())
 }
 
@@ -1197,9 +1146,7 @@ async fn upload_key(
         std::path::PathBuf::from(file)
     } else {
         let ssh_dir = directories::UserDirs::new()
-            .ok_or_eyre(
-                "Couldn't locate home directory. Please provide an explicit path for the key file.",
-            )?
+            .ok_or_else(|| ftl_eyre!("msg-user-key-upload-home_not_found"))?
             .home_dir()
             .join(".ssh");
 
@@ -1207,7 +1154,7 @@ async fn upload_key(
 
         loop {
             let Some(entry) = dirstream.next_entry().await? else {
-                eyre::bail!("No keys found.");
+                ftl_bail!("msg-user-key-upload-home_not_found");
             };
 
             if !entry.file_type().await?.is_file() {
@@ -1220,26 +1167,23 @@ async fn upload_key(
             }
 
             let path = entry.path();
-            eyre::ensure!(
+            ftl_ensure!(
                 crate::ftl_prompt_bool!(
                     default false;
                     "msg-user-key-upload-confirm_key_file_prompt",
                     path = path.to_string_lossy()
                 )?,
-                "User didn't confirm guessed key file.",
+                "msg-user-key-upload-file_unconfirmed",
             );
 
             break path;
         }
     };
 
-    eyre::ensure!(
+    ftl_ensure!(
         force || is_stdin || file.extension().map(|e| e == "pub").unwrap_or_default(),
-        concat!(
-            "'{}' doesn't end in '.pub'. Are you sure this isn't a private key?",
-            " If you want to proceed anyways, add --force."
-        ),
-        file.display(),
+        "msg-user-key-upload-unexpected_extension",
+        path = file.to_string_lossy()
     );
 
     let content = if is_stdin {
@@ -1255,31 +1199,26 @@ async fn upload_key(
     //
     // Public keys are one-line and start with "ssh-", so we check for that.
     let trimmed = content.trim();
-    eyre::ensure!(
+    ftl_ensure!(
         force || (trimmed.starts_with("ssh-") && !trimmed.contains('\n')),
-        concat!(
-            "'{}' looks like a private key or invalid data!",
-            " If you want to proceed anyways, add --force."
-        ),
-        file.display(),
+        "msg-user-key-upload-invalid_key",
+        path = file.to_string_lossy()
     );
 
     let title = if let Some(title) = title {
         title
     } else {
         let Some(guess) = trimmed.split(' ').last() else {
-            eyre::bail!(
-                "Couldn't guess key title, please provide one explicitly and check your key file."
-            );
+            ftl_bail!("msg-user-key-upload-no_title");
         };
 
-        eyre::ensure!(
+        ftl_ensure!(
             crate::ftl_prompt_bool!(
                 default false;
                 "msg-user-key-upload-confirm_key_title_prompt",
                 title = guess
             )?,
-            "User didn't confirm guessed title.",
+            "msg-user-key-upload-title_unconfirmed",
         );
 
         guess.to_string()
@@ -1292,7 +1231,8 @@ async fn upload_key(
     };
 
     let key = api.user_current_post_key(body).await?;
-    println!("Key created successfully!\n");
+    ftl_println!("msg-user-key-upload-success");
+    println!();
     print_key(&key, 0);
 
     Ok(())
@@ -1322,11 +1262,11 @@ async fn list_gpg(api: &Forgejo, verbose: bool) -> eyre::Result<()> {
         .max()
         .unwrap_or(0);
 
-    println!("total keys: {}", keys.len());
+    ftl_println!("msg-user-gpg-list-count", keys = keys.len());
     for key in keys {
         let id = key.id.unwrap_or(0);
         if verbose {
-            println!("\n{bold}Key {bright_magenta}{id}{reset}:");
+            ftl_println!("msg-user-gpg-list-header", id);
             print_gpg(&key, 4);
         } else {
             let keyid = crate::DisplayOptional(key.key_id, "?");
@@ -1357,41 +1297,50 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
     let indent = " ".repeat(indent_depth);
     let unknown_value = format!("{bright_red}?{reset}");
 
-    println!(
-        "{indent}{bold}Key ID:              {reset}{bright_cyan}{}{reset}",
-        crate::DisplayOptional(key.key_id.as_ref(), &unknown_value)
+    let ftl_bool = |b| if b { "yes" } else { "no" };
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-gpg-list-key_id",
+        key_id = key.key_id.as_deref().unwrap_or(&unknown_value)
     );
-    println!(
-        "{indent}{bold}Can Sign:            {reset}{}",
-        crate::DisplayBool(key.can_sign.unwrap_or(false))
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-gpg-list-can_sign",
+        can_sign = ftl_bool(key.can_sign.unwrap_or_default())
     );
-    println!(
-        "{indent}{bold}Can Encrypt Comms:   {reset}{}",
-        crate::DisplayBool(key.can_encrypt_comms.unwrap_or(false))
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-gpg-list-can_encrypt_comms",
+        can_encrypt_comms = ftl_bool(key.can_encrypt_comms.unwrap_or_default())
     );
-    println!(
-        "{indent}{bold}Can Encrypt Storage: {reset}{}",
-        crate::DisplayBool(key.can_encrypt_storage.unwrap_or(false))
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-gpg-list-can_encrypt_storage",
+        can_encrypt_storage = ftl_bool(key.can_encrypt_storage.unwrap_or_default())
     );
-    println!(
-        "{indent}{bold}Can Certify:         {reset}{}",
-        crate::DisplayBool(key.can_certify.unwrap_or(false))
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-gpg-list-can_certify",
+        can_certify = ftl_bool(key.can_certify.unwrap_or_default())
     );
-    println!(
-        "{indent}{bold}Verified:            {reset}{}",
-        crate::DisplayBool(key.verified.unwrap_or(false))
+    print!("{indent}");
+    ftl_println!(
+        "msg-user-gpg-list-verified",
+        verified = ftl_bool(key.verified.unwrap_or_default())
     );
 
-    for email in key.emails.as_ref().map(Vec::as_slice).unwrap_or_default() {
+    for email in key.emails.as_deref().unwrap_or_default() {
         if let forgejo_api::structs::GPGKeyEmail {
             email: Some(email),
             verified,
         } = email
         {
-            let verified = verified.unwrap_or(false);
-            println!(
-                "{indent}{bright_cyan}{email}{reset} {}",
-                if verified { "verified" } else { "not verified" }
+            let verified = verified.unwrap_or_default();
+            print!("{indent}");
+            ftl_println!(
+                "msg-user-gpg-list-email",
+                email,
+                verified = ftl_bool(verified)
             );
         }
     }
@@ -1401,18 +1350,17 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
     }
 
     for subkey in key.subkeys.as_ref().map(Vec::as_slice).unwrap_or(&[]) {
-        println!(
-            "\n{indent}{bold}Subkey {bright_magenta}{}{reset}:",
-            crate::DisplayOptional(key.id, "?")
-        );
+        println!();
+        print!("{indent}");
+        ftl_println!("msg-user-gpg-list-subkey", id = key.id);
         print_gpg(subkey, indent_depth + 4);
     }
 }
 
 async fn delete_gpg(api: &Forgejo, id: i64, force: bool) -> eyre::Result<()> {
-    eyre::ensure!(
-        force || crate::ftl_prompt_bool!(default false; "msg-user-key-delete-confirmation_prompt")?,
-        "User aborted process.",
+    ftl_ensure!(
+        force || crate::ftl_prompt_bool!(default false; "msg-user-gpg-delete-confirmation_prompt")?,
+        "msg-user-gpg-delete-unconfirmed",
     );
 
     api.user_current_delete_gpg_key(id).await?;
@@ -1422,7 +1370,7 @@ async fn delete_gpg(api: &Forgejo, id: i64, force: bool) -> eyre::Result<()> {
 }
 
 async fn upload_gpg(api: &Forgejo, key_name: String, no_verify: bool) -> eyre::Result<()> {
-    println!("Exporting key...");
+    ftl_println!("msg-user-gpg-upload-exporting");
     let key_output = tokio::process::Command::new("gpg")
         .arg("--export")
         .arg("--armor")
@@ -1431,10 +1379,10 @@ async fn upload_gpg(api: &Forgejo, key_name: String, no_verify: bool) -> eyre::R
         .output()
         .await?;
 
-    eyre::ensure!(
+    ftl_ensure!(
         key_output.status.success(),
-        "Failed to export key. GPG status: {}",
-        key_output.status,
+        "msg-user-gpg-upload-export_failed",
+        status_code = key_output.status.code()
     );
 
     eyre::ensure!(!key_output.stdout.is_empty(), "No such key found!");
@@ -1453,7 +1401,8 @@ async fn upload_gpg(api: &Forgejo, key_name: String, no_verify: bool) -> eyre::R
     };
     let key = api.user_current_post_gpg_key(form).await?;
 
-    println!("Key successfully added!\n");
+    ftl_println!("msg-user-gpg-upload-success");
+    println!();
     print_gpg(&key, 0);
 
     Ok(())
@@ -1462,10 +1411,10 @@ async fn upload_gpg(api: &Forgejo, key_name: String, no_verify: bool) -> eyre::R
 async fn gpg_verify_token(api: &Forgejo, key_name: &str) -> eyre::Result<String> {
     use tokio::io::AsyncWriteExt;
 
-    println!("Fetching verification token...");
+    ftl_println!("msg-user-gpg-verify-fetching_token");
     let token = api.get_verification_token().await?;
 
-    println!("Signing verification token with key '{key_name}'...");
+    ftl_println!("msg-user-gpg-verify-signing_token", key_name);
     let mut child = tokio::process::Command::new("gpg")
         .arg("--armor")
         .arg("--default-key")
@@ -1481,10 +1430,10 @@ async fn gpg_verify_token(api: &Forgejo, key_name: &str) -> eyre::Result<String>
     let output = child.wait_with_output().await?;
     writer.await??;
 
-    eyre::ensure!(
+    ftl_ensure!(
         output.status.success(),
-        "Failed to export key. GPG status: {}",
-        output.status,
+        "msg-user-gpg-upload-signing_failed",
+        status_code = output.status.code()
     );
 
     Ok(String::from_utf8(output.stdout)?)
@@ -1497,7 +1446,7 @@ async fn verify_gpg(api: &Forgejo, id: i64) -> eyre::Result<()> {
         eyre::bail!("API didn't return a key ID!");
     };
 
-    println!("Verifying this key:");
+    ftl_println!("msg-user-gpg-verify-key_to_verify");
     print_gpg(&key, 0);
 
     let token = gpg_verify_token(api, key_id).await?;
@@ -1508,7 +1457,7 @@ async fn verify_gpg(api: &Forgejo, id: i64) -> eyre::Result<()> {
     };
     api.user_verify_gpg_key(option).await?;
 
-    println!("Verification successful!");
+    ftl_println!("msg-user-gpg-verify-success");
 
     Ok(())
 }
