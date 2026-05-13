@@ -671,7 +671,6 @@ dependencies = [
  "forgejo-api",
  "futures",
  "git2",
- "glob",
  "hyper",
  "hyper-util",
  "icu_calendar",

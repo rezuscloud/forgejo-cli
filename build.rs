@@ -4,8 +4,8 @@ fn main() {
         std::env::var("TARGET").unwrap()
     );
 
-    for path in glob::glob("localization/*/*.ftl").unwrap() {
-        let path = path.unwrap();
+    for entry in std::fs::read_dir("localization").unwrap() {
+        let path = entry.unwrap().path().join("messages.ftl");
         check_fluent_file(&path);
     }
 }
