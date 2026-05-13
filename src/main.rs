@@ -309,7 +309,6 @@ struct SpecialRender {
     body_prefix: char,
     horiz_rule: char,
 
-    // Uncomment these as needed
     red: &'static str,
     bright_red: &'static str,
     green: &'static str,
