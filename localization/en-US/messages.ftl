@@ -590,24 +590,24 @@ msg-user-gpg-list-count = total keys: {$keys}
 msg-user-gpg-list-header = {STYLE("bold")}Key {STYLE("bright-magenta")}{$id}{STYLE("reset")}
 msg-user-gpg-list-key_id = {STYLE("bold")}Key ID:{STYLE("reset")}              {STYLE("bright-cyan")}{$key_id}{STYLE("reset")}
 msg-user-gpg-list-can_sign = {STYLE("bold")}Can Sign:{STYLE("reset")}            {$can_sign ->
-        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
-       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+        [yes] {STYLE("bright-green")}true{STYLE("reset")}
+       *[no] {STYLE("bright-red")}false{STYLE("reset")}
     }
 msg-user-gpg-list-can_encrypt_comms = {STYLE("bold")}Can Encrypt Comms:{STYLE("reset")}   {$can_encrypt_comms ->
-        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
-       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+        [yes] {STYLE("bright-green")}true{STYLE("reset")}
+       *[no] {STYLE("bright-red")}false{STYLE("reset")}
     }
 msg-user-gpg-list-can_encrypt_storage = {STYLE("bold")}Can Encrypt Storage:{STYLE("reset")} {$can_encrypt_storage ->
-        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
-       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+        [yes] {STYLE("bright-green")}true{STYLE("reset")}
+       *[no] {STYLE("bright-red")}false{STYLE("reset")}
     }
 msg-user-gpg-list-can_certify = {STYLE("bold")}Can Certify:{STYLE("reset")}         {$can_certify ->
-        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
-       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+        [yes] {STYLE("bright-green")}true{STYLE("reset")}
+       *[no] {STYLE("bright-red")}false{STYLE("reset")}
     }
 msg-user-gpg-list-verified = {STYLE("bold")}Verified:{STYLE("reset")}            {$verified ->
-        [yes] {STYLE("bright-cyan")}true{STYLE("reset")}
-       *[no] {STYLE("bright-cyan")}false{STYLE("reset")}
+        [yes] {STYLE("bright-green")}true{STYLE("reset")}
+       *[no] {STYLE("bright-red")}false{STYLE("reset")}
     }
 msg-user-gpg-list-email = {STYLE("bright-cyan")}{$email}{STYLE("reset")} {$verified ->
         [yes] verified
