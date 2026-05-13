@@ -243,7 +243,7 @@ async fn view_team(
         "msg-org-team-view",
         name,
         org,
-        admin = if is_admin { "yes" } else { "no" }
+        admin = if is_admin { "yes" } else { "no" },
     );
 
     if let Some(description) = &team.description {
@@ -365,7 +365,7 @@ async fn create_team(
         "msg-org-team-create-success",
         name,
         org = org_name,
-        admin = if flags.admin { "yes" } else { "no" }
+        admin = if flags.admin { "yes" } else { "no" },
     );
     Ok(())
 }
@@ -495,7 +495,7 @@ async fn list_team_repos(api: &Forgejo, org: String, team: String, page: u32) ->
         ftl_eprintln!(
             "msg-org-team-repo-list-page_number",
             page,
-            total = (count as u64).div_ceil(20)
+            total = (count as u64).div_ceil(20),
         );
     }
     Ok(())
@@ -622,7 +622,7 @@ async fn list_team_members(
         ftl_eprintln!(
             "msg-org-team-member-list-page_number",
             page,
-            total = (count as u64).div_ceil(20)
+            total = (count as u64).div_ceil(20),
         );
     }
     Ok(())

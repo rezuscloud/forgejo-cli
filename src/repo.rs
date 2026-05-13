@@ -661,7 +661,7 @@ impl RepoCommand {
                 ftl_println!(
                     "msg-repo-star-success",
                     owner = name.owner(),
-                    repo = name.name()
+                    repo = name.name(),
                 );
             }
             RepoCommand::Unstar { repo, remote } => {
@@ -676,7 +676,7 @@ impl RepoCommand {
                 ftl_println!(
                     "msg-repo-unstar-success",
                     owner = name.owner(),
-                    repo = name.name()
+                    repo = name.name(),
                 );
             }
             RepoCommand::Delete { repo } => {
@@ -1211,7 +1211,7 @@ async fn fork_repo(api: &Forgejo, repo: &RepoName, name: Option<String>) -> eyre
         "msg-repo-fork-success",
         parent_owner = repo.owner(),
         parent_name = repo.name(),
-        fork_name
+        fork_name,
     );
 
     Ok(())
@@ -1444,18 +1444,18 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
     } = crate::special_render();
     ftl_println!(
         "msg-repo-view-name",
-        repo_name = repo.full_name.as_deref().ok_or_eyre("no full name")?
+        repo_name = repo.full_name.as_deref().ok_or_eyre("no full name")?,
     );
     if let Some(parent) = repo.parent.as_ref() {
         ftl_println!(
             "msg-repo-view-is_fork",
-            parent = parent.full_name.as_deref()
+            parent = parent.full_name.as_deref(),
         );
     }
     if repo.mirror == Some(true) {
         ftl_println!(
             "msg-repo-view-is_fork",
-            mirror_of = repo.original_url.as_ref().map(|url| url.as_str())
+            mirror_of = repo.original_url.as_ref().map(|url| url.as_str()),
         );
     };
     let desc = repo.description.as_deref().unwrap_or_default();
@@ -1479,17 +1479,17 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
 
     ftl_print!(
         "msg-repo-view-stars",
-        stars = repo.stars_count.unwrap_or_default()
+        stars = repo.stars_count.unwrap_or_default(),
     );
     print!(" {dash} ");
     ftl_print!(
         "msg-repo-view-watching",
-        watching = repo.watchers_count.unwrap_or_default()
+        watching = repo.watchers_count.unwrap_or_default(),
     );
     print!(" {dash} ");
     ftl_print!(
         "msg-repo-view-forks",
-        forks = repo.forks_count.unwrap_or_default()
+        forks = repo.forks_count.unwrap_or_default(),
     );
     println!();
 
@@ -1497,7 +1497,7 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
     if repo.has_issues.unwrap_or_default() && repo.external_tracker.is_none() {
         ftl_print!(
             "msg-repo-view-issues",
-            issues = repo.open_issues_count.unwrap_or_default()
+            issues = repo.open_issues_count.unwrap_or_default(),
         );
         first = false;
     }
@@ -1507,7 +1507,7 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
         }
         ftl_print!(
             "msg-repo-view-prs",
-            pull_requests = repo.open_pr_counter.unwrap_or_default()
+            pull_requests = repo.open_pr_counter.unwrap_or_default(),
         );
         first = false;
     }
@@ -1517,7 +1517,7 @@ async fn view_repo(api: &Forgejo, repo: &RepoName) -> eyre::Result<()> {
         }
         ftl_print!(
             "msg-repo-view-releases",
-            releases = repo.release_counter.unwrap_or_default()
+            releases = repo.release_counter.unwrap_or_default(),
         );
         first = false;
     }
@@ -1627,7 +1627,7 @@ async fn cmd_clone_repo(
     ftl_println!(
         "msg-repo-clone-success",
         repo = repo_full_name,
-        path = path.to_string_lossy()
+        path = path.to_string_lossy(),
     );
     Ok(())
 }
@@ -1739,14 +1739,14 @@ async fn delete_repo(api: &Forgejo, name: &RepoName) -> eyre::Result<()> {
     let confirmation = crate::ftl_prompt_bool!(
         default false; "msg-repo-delete-confirmation_prompt",
         owner = name.owner(),
-        name = name.name()
+        name = name.name(),
     )?;
     if confirmation {
         api.repo_delete(name.owner(), name.name()).await?;
         ftl_println!(
             "msg-repo-delete-success",
             owner = name.owner(),
-            repo = name.name()
+            repo = name.name(),
         );
     } else {
         ftl_println!("msg-repo-delete-cancelled");
@@ -1810,7 +1810,7 @@ async fn create_repo_label(
 
     ftl_println!(
         "msg-repo-label-create-success",
-        label = crate::render_label(&label)?
+        label = crate::render_label(&label)?,
     );
     Ok(())
 }
@@ -1854,7 +1854,7 @@ async fn edit_repo_label(
 
     ftl_println!(
         "msg-repo-label-edit-success",
-        label = crate::render_label(&label)?
+        label = crate::render_label(&label)?,
     );
 
     Ok(())

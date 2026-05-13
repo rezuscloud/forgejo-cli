@@ -52,7 +52,7 @@ impl AuthCommand {
                     ftl_eprintln!(
                         "msg-auth-login-oauth_unsupported",
                         host_domain,
-                        applications_url
+                        applications_url,
                     );
                 }
             }

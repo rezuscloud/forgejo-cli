@@ -391,7 +391,7 @@ async fn view_release(
         "msg-release-view-header",
         name,
         author,
-        created_at = created_at.ftl()
+        created_at = created_at.ftl(),
     );
     let SpecialRender { bullet, .. } = crate::special_render();
     let body = release
@@ -512,7 +512,7 @@ async fn delete_asset(
     ftl_println!(
         "msg-release-asset-delete-success",
         asset = asset_name,
-        release = release_name
+        release = release_name,
     );
     Ok(())
 }
@@ -575,7 +575,7 @@ async fn download_asset(
     ftl_println!(
         "msg-release-asset-download-success",
         asset = &asset,
-        file = output.as_deref().map(|p| p.to_string_lossy())
+        file = output.as_deref().map(|p| p.to_string_lossy()),
     );
 
     Ok(())

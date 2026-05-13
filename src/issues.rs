@@ -390,7 +390,7 @@ async fn create_issue(
                     has_templates,
                     "msg-issue-create-no_templates",
                     owner = repo.owner(),
-                    repo = repo.name()
+                    repo = repo.name(),
                 );
                 let (template_file, is_yaml) =
                     template::get_template_file(repo, api, &template_name).await?;
@@ -414,13 +414,13 @@ async fn create_issue(
                     blank_issues_enabled,
                     "msg-issue-create-templates_required",
                     owner = repo.owner(),
-                    repo = repo.name()
+                    repo = repo.name(),
                 );
                 ftl_ensure!(
                     !has_templates || no_template,
                     "msg-issue-create-templates_enabled",
                     owner = repo.owner(),
-                    repo = repo.name()
+                    repo = repo.name(),
                 );
                 let body = match body {
                     Some(body) => body,
@@ -513,7 +513,7 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, number: i64) -> eyre::Re
         title,
         number,
         author = username,
-        state
+        state,
     );
 
     crate::render_label_list(&issue.labels.unwrap_or_default())?;
@@ -691,7 +691,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
     ftl_println!(
         "msg-issue-view-comments-comment_header",
         full_name,
-        username
+        username,
     );
     println!("{}", crate::markdown(body));
     let assets = comment
@@ -701,7 +701,7 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
     if !assets.is_empty() {
         ftl_println!(
             "msg-issue-view-comments-attachments",
-            attachments = assets.len()
+            attachments = assets.len(),
         );
     }
     Ok(())
@@ -930,7 +930,7 @@ pub async fn assign_to_issue(
         repo = repo.name(),
         number = index,
         added,
-        duplicate
+        duplicate,
     );
     Ok(())
 }
@@ -976,7 +976,7 @@ pub async fn unassign_from_issue(
         repo = repo.name(),
         number = index,
         removed,
-        duplicate
+        duplicate,
     );
     Ok(())
 }
@@ -1029,7 +1029,7 @@ pub async fn close_issue(
     ftl_println!(
         "msg-issue-close-success",
         number = issue,
-        title = issue_title
+        title = issue_title,
     );
 
     Ok(())

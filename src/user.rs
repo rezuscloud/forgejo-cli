@@ -383,7 +383,7 @@ async fn user_search(api: &Forgejo, query: &str, page: Option<usize>) -> eyre::R
                 total_results = users.len(),
                 page,
                 total_pages,
-                more = if users.len() > 20 { "yes" } else { "no" }
+                more = if users.len() > 20 { "yes" } else { "no" },
             );
         }
     }
@@ -409,7 +409,7 @@ async fn view_user(api: &Forgejo, user: Option<&str>) -> eyre::Result<()> {
         followers,
         following,
         website = user_data.website.as_deref().filter(|s| !s.is_empty()),
-        email = user_data.email.as_deref().filter(|s| !s.is_empty())
+        email = user_data.email.as_deref().filter(|s| !s.is_empty()),
     );
 
     if let Some(desc) = user_data.description.as_deref() {
@@ -623,7 +623,7 @@ async fn list_repos(
             total_results = repos.len(),
             page,
             total_pages,
-            more = if repos.len() > 20 { "yes" } else { "no" }
+            more = if repos.len() > 20 { "yes" } else { "no" },
         );
     }
 
@@ -739,7 +739,7 @@ pub fn print_activity(activity: &forgejo_api::structs::Activity) -> eyre::Result
                     "msg-activity-created_fork",
                     actor,
                     parent_repo_name,
-                    repo_name
+                    repo_name,
                 );
             } else if repo.mirror.is_some_and(|b| b) {
                 ftl_println!("msg-activity-created_mirror", actor, repo_name);
@@ -1091,25 +1091,25 @@ fn print_key(key: &forgejo_api::structs::PublicKey, indent: usize) {
     print!("{indent}");
     ftl_println!(
         "msg-user-key-list-title",
-        title = key.title.as_deref().unwrap_or(&unknown_value)
+        title = key.title.as_deref().unwrap_or(&unknown_value),
     );
 
     print!("{indent}");
     ftl_println!(
         "msg-user-key-list-created_at",
-        created_at = key.created_at.as_ref().map(|ts| ts.ftl())
+        created_at = key.created_at.as_ref().map(|ts| ts.ftl()),
     );
 
     print!("{indent}");
     ftl_println!(
         "msg-user-key-list-type",
-        key_type = key.key_type.as_deref().unwrap_or(&unknown_value)
+        key_type = key.key_type.as_deref().unwrap_or(&unknown_value),
     );
 
     print!("{indent}");
     ftl_println!(
         "msg-user-key-list-fingerprint",
-        fingerprint = key.fingerprint.as_deref().unwrap_or(&unknown_value)
+        fingerprint = key.fingerprint.as_deref().unwrap_or(&unknown_value),
     );
 
     if let Some(key) = &key.key {
@@ -1163,7 +1163,7 @@ async fn upload_key(
                 crate::ftl_prompt_bool!(
                     default false;
                     "msg-user-key-upload-confirm_key_file_prompt",
-                    path = path.to_string_lossy()
+                    path = path.to_string_lossy(),
                 )?,
                 "msg-user-key-upload-file_unconfirmed",
             );
@@ -1175,7 +1175,7 @@ async fn upload_key(
     ftl_ensure!(
         force || is_stdin || file.extension().map(|e| e == "pub").unwrap_or_default(),
         "msg-user-key-upload-unexpected_extension",
-        path = file.to_string_lossy()
+        path = file.to_string_lossy(),
     );
 
     let content = if is_stdin {
@@ -1194,7 +1194,7 @@ async fn upload_key(
     ftl_ensure!(
         force || (trimmed.starts_with("ssh-") && !trimmed.contains('\n')),
         "msg-user-key-upload-invalid_key",
-        path = file.to_string_lossy()
+        path = file.to_string_lossy(),
     );
 
     let title = if let Some(title) = title {
@@ -1208,7 +1208,7 @@ async fn upload_key(
             crate::ftl_prompt_bool!(
                 default false;
                 "msg-user-key-upload-confirm_key_title_prompt",
-                title = guess
+                title = guess,
             )?,
             "msg-user-key-upload-title_unconfirmed",
         );
@@ -1287,32 +1287,32 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-key_id",
-        key_id = key.key_id.as_deref().unwrap_or(&unknown_value)
+        key_id = key.key_id.as_deref().unwrap_or(&unknown_value),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_sign",
-        can_sign = ftl_bool(key.can_sign.unwrap_or_default())
+        can_sign = ftl_bool(key.can_sign.unwrap_or_default()),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_encrypt_comms",
-        can_encrypt_comms = ftl_bool(key.can_encrypt_comms.unwrap_or_default())
+        can_encrypt_comms = ftl_bool(key.can_encrypt_comms.unwrap_or_default()),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_encrypt_storage",
-        can_encrypt_storage = ftl_bool(key.can_encrypt_storage.unwrap_or_default())
+        can_encrypt_storage = ftl_bool(key.can_encrypt_storage.unwrap_or_default()),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_certify",
-        can_certify = ftl_bool(key.can_certify.unwrap_or_default())
+        can_certify = ftl_bool(key.can_certify.unwrap_or_default()),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-verified",
-        verified = ftl_bool(key.verified.unwrap_or_default())
+        verified = ftl_bool(key.verified.unwrap_or_default()),
     );
 
     for email in key.emails.as_deref().unwrap_or_default() {
@@ -1326,7 +1326,7 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
             ftl_println!(
                 "msg-user-gpg-list-email",
                 email,
-                verified = ftl_bool(verified)
+                verified = ftl_bool(verified),
             );
         }
     }
@@ -1368,7 +1368,7 @@ async fn upload_gpg(api: &Forgejo, key_name: String, no_verify: bool) -> eyre::R
     ftl_ensure!(
         key_output.status.success(),
         "msg-user-gpg-upload-export_failed",
-        status_code = key_output.status.code()
+        status_code = key_output.status.code(),
     );
 
     eyre::ensure!(!key_output.stdout.is_empty(), "No such key found!");
@@ -1419,7 +1419,7 @@ async fn gpg_verify_token(api: &Forgejo, key_name: &str) -> eyre::Result<String>
     ftl_ensure!(
         output.status.success(),
         "msg-user-gpg-upload-signing_failed",
-        status_code = output.status.code()
+        status_code = output.status.code(),
     );
 
     Ok(String::from_utf8(output.stdout)?)

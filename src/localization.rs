@@ -211,7 +211,7 @@ macro_rules! ftl_format {
     ($msg_id:expr) => {
         $crate::ftl_format!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             if let Some((bundle, pattern)) = $crate::ftl_pattern!($msg_id) {
                 let args = $crate::ftl_args!($($var_name $(= $var_val)*),*);
@@ -251,7 +251,7 @@ macro_rules! ftl_write {
     ($writer:expr, $msg_id:expr) => {
         $crate::ftl_write!($writer, $msg_id,)
     };
-    ($writer:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($writer:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             #[allow(unused)]
             use std::fmt::Write;
@@ -292,7 +292,7 @@ macro_rules! ftl_print {
     ($msg_id:expr) => {
         $crate::ftl_print!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             let mut stdout = $crate::localization::WriterCompat(std::io::stdout());
             $crate::ftl_write!(&mut stdout, $msg_id, $($var_name $(= $var_val)*),*);
@@ -305,7 +305,7 @@ macro_rules! ftl_println {
     ($msg_id:expr) => {
         $crate::ftl_println!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             use std::fmt::Write;
             let mut stdout = $crate::localization::WriterCompat(std::io::stdout());
@@ -320,7 +320,7 @@ macro_rules! ftl_eprint {
     ($msg_id:expr) => {
         $crate::ftl_eprint!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             let mut stderr = $crate::localization::WriterCompat(std::io::stderr());
             $crate::ftl_write!(&mut stderr, $msg_id, $($var_name $(= $var_val)*),*);
@@ -333,7 +333,7 @@ macro_rules! ftl_eprintln {
     ($msg_id:expr) => {
         $crate::ftl_eprintln!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             use std::fmt::Write;
             let mut stderr = $crate::localization::WriterCompat(std::io::stderr());
@@ -348,7 +348,7 @@ macro_rules! ftl_eyre {
     ($msg_id:expr) => {
         $crate::ftl_eyre!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             eyre::eyre!("{}", $crate::ftl_format!($msg_id, $($var_name $(= $var_val)*),*))
         }
@@ -360,7 +360,7 @@ macro_rules! ftl_bail {
     ($msg_id:expr) => {
         $crate::ftl_bail!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             eyre::bail!("{}", $crate::ftl_format!($msg_id, $($var_name $(= $var_val)*),*))
         }
@@ -372,7 +372,7 @@ macro_rules! ftl_ensure {
     ($cond:expr, $msg_id:expr) => {
         $crate::ftl_ensure!($cond, $msg_id,)
     };
-    ($cond:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($cond:expr, $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             eyre::ensure!($cond, "{}", $crate::ftl_format!($msg_id, $($var_name $(= $var_val)*),*))
         }
@@ -384,7 +384,7 @@ macro_rules! ftl_readline {
     ($msg_id:expr) => {
         $crate::ftl_readline!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             use std::io::Write;
             $crate::ftl_print!($msg_id, $($var_name $(= $var_val)*),*);
@@ -399,7 +399,7 @@ macro_rules! ftl_prompt {
     ($msg_id:expr) => {
         $crate::ftl_prompt!($msg_id,)
     };
-    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             crate::prompt($msg_id, &$crate::ftl_args!($($var_name $(= $var_val)*),*)).await
         }
@@ -411,7 +411,7 @@ macro_rules! ftl_prompt_bool {
     (default $default:expr; $msg_id:expr) => {
         $crate::ftl_prompt_bool!(default $default; $msg_id,)
     };
-    (default $default:expr; $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),*) => {
+    (default $default:expr; $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
             crate::ftl_prompt!($msg_id, $($var_name $(= $var_val)*),*).map(|o| o.map(|r| r == "yes").unwrap_or($default))
         }

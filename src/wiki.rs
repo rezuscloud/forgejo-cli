@@ -175,7 +175,7 @@ async fn clone_wiki(
     ftl_println!(
         "msg-wiki-clone-success",
         repo = repo_full_name,
-        path = path.display().to_string()
+        path = path.display().to_string(),
     );
 
     Ok(())

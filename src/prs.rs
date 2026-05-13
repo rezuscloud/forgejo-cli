@@ -623,7 +623,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
         additions,
         deletions,
         head_branch,
-        base_branch = base_name
+        base_branch = base_name,
     );
 
     crate::render_label_list(pr.labels.as_deref().unwrap_or_default())?;
@@ -769,7 +769,7 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
             ftl_println!(
                 "msg-pr-status-merged",
                 merged_by,
-                merged_at = merged_at.ftl()
+                merged_at = merged_at.ftl(),
             );
         }
         PrStatus::Open {
@@ -787,7 +787,7 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
             ftl_println!(
                 "msg-pr-status-header",
                 state,
-                mergeable = if mergeable { "yes" } else { "no" }
+                mergeable = if mergeable { "yes" } else { "no" },
             );
 
             use forgejo_api::structs::CommitStatusState;
@@ -848,7 +848,7 @@ fn print_pr_review(review: &PullReview) -> eyre::Result<()> {
         reviewer,
         comments = comments_count,
         timestamp = review_ts.map(|ts| ts.ftl()),
-        state
+        state,
     );
 
     if let Some(body) = &review.body {
@@ -926,7 +926,7 @@ fn print_pr_reviews_comment(
         ftl_println!(
             "msg-pr-review-list-comment_position",
             commenter = user,
-            resolver
+            resolver,
         );
         println!("{}", crate::markdown(body));
     }
@@ -1045,7 +1045,7 @@ async fn create_pr(
                 remote_host == repo_http_host || remote_host == repo_ssh_host,
                 "msg-pr-create-cross_instance",
                 base_instance = repo_http_host,
-                head_instance = remote_host
+                head_instance = remote_host,
             );
 
             let remote_head_name =
@@ -1433,7 +1433,7 @@ async fn merge_pr(
     let default_message = || {
         ftl_format!(
             "msg-pr-merge-default_message",
-            pr_url = pr_html_url.as_str()
+            pr_url = pr_html_url.as_str(),
         )
         .into_owned()
     };
@@ -1566,7 +1566,7 @@ async fn checkout_pr(
         number = pr.number(),
         title,
         new_branch = if branch_is_new { "yes" } else { "no" },
-        branch_name
+        branch_name,
     );
 
     Ok(())

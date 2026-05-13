@@ -66,7 +66,7 @@ impl VersionCommand {
                     ftl_println!(
                         "msg-version-update_check-behind",
                         new_version = latest_ver.to_string(),
-                        url = url.as_str()
+                        url = url.as_str(),
                     );
                 }
                 Ordering::Equal => {
