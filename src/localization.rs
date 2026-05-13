@@ -297,6 +297,10 @@ impl<W: std::io::Write> std::fmt::Write for WriterCompat<W> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
     }
+
+    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) -> std::fmt::Result {
+        self.0.write_fmt(args).map_err(|_| std::fmt::Error)
+    }
 }
 
 #[macro_export]
