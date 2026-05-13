@@ -61,7 +61,7 @@ msg-org-view-team_count = {$team_count ->
     }
 
 msg-org-create-invalid_character = 
-    Organization names can only have alphanumeric characters, dash, underscore, or period.
+    Organization names can only have alphanumeric characters, dashes, underscores, or periods.
       If you want a name with other characters, try setting the --full-name flag
 msg-org-create-invalid_starting_character = 
     Organization names can only start with alphanumeric characters.
