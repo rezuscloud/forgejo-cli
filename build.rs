@@ -6,6 +6,7 @@ fn main() {
 
     for entry in std::fs::read_dir("localization").unwrap() {
         let path = entry.unwrap().path().join("messages.ftl");
+        println!("cargo::rerun-if-changed={}", path.display(),);
         check_fluent_file(&path);
     }
 }
@@ -39,7 +40,10 @@ fn check_fluent_file(path: &std::path::Path) {
                     if err.pos.start < current_offset + line.len() && err.pos.end > current_offset {
                         let spaces = err.pos.start.saturating_sub(current_offset);
                         let arrows = (err.pos.end - current_offset).min(line.len()) - spaces;
-                        println!("{pre}  {bold}{blue}|{reset} {:spaces$}{bold}{red}{:^<arrows$}{reset}", "", "");
+                        println!(
+                            "{pre}  {bold}{blue}|{reset} {:spaces$}{bold}{red}{:^<arrows$}{reset}",
+                            "", ""
+                        );
                         has_last_line = true;
                     }
                     current_offset += line.len() + 1;
