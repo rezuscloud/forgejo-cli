@@ -8,7 +8,7 @@ use forgejo_api::{
 };
 use futures::{future, TryStreamExt};
 
-use crate::{ftl_eprintln, ftl_println, ftl_prompt_bool, SpecialRender};
+use crate::{ftl_eprintln, ftl_println, ftl_prompt_bool, localization::AsFluent, SpecialRender};
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamSubcommand {
@@ -239,12 +239,7 @@ async fn view_team(
     let is_admin = team
         .permission
         .is_some_and(|p| p == forgejo_api::structs::TeamPermission::Admin);
-    ftl_println!(
-        "msg-org-team-view",
-        name,
-        org,
-        admin = if is_admin { "yes" } else { "no" },
-    );
+    ftl_println!("msg-org-team-view", name, org, admin = is_admin.ftl());
 
     if let Some(description) = &team.description {
         if !description.is_empty() {
@@ -365,7 +360,7 @@ async fn create_team(
         "msg-org-team-create-success",
         name,
         org = org_name,
-        admin = if flags.admin { "yes" } else { "no" },
+        admin = flags.admin.ftl(),
     );
     Ok(())
 }
@@ -407,7 +402,7 @@ async fn edit_team(
 
 async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<()> {
     let confirmation = ftl_prompt_bool!(
-        default false; "msg-org-team-delete-confirmation", org = &org, name = &name
+        default false; "msg-org-team-delete-confirmation", org = &org, name = &name,
     )?;
     if confirmation {
         let id = find_team_by_name(api, &org, &name)

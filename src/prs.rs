@@ -784,11 +784,7 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                 StateType::Closed => "closed",
             };
             let mergeable = pr.mergeable.ok_or_eyre("pr does not have mergeable")?;
-            ftl_println!(
-                "msg-pr-status-header",
-                state,
-                mergeable = if mergeable { "yes" } else { "no" },
-            );
+            ftl_println!("msg-pr-status-header", state, mergeable = mergeable.ftl());
 
             use forgejo_api::structs::CommitStatusState;
 
@@ -1565,7 +1561,7 @@ async fn checkout_pr(
         "msg-pr-checkout-success",
         number = pr.number(),
         title,
-        new_branch = if branch_is_new { "yes" } else { "no" },
+        new_branch = branch_is_new.ftl(),
         branch_name,
     );
 

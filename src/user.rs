@@ -383,7 +383,7 @@ async fn user_search(api: &Forgejo, query: &str, page: Option<usize>) -> eyre::R
                 total_results = users.len(),
                 page,
                 total_pages,
-                more = if users.len() > 20 { "yes" } else { "no" },
+                more = (users.len() > 20).ftl(),
             );
         }
     }
@@ -623,7 +623,7 @@ async fn list_repos(
             total_results = repos.len(),
             page,
             total_pages,
-            more = if repos.len() > 20 { "yes" } else { "no" },
+            more = (repos.len() > 20).ftl(),
         );
     }
 
@@ -1283,7 +1283,6 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
     let indent = " ".repeat(indent_depth);
     let unknown_value = format!("{bright_red}?{reset}");
 
-    let ftl_bool = |b| if b { "yes" } else { "no" };
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-key_id",
@@ -1292,27 +1291,27 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_sign",
-        can_sign = ftl_bool(key.can_sign.unwrap_or_default()),
+        can_sign = key.can_sign.unwrap_or_default().ftl(),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_encrypt_comms",
-        can_encrypt_comms = ftl_bool(key.can_encrypt_comms.unwrap_or_default()),
+        can_encrypt_comms = key.can_encrypt_comms.unwrap_or_default().ftl(),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_encrypt_storage",
-        can_encrypt_storage = ftl_bool(key.can_encrypt_storage.unwrap_or_default()),
+        can_encrypt_storage = key.can_encrypt_storage.unwrap_or_default().ftl(),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-can_certify",
-        can_certify = ftl_bool(key.can_certify.unwrap_or_default()),
+        can_certify = key.can_certify.unwrap_or_default().ftl(),
     );
     print!("{indent}");
     ftl_println!(
         "msg-user-gpg-list-verified",
-        verified = ftl_bool(key.verified.unwrap_or_default()),
+        verified = key.verified.unwrap_or_default().ftl(),
     );
 
     for email in key.emails.as_deref().unwrap_or_default() {
@@ -1323,11 +1322,7 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
         {
             let verified = verified.unwrap_or_default();
             print!("{indent}");
-            ftl_println!(
-                "msg-user-gpg-list-email",
-                email,
-                verified = ftl_bool(verified),
-            );
+            ftl_println!("msg-user-gpg-list-email", email, verified = verified.ftl());
         }
     }
 

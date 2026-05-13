@@ -155,6 +155,18 @@ impl AsFluent for time::OffsetDateTime {
     }
 }
 
+impl AsFluent for bool {
+    type FluentType = &'static str;
+
+    fn ftl(self) -> Self::FluentType {
+        if self {
+            "yes"
+        } else {
+            "no"
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! ftl_arg {
     ($args:ident, $var_name:ident) => {
