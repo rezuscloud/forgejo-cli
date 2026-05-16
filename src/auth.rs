@@ -333,7 +333,7 @@ fn auth_server() -> (
                         Ok(Some((code.to_owned(), state.to_owned()))),
                         ftl_format!("msg-auth-login-browser_success").into_owned(),
                     ),
-                    _ => unreachable!(),
+                    _ => (Ok(None), String::new()),
                 };
                 tx.send(response).await.unwrap();
                 Ok::<_, hyper::Error>(hyper::Response::new(message.to_owned()))
