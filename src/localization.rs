@@ -76,7 +76,7 @@ mod functions {
         let mut out = String::new();
         for arg in positional {
             let FluentValue::String(style) = arg else {
-                continue;
+                return FluentValue::Error;
             };
             let ansi = match style.as_ref() {
                 "red" => special.red,
@@ -121,7 +121,7 @@ mod functions {
     }
 
     pub fn opt<'a>(positional: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
-        let Some(value) = positional.first() else {
+        let [value] = positional else {
             return FluentValue::Error;
         };
         match value {
