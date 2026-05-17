@@ -69,6 +69,7 @@ pub mod bundles {
 }
 
 mod functions {
+    use super::AsFluent;
     use fluent_bundle::{FluentArgs, FluentValue};
 
     pub fn style<'a>(positional: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
@@ -113,11 +114,7 @@ mod functions {
     }
 
     pub fn is_minimal<'a>(_: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
-        if crate::special_render().fancy {
-            "no".into()
-        } else {
-            "yes".into()
-        }
+        crate::special_render().fancy.ftl().into()
     }
 
     pub fn opt<'a>(positional: &[FluentValue<'a>], _: &FluentArgs<'_>) -> FluentValue<'a> {
