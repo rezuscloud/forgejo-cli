@@ -139,9 +139,8 @@ impl AsFluent for time::OffsetDateTime {
 
     fn ftl(self) -> Self::FluentType {
         let date = icu_calendar::Date::try_new_iso(self.year(), self.month() as u8, self.day())
-            .expect(
-            "icu_calendar::Date and time::Date share the same range restraints so this can't panic",
-        );
+            // icu_calendar::Date and time::Date share the same range restraints, so this can't panic
+            .expect("failed invariant");
         let time = icu_time::Time::new(
             self.hour().try_into().expect("same as above"),
             self.minute().try_into().expect("same as above"),
