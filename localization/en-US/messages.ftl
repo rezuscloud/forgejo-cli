@@ -150,19 +150,19 @@ msg-org-team-member-list-no_results = No results.
 msg-org-team-member-list-page_number = Page {$page} of {$total}
 
 msg-org-team-member-add-success =
-    Added {STYLE("bold")}{$org}/{$repo}{STYLE("reset")} to team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
+    Added {STYLE("bold", "bright-cyan")}{$user}{STYLE("reset")} to team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 
 msg-org-team-member-rm-success =
-    Removed {STYLE("bold", "bright-cyan")}{$org}/{$repo}{STYLE("reset")} from team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
+    Removed {STYLE("bold", "bright-cyan")}{$user}{STYLE("reset")} from team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 
 msg-issue-create-no_templates = {$owner}/{$repo} does not have any issue templates
 msg-issue-create-templates_required =
     {$owner}/{$repo} requires using a template.
-    Please choose one with `--template <NAME>`
+    Please choose one with `--template <NAME>`.
 msg-issue-create-templates_enabled =
     {$owner}/{$repo} uses issue templates.
     Please choose one with `--template <NAME>`,
-    or use `--no-template` to write one from scratch",
+    or use `--no-template` to write one from scratch".
 msg-issue-create-success = created issue #{$number}: {$title}
 
 msg-issue-view-header = 
