@@ -20,9 +20,9 @@ msg-auth_logout-already_signed_out = already not signed in to {$host}
 
 msg-auth-use_ssh-not-logged-in = not logged in to {$host}
 msg-auth-use_ssh-enabled = now will use SSH for {$host} by default
-msg-auth-use_ssh-disabled = will no longer use SSH for {host} by default
+msg-auth-use_ssh-disabled = will no longer use SSH for {$host} by default
 msg-auth-use_ssh-already_enabled = already using SSH for {$host} by default
-msg-auth-use_ssh-already_disabled = already not using SSH for {host} by default
+msg-auth-use_ssh-already_disabled = already not using SSH for {$host} by default
 
 msg-auth-add_key-prompt = new key: 
 msg-auth-add_key-already_exists = key for {$host} already exists
@@ -644,7 +644,7 @@ msg-user-gpg-delete-confirmation_prompt =
         N
         n
 msg-user-gpg-delete-unconfirmed = User aborted process.
-msg-user-gpg-delete-success = Key with ID {id} deleted successfully.
+msg-user-gpg-delete-success = Key with ID {$id} deleted successfully.
 
 msg-release-create-must_specify_tag = must select tag with `--tag` or `--create-tag`
 msg-release-create-tag_flags_conflict =`--tag` and `--create-tag` are mutually exclusive; please pick just one 
