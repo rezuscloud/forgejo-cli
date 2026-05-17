@@ -202,8 +202,7 @@ macro_rules! ftl_message {
     ($msg_id:expr) => {{
         $crate::localization::bundles::locale()
             .into_iter()
-            .filter_map(|b| Some((b, b.get_message($msg_id)?)))
-            .next()
+            .find_map(|b| Some((b, b.get_message($msg_id)?)))
     }};
 }
 
