@@ -117,7 +117,7 @@ async fn prompt<'b>(
 ) -> eyre::Result<Option<&'static str>> {
     use std::io::Write;
     let (bundle, message) =
-        ftl_message!(msg_id).ok_or_eyre("cannot prompt for bool: invalid fluent message id")?;
+        ftl_message!(msg_id).expect("cannot prompt for bool: invalid fluent message id");
 
     let mut stdout = std::io::stdout();
 
