@@ -135,8 +135,6 @@ async fn prompt<'b>(
             }
             panic!("failed to format localized text");
         }
-    } else {
-        write!(&mut stdout, "{}", std::borrow::Cow::from(msg_id))?;
     }
 
     stdout.flush()?;
