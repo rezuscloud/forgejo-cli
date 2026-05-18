@@ -8,7 +8,7 @@ use forgejo_api::{
 };
 use futures::{future, TryStreamExt};
 
-use crate::SpecialRender;
+use crate::{ftl_eprintln, ftl_println, ftl_prompt_bool, localization::AsFluent, SpecialRender};
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamSubcommand {
@@ -234,23 +234,12 @@ async fn view_team(
 ) -> eyre::Result<()> {
     let team = find_team_by_name(api, &org, &name).await?;
 
-    let SpecialRender {
-        bright_blue,
-        bright_red,
-        bold,
-        reset,
-        dash,
-        ..
-    } = crate::special_render();
+    let SpecialRender { bullet, .. } = crate::special_render();
 
-    print!("{bright_blue}{bold}{name}{reset} {dash} in org {bold}{org}{reset}");
-    if team
+    let is_admin = team
         .permission
-        .is_some_and(|p| p == forgejo_api::structs::TeamPermission::Admin)
-    {
-        print!(" {dash} {bright_red}Admin{reset}");
-    }
-    println!();
+        .is_some_and(|p| p == forgejo_api::structs::TeamPermission::Admin);
+    ftl_println!("msg-org-team-view", name, org, admin = is_admin.ftl());
 
     if let Some(description) = &team.description {
         if !description.is_empty() {
@@ -274,38 +263,34 @@ async fn view_team(
             }
         }
 
-        let get_unit_name = |unit| match unit {
-            "repo.wiki" => "Wikis",
-            "repo.ext_wiki" => "External Wikis",
-            "repo.issues" => "Issues",
-            "repo.ext_issues" => "External Issues",
-            "repo.pulls" => "Pull Requests",
-            "repo.projects" => "Projects",
-            "repo.actions" => "CI",
-            "repo.code" => "Code",
-            "repo.releases" => "Releases",
-            "repo.packages" => "Packages",
-            _ => "Unknown",
+        let get_unit_fluent_id = |unit| match unit {
+            "repo.wiki" => "msg-org-team-view-perms-wiki",
+            "repo.ext_wiki" => "msg-org-team-view-perms-ext_wiki",
+            "repo.issues" => "msg-org-team-view-perms-issues",
+            "repo.ext_issues" => "msg-org-team-view-perms-ext_issues",
+            "repo.pulls" => "msg-org-team-view-perms-pulls",
+            "repo.projects" => "msg-org-team-view-perms-projects",
+            "repo.actions" => "msg-org-team-view-perms-actions",
+            "repo.code" => "msg-org-team-view-perms-code",
+            "repo.releases" => "msg-org-team-view-perms-releases",
+            "repo.packages" => "msg-org-team-view-perms-packages",
+            _ => "msg-org-team-view-perms-unknown",
         };
         if !ro_perms.is_empty() {
-            print!("Read Only: ");
-            for (i, unit) in ro_perms.iter().enumerate() {
-                let unit_name = get_unit_name(unit);
-                if i > 0 {
-                    print!(", ");
-                }
-                print!("{unit_name}");
+            ftl_println!("msg-org-team-view-read_write");
+            for unit in ro_perms {
+                let unit_fluent_id = get_unit_fluent_id(unit);
+                print!("{bullet} ");
+                ftl_println!(unit_fluent_id);
             }
             println!();
         }
         if !rw_perms.is_empty() {
-            print!("Read/Write: ");
-            for (i, unit) in rw_perms.iter().enumerate() {
-                let unit_name = get_unit_name(unit);
-                if i != 0 {
-                    print!(", ");
-                }
-                print!("{unit_name}");
+            ftl_println!("msg-org-team-view-read_write");
+            for unit in rw_perms {
+                let unit_fluent_id = get_unit_fluent_id(unit);
+                print!("{bullet} ");
+                ftl_println!(unit_fluent_id);
             }
             println!();
         }
@@ -371,17 +356,12 @@ async fn create_team(
         .ok_or_eyre("org doesn't have name")?;
     let name = new_team.name.ok_or_eyre("team doesn't have name")?;
 
-    let SpecialRender {
-        bright_blue,
-        bold,
-        reset,
-        ..
-    } = crate::special_render();
-    print!("created new ");
-    if flags.admin {
-        print!("admin ");
-    }
-    println!("team {bright_blue}{bold}{name}{reset} in {bold}{org_name}{reset}");
+    ftl_println!(
+        "msg-org-team-create-success",
+        name,
+        org = org_name,
+        admin = flags.admin.ftl(),
+    );
     Ok(())
 }
 
@@ -421,10 +401,10 @@ async fn edit_team(
 }
 
 async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<()> {
-    let SpecialRender { bold, reset, .. } = crate::special_render();
-    println!("Are you sure you want to delete {bold}{org}/{name}{reset}?");
-    let confirmation = crate::readline("(y/N) ").await?.to_lowercase();
-    if matches!(confirmation.trim(), "y" | "yes") {
+    let confirmation = ftl_prompt_bool!(
+        default false; "msg-org-team-delete-confirmation", org = &org, name = &name,
+    )?;
+    if confirmation {
         let id = find_team_by_name(api, &org, &name)
             .await?
             .id
@@ -497,7 +477,7 @@ async fn list_team_repos(api: &Forgejo, org: String, team: String, page: u32) ->
 
     let SpecialRender { bullet, .. } = crate::special_render();
     if repos.is_empty() {
-        println!("No results");
+        ftl_eprintln!("msg-org-team-repo-list-no_results");
     } else {
         for repo in repos {
             let full_name = repo
@@ -507,7 +487,11 @@ async fn list_team_repos(api: &Forgejo, org: String, team: String, page: u32) ->
             println!("{bullet} {full_name}");
         }
         let count = headers.x_total_count.unwrap_or_default();
-        println!("Page {} of {}", page, (count as u64).div_ceil(20));
+        ftl_eprintln!(
+            "msg-org-team-repo-list-page_number",
+            page,
+            total = (count as u64).div_ceil(20),
+        );
     }
     Ok(())
 }
@@ -523,13 +507,7 @@ async fn add_repo_to_team(
         .id
         .ok_or_eyre("team does not have id")?;
     api.org_add_team_repository(id, &org, &repo).await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        ..
-    } = crate::special_render();
-    println!("Added {bold}{org}/{repo}{reset} to team {bright_blue}{bold}{team}{reset}");
+    ftl_println!("msg-org-team-repo-add-success", org, repo, team);
     Ok(())
 }
 
@@ -544,13 +522,7 @@ async fn remove_repo_from_team(
         .id
         .ok_or_eyre("team does not have id")?;
     api.org_remove_team_repository(id, &org, &repo).await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        ..
-    } = crate::special_render();
-    println!("Removed {bold}{org}/{repo}{reset} from team {bright_blue}{bold}{team}{reset}");
+    ftl_println!("msg-org-team-repo-rm-success", org, repo, team);
     Ok(())
 }
 
@@ -627,7 +599,7 @@ async fn list_team_members(
         ..
     } = crate::special_render();
     if users.is_empty() {
-        println!("No results");
+        ftl_eprintln!("msg-org-team-member-list-no_results");
     } else {
         for user in users {
             let username = user
@@ -642,7 +614,11 @@ async fn list_team_members(
             }
         }
         let count = headers.x_total_count.unwrap_or_default();
-        println!("Page {} of {}", page, (count as u64).div_ceil(20));
+        ftl_eprintln!(
+            "msg-org-team-member-list-page_number",
+            page,
+            total = (count as u64).div_ceil(20),
+        );
     }
     Ok(())
 }
@@ -658,14 +634,7 @@ async fn add_user_to_team(
         .id
         .ok_or_eyre("team does not have id")?;
     api.org_add_team_member(id, &user).await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        bright_cyan,
-        ..
-    } = crate::special_render();
-    println!("Added {bright_cyan}{bold}{user}{reset} to team {bright_blue}{bold}{team}{reset}");
+    ftl_println!("msg-org-team-member-add-success", user, team);
     Ok(())
 }
 
@@ -680,13 +649,6 @@ async fn remove_user_from_team(
         .id
         .ok_or_eyre("team does not have id")?;
     api.org_remove_team_member(id, &user).await?;
-    let SpecialRender {
-        bold,
-        reset,
-        bright_blue,
-        bright_cyan,
-        ..
-    } = crate::special_render();
-    println!("Removed {bright_cyan}{bold}{user}{reset} from team {bright_blue}{bold}{team}{reset}");
+    ftl_println!("msg-org-team-member-rm-success", user, team);
     Ok(())
 }

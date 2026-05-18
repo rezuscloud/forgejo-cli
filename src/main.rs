@@ -23,6 +23,8 @@ mod version;
 mod whoami;
 mod wiki;
 
+mod localization;
+
 pub const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
@@ -100,10 +102,7 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn readline(msg: &str) -> eyre::Result<String> {
-    use std::io::Write;
-    print!("{msg}");
-    std::io::stdout().flush()?;
+async fn readline() -> eyre::Result<String> {
     tokio::task::spawn_blocking(|| {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
@@ -112,28 +111,46 @@ async fn readline(msg: &str) -> eyre::Result<String> {
     .await?
 }
 
-async fn prompt_bool(msg: &str, default_answer: bool) -> eyre::Result<bool> {
-    let msg = if default_answer {
-        format!("{msg} [Y/n]: ")
-    } else {
-        format!("{msg} [y/N]: ")
-    };
+async fn prompt<'b>(
+    msg_id: &str,
+    args: &fluent_bundle::FluentArgs<'_>,
+) -> eyre::Result<Option<&'static str>> {
+    use std::io::Write;
+    let (bundle, message) =
+        ftl_message!(msg_id).expect("cannot prompt for bool: invalid fluent message id");
 
-    loop {
-        let input = readline(&msg).await?;
-        let input = input.trim();
+    let mut stdout = std::io::stdout();
 
-        if input.is_empty() {
-            return Ok(default_answer);
-        }
-
-        if input.eq_ignore_ascii_case("y") {
-            return Ok(true);
-        }
-        if input.eq_ignore_ascii_case("n") {
-            return Ok(false);
+    if let Some(pattern) = message.value() {
+        let mut errors = Vec::new();
+        bundle.write_pattern(
+            &mut localization::WriterCompat(&mut stdout),
+            pattern,
+            Some(&args),
+            &mut errors,
+        )?;
+        if !errors.is_empty() {
+            for error in errors {
+                eprintln!("{error}");
+            }
+            panic!("failed to format localized text");
         }
     }
+
+    stdout.flush()?;
+
+    let response = readline().await?;
+    let response = response.trim();
+    for attr in message.attributes() {
+        let attr_value = localization::format_pattern(bundle, attr.value(), None);
+        for line in attr_value.lines() {
+            if response == line {
+                return Ok(Some(attr.id()));
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 async fn editor(contents: &mut String, ext: Option<&str>) -> eyre::Result<()> {
@@ -313,18 +330,17 @@ struct SpecialRender {
     body_prefix: char,
     horiz_rule: char,
 
-    // Uncomment these as needed
-    // red: &'static str,
+    red: &'static str,
     bright_red: &'static str,
-    // green: &'static str,
+    green: &'static str,
     bright_green: &'static str,
-    // blue: &'static str,
+    blue: &'static str,
     bright_blue: &'static str,
-    // cyan: &'static str,
+    cyan: &'static str,
     bright_cyan: &'static str,
     yellow: &'static str,
     bright_yellow: &'static str,
-    // magenta: &'static str,
+    magenta: &'static str,
     bright_magenta: &'static str,
     black: &'static str,
     dark_grey: &'static str,
@@ -334,7 +350,7 @@ struct SpecialRender {
     reset: &'static str,
 
     dark_grey_bg: &'static str,
-    // no_bg: &'static str,
+    no_bg: &'static str,
     hide_cursor: &'static str,
     show_cursor: &'static str,
     clear_line: &'static str,
@@ -365,17 +381,17 @@ impl SpecialRender {
             body_prefix: '▌',
             horiz_rule: '─',
 
-            // red: "\x1b[31m",
+            red: "\x1b[31m",
             bright_red: "\x1b[91m",
-            // green: "\x1b[32m",
+            green: "\x1b[32m",
             bright_green: "\x1b[92m",
-            // blue: "\x1b[34m",
+            blue: "\x1b[34m",
             bright_blue: "\x1b[94m",
-            // cyan: "\x1b[36m",
+            cyan: "\x1b[36m",
             bright_cyan: "\x1b[96m",
             yellow: "\x1b[33m",
             bright_yellow: "\x1b[93m",
-            // magenta: "\x1b[35m",
+            magenta: "\x1b[35m",
             bright_magenta: "\x1b[95m",
             black: "\x1b[30m",
             dark_grey: "\x1b[90m",
@@ -385,7 +401,7 @@ impl SpecialRender {
             reset: "\x1b[0m",
 
             dark_grey_bg: "\x1b[100m",
-            // no_bg: "\x1b[49",
+            no_bg: "\x1b[49",
             hide_cursor: "\x1b[?25l",
             show_cursor: "\x1b[?25h",
             clear_line: "\x1b[2K",
@@ -407,17 +423,17 @@ impl SpecialRender {
             body_prefix: '>',
             horiz_rule: '-',
 
-            // red: "",
+            red: "",
             bright_red: "",
-            // green: "",
+            green: "",
             bright_green: "",
-            // blue: "",
+            blue: "",
             bright_blue: "",
-            // cyan: "",
+            cyan: "",
             bright_cyan: "",
             yellow: "",
             bright_yellow: "",
-            // magenta: "",
+            magenta: "",
             bright_magenta: "",
             black: "",
             dark_grey: "",
@@ -427,7 +443,7 @@ impl SpecialRender {
             reset: "",
 
             dark_grey_bg: "",
-            // no_bg: "",
+            no_bg: "",
             hide_cursor: "",
             show_cursor: "",
             clear_line: "",
@@ -899,28 +915,6 @@ impl<T: Display, F: Display> Display for DisplayOptional<T, F> {
         } else {
             write!(f, "{}", self.1)
         }
-    }
-}
-
-/// When formatted, show the boolean with coloring.
-struct DisplayBool(bool);
-
-impl Display for DisplayBool {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let SpecialRender {
-            bright_red,
-            bright_green,
-            reset,
-            ..
-        } = *special_render();
-
-        if self.0 {
-            write!(f, "{bright_green}true{reset}")?;
-        } else {
-            write!(f, "{bright_red}false{reset}")?;
-        }
-
-        Ok(())
     }
 }
 

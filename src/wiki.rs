@@ -6,6 +6,7 @@ use eyre::{Context, OptionExt};
 use forgejo_api::Forgejo;
 
 use crate::{
+    ftl_println,
     repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
@@ -167,11 +168,15 @@ async fn clone_wiki(
         .full_name
         .as_deref()
         .ok_or_eyre("repo does not have full name")?;
-    let name = format!("{}'s wiki", repo_full_name);
 
     let path = path.unwrap_or_else(|| PathBuf::from(format!("./{repo_name}-wiki")));
 
-    crate::repo::clone_repo(&name, &clone_url, &path, identity_file.as_deref())?;
+    crate::repo::clone_repo(&clone_url, &path, identity_file.as_deref())?;
+    ftl_println!(
+        "msg-wiki-clone-success",
+        repo = repo_full_name,
+        path = path.display().to_string(),
+    );
 
     Ok(())
 }

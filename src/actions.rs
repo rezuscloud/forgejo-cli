@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fmt::Display};
 
 use clap::{Args, Subcommand};
-use eyre::{bail, OptionExt};
+use eyre::OptionExt;
 use forgejo_api::{
     structs::{
         ActionVariable, CreateOrUpdateSecretOption, CreateVariableOption, UpdateVariableOption,
@@ -12,6 +12,7 @@ use hyper::StatusCode;
 use time::Duration;
 
 use crate::{
+    ftl_bail, ftl_eprintln, ftl_println,
     repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
@@ -280,10 +281,10 @@ async fn create_variable(
             ..
         })) => {
             if !force {
-                bail!("variable already exists, pass --force to replace it.");
+                ftl_bail!("msg-actions-variable-create-already_exists");
             }
 
-            eprintln!("variable already exists, updating.");
+            ftl_eprintln!("msg-actions-variable-create-already_exists_forced");
             api.update_repo_variable(
                 repo.owner(),
                 repo.name(),
@@ -305,7 +306,7 @@ async fn create_variable(
 async fn delete_variable(repo: &RepoName, api: &Forgejo, name: String) -> eyre::Result<()> {
     api.delete_repo_variable(repo.owner(), repo.name(), &name)
         .await?;
-    println!("Variable {name} deleted.");
+    ftl_println!("msg-actions-variable-delete-success", name);
 
     Ok(())
 }
@@ -371,7 +372,7 @@ async fn dispatch(
     )
     .await?;
 
-    println!("Dispatched workflow {name} in {ref} with {n_inputs} input(s).");
+    ftl_println!("msg-actions-dispatch-success", name, r#ref, n_inputs);
 
     Ok(())
 }

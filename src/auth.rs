@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::path::PathBuf;
 
+use crate::{ftl_eprintln, ftl_format, ftl_println, ftl_readline};
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum AuthCommand {
     /// Log in to an instance.
@@ -47,19 +49,20 @@ impl AuthCommand {
                     let applications_url =
                         format!("https://{host_domain}/user/settings/applications");
 
-                    println!("Your installation of fj doesn't support `login` for {host_domain}");
-                    println!();
-                    println!("Please visit {applications_url}");
-                    println!("to create a token, and use it to log in with `fj auth add-key`");
+                    ftl_eprintln!(
+                        "msg-auth-login-oauth_unsupported",
+                        host_domain,
+                        applications_url,
+                    );
                 }
             }
             AuthCommand::Logout { host } => {
                 let info_opt = keys.hosts.remove(&host);
                 if let Some(info) = info_opt {
-                    eprintln!("signed out of {}@{}", &info.username(), host);
+                    ftl_println!("msg-auth_logout-success", username = info.username(), host);
                     keys.save().await?;
                 } else {
-                    eprintln!("already not signed in to {host}");
+                    ftl_println!("msg-auth_logout-already_signed_out", host = host);
                 }
             }
             AuthCommand::AddKey { user, key } => {
@@ -67,7 +70,10 @@ impl AuthCommand {
                 let host_url = repo_info.host_url();
                 let key = match key {
                     Some(key) => key,
-                    None => crate::readline("new key: ").await?.trim().to_string(),
+                    None => ftl_readline!("msg-auth-add_key-prompt")
+                        .await?
+                        .trim()
+                        .to_string(),
                 };
                 let host = crate::host_name(&host_url);
                 if !keys.hosts.contains_key(host) {
@@ -79,37 +85,37 @@ impl AuthCommand {
                     keys.hosts.insert(host.to_owned(), login);
                     keys.save().await?;
                 } else {
-                    println!("key for {host} already exists");
+                    ftl_eprintln!("msg-auth-add_key-already_exists", host);
                 }
             }
             AuthCommand::UseSsh { use_ssh } => {
                 let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
                 let host = crate::host_name(&repo_info.host_url());
                 if !keys.hosts.contains_key(host) {
-                    println!("not logged in to {host}");
+                    ftl_eprintln!("msg-auth-use_ssh-not_logged_in", host);
                 } else {
                     if use_ssh.unwrap_or(true) {
                         let already_present = keys.default_ssh.insert(host.to_string());
                         if already_present {
-                            println!("now will use SSH for {host} by default");
+                            ftl_println!("msg-auth-use_ssh-enabled", host);
                             keys.save().await?;
                         } else {
-                            println!("already using SSH for {host} by default");
+                            ftl_println!("msg-auth-use_ssh-already_enabled", host);
                         }
                     } else {
                         let was_present = keys.default_ssh.remove(host);
                         if was_present {
-                            println!("will no longer use SSH for {host} by default");
+                            ftl_println!("msg-auth-use_ssh-disabled", host);
                             keys.save().await?;
                         } else {
-                            println!("already not using SSH for {host} by default");
+                            ftl_println!("msg-auth-use_ssh-already_disabled", host);
                         }
                     }
                 }
             }
             AuthCommand::List => {
                 if keys.hosts.is_empty() {
-                    println!("No logins.");
+                    ftl_eprintln!("msg-auth-list-none");
                 }
                 for (host_url, login_info) in &keys.hosts {
                     println!("{}@{}", login_info.username(), host_url);
@@ -240,7 +246,7 @@ async fn oauth_login(
             }
         }
         Ok(None) => {
-            println!("Login canceled");
+            ftl_eprintln!("msg-auth-login-canceled");
             return Ok(());
         }
         Err(e) => {
@@ -319,12 +325,15 @@ fn auth_server() -> (
                     }
                 }
                 let (response, message) = match (code, state, error_description) {
-                    (_, _, Some(error)) => (Err(error.to_owned()), "Failed to authenticate"),
+                    (_, _, Some(error)) => (
+                        Err(error.to_owned()),
+                        ftl_format!("msg-auth-login-browser_failure").into_owned(),
+                    ),
                     (Some(code), Some(state), None) => (
                         Ok(Some((code.to_owned(), state.to_owned()))),
-                        "Authenticated! Close this tab and head back to your terminal",
+                        ftl_format!("msg-auth-login-browser_success").into_owned(),
                     ),
-                    _ => (Ok(None), "Canceled"),
+                    _ => (Ok(None), String::new()),
                 };
                 tx.send(response).await.unwrap();
                 Ok::<_, hyper::Error>(hyper::Response::new(message.to_owned()))

@@ -3,6 +3,7 @@ use eyre::OptionExt;
 use forgejo_api::Forgejo;
 
 use crate::{
+    ftl_println,
     keys::KeyInfo,
     repo::{RepoArg, RepoInfo, RepoName},
 };
@@ -90,14 +91,14 @@ async fn create_tag(
         target: branch,
     };
     api.repo_create_tag(repo.owner(), repo.name(), opt).await?;
-    println!("created tag {name}");
+    ftl_println!("msg-tag-create-success", name);
     Ok(())
 }
 
 async fn delete_tag(repo: &RepoName, api: &Forgejo, name: String) -> eyre::Result<()> {
     api.repo_delete_tag(repo.owner(), repo.name(), &name)
         .await?;
-    println!("deleted tag {name}");
+    ftl_println!("msg-tag-delete-success", name);
     Ok(())
 }
 
@@ -108,7 +109,9 @@ async fn list_tags(repo: &RepoName, api: &Forgejo, page: u32) -> eyre::Result<()
         .page_size(20)
         .await?;
     for tag in tags {
-        println!("{}", tag.name.as_deref().unwrap_or("<missing>"));
+        if let Some(name) = tag.name.as_deref() {
+            println!("{name}");
+        }
     }
     Ok(())
 }

@@ -34,11 +34,16 @@ comrak = { version = "0.52.0", default-features = false }
 crossterm = "0.29.0"
 directories = "6.0.0"
 eyre = "0.6.12"
+fluent-bundle = "0.16.0"
+fluent-datetime = "0.2.0"
+fluent-syntax = "0.12.0"
 forgejo-api = "0.10.0"
 futures = "0.3.31"
 git2 = "0.20.1"
 hyper = "1.6.0"
 hyper-util = { version = "0.1.11", features = ["tokio", "server", "http1", "http2"] }
+icu_calendar = "2.2.1"
+icu_time = "2.2.0"
 open = "5.3.2"
 rand = "0.10.0"
 regex = "1.12.2"
@@ -52,9 +57,9 @@ soft_assert = "0.1.1"
 ssh2-config = "0.7.0"
 time = { version = "0.3.41", features = ["formatting", "local-offset", "macros"] }
 tokio = { version = "1.44.1", features = ["full"] }
+unic-langid = { version = "0.9.6", features = ["unic-langid-macros"] }
 url = "2.5.4"
 uuid = { version = "1.16.0", features = ["v4"] }
 
 [build-dependencies]
-git2 = "0.20.1"
-uuid = "1.16.0"
+fluent-syntax = "0.12.0"

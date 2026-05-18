@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use eyre::{bail, eyre, Context, OptionExt};
+use eyre::{eyre, Context, OptionExt};
 use forgejo_api::{
     structs::{RepoCreateReleaseAttachmentQuery, RepoListReleasesQuery},
     Forgejo,
@@ -8,7 +8,9 @@ use futures::stream::TryStreamExt;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
+    ftl_bail, ftl_println,
     keys::KeyInfo,
+    localization::AsFluent,
     repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
@@ -205,7 +207,7 @@ async fn create_release(
     prerelease: bool,
 ) -> eyre::Result<()> {
     let tag_name = match (tag, create_tag) {
-        (None, None) => bail!("must select tag with `--tag` or `--create-tag`"),
+        (None, None) => ftl_bail!("msg-release-create-must_specify_tag"),
         (Some(tag), None) => tag,
         (None, Some(tag)) => {
             let tag = tag.unwrap_or_else(|| name.clone());
@@ -218,7 +220,7 @@ async fn create_release(
             tag
         }
         (Some(_), Some(_)) => {
-            bail!("`--tag` and `--create-tag` are mutually exclusive; please pick just one")
+            ftl_bail!("msg-release-create-tag_flags_conflict")
         }
     };
 
@@ -275,7 +277,7 @@ async fn create_release(
         .await?;
     }
 
-    println!("Created release {name}");
+    ftl_println!("msg-release-create-success", name);
 
     Ok(())
 }
@@ -347,14 +349,13 @@ async fn list_releases(
             .prerelease
             .as_ref()
             .ok_or_else(|| eyre::eyre!("release does not have prerelease"))?;
-        print!("{}", name);
-        match (draft, prerelease) {
-            (false, false) => (),
-            (true, false) => print!(" (draft)"),
-            (false, true) => print!(" (prerelease)"),
-            (true, true) => print!(" (draft, prerelease)"),
-        }
-        println!();
+        let state = match (draft, prerelease) {
+            (false, false) => "neither",
+            (true, false) => "draft",
+            (false, true) => "prerelease",
+            (true, true) => "both",
+        };
+        ftl_println!("msg-release-list-entry", name, state);
     }
     Ok(())
 }
@@ -379,20 +380,19 @@ async fn view_release(
         .author
         .as_ref()
         .ok_or_else(|| eyre::eyre!("release does not have author"))?;
-    let login = author
+    let author = author
         .login
         .as_ref()
         .ok_or_else(|| eyre::eyre!("autho does not have login"))?;
     let created_at = release
         .created_at
         .ok_or_else(|| eyre::eyre!("release does not have created_at"))?;
-    println!("{}", name);
-    print!("By {} on ", login);
-    created_at.format_into(
-        &mut std::io::stdout(),
-        &time::format_description::well_known::Rfc2822,
-    )?;
-    println!();
+    ftl_println!(
+        "msg-release-view-header",
+        name,
+        author,
+        created_at = created_at.ftl(),
+    );
     let SpecialRender { bullet, .. } = crate::special_render();
     let body = release
         .body
@@ -480,7 +480,7 @@ async fn create_asset(
     )
     .await?;
 
-    println!("Added attachment `{}` to {}", asset, release);
+    ftl_println!("msg-release-asset-create-success", asset, release);
 
     Ok(())
 }
@@ -509,6 +509,11 @@ async fn delete_asset(
     api.repo_delete_release_attachment(repo.owner(), repo.name(), release_id, asset_id)
         .await?;
     println!("Removed attachment `{}` from {}", asset_name, release_name);
+    ftl_println!(
+        "msg-release-asset-delete-success",
+        asset = asset_name,
+        release = release_name,
+    );
     Ok(())
 }
 
@@ -567,11 +572,11 @@ async fn download_asset(
         .write_all(file.as_ref())
         .await?;
 
-    if output.is_some() {
-        println!("Downloaded {asset} into {}", real_output.display());
-    } else {
-        println!("Downloaded {asset}");
-    }
+    ftl_println!(
+        "msg-release-asset-download-success",
+        asset = &asset,
+        file = output.as_deref().map(|p| p.to_string_lossy()),
+    );
 
     Ok(())
 }

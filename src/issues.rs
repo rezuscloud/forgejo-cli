@@ -10,6 +10,7 @@ use forgejo_api::structs::{
 use forgejo_api::Forgejo;
 
 use crate::repo::{RepoArg, RepoInfo, RepoName};
+use crate::{ftl_bail, ftl_ensure, ftl_eprintln, ftl_println};
 
 pub mod template;
 
@@ -27,6 +28,7 @@ pub enum IssueSubcommand {
     /// Create a new issue on a repo
     Create {
         /// Title of the issue
+        #[clap(group = "method", required = true)]
         title: Option<String>,
         /// The text body of the issue
         ///
@@ -50,7 +52,7 @@ pub enum IssueSubcommand {
         #[clap(long, short)]
         repo: Option<RepoArg>,
         /// Open the issue creation page in your web browser
-        #[clap(long)]
+        #[clap(long, group = "method")]
         web: bool,
     },
     /// Edit an issue
@@ -384,11 +386,11 @@ async fn create_issue(
                 .unwrap_or(true);
 
             let opts = if let Some(template_name) = template {
-                eyre::ensure!(
+                ftl_ensure!(
                     has_templates,
-                    "{}/{} does not have any issue templates",
-                    repo.owner(),
-                    repo.name()
+                    "msg-issue-create-no_templates",
+                    owner = repo.owner(),
+                    repo = repo.name(),
                 );
                 let (template_file, is_yaml) =
                     template::get_template_file(repo, api, &template_name).await?;
@@ -408,20 +410,17 @@ async fn create_issue(
                     r#ref: metadata.r#ref,
                 }
             } else {
-                eyre::ensure!(
+                ftl_ensure!(
                     blank_issues_enabled,
-                    "{}/{} requires using a template. \
-                    Please choose one with `--template <NAME>`",
-                    repo.owner(),
-                    repo.name()
+                    "msg-issue-create-templates_required",
+                    owner = repo.owner(),
+                    repo = repo.name(),
                 );
-                eyre::ensure!(
+                ftl_ensure!(
                     !has_templates || no_template,
-                    "{}/{} uses issue templates. \
-                    Please choose one with `--template <NAME>`, \
-                    or use `--no-template` to write one from scratch",
-                    repo.owner(),
-                    repo.name()
+                    "msg-issue-create-templates_enabled",
+                    owner = repo.owner(),
+                    repo = repo.name(),
                 );
                 let body = match body {
                     Some(body) => body,
@@ -454,7 +453,7 @@ async fn create_issue(
                 .title
                 .as_ref()
                 .ok_or_else(|| eyre::eyre!("issue does not have title"))?;
-            eprintln!("created issue #{}: {}", number, title);
+            ftl_eprintln!("msg-issue-create-success", number, title);
         }
         (None, true) => {
             let base_repo = api.repo_get(repo.owner(), repo.name()).await?;
@@ -468,35 +467,22 @@ async fn create_issue(
                 .extend(["issues", "new"]);
             open::that_detached(issue_create_url.as_str()).wrap_err("Failed to open URL")?;
         }
-        (None, false) => {
-            eyre::bail!("requires either issue title or --web flag")
-        }
-        (Some(_), true) => {
-            eyre::bail!("issue title and --web flag are mutually exclusive")
+        _ => {
+            unreachable!()
         }
     }
     Ok(())
 }
 
-pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result<()> {
-    let crate::SpecialRender {
-        dash,
-
-        bright_red,
-        bright_green,
-        yellow,
-        dark_grey,
-        white,
-        reset,
-        ..
-    } = crate::special_render();
-
-    let issue = api.issue_get_issue(repo.owner(), repo.name(), id).await?;
+pub async fn view_issue(repo: &RepoName, api: &Forgejo, number: i64) -> eyre::Result<()> {
+    let issue = api
+        .issue_get_issue(repo.owner(), repo.name(), number)
+        .await?;
     let repo_info = api.repo_get(repo.owner(), repo.name()).await?;
 
     // if it's a pull request, display it as one instead
     if issue.pull_request.is_some() {
-        crate::prs::view_pr(repo, api, Some(id)).await?;
+        crate::prs::view_pr(repo, api, Some(number)).await?;
         return Ok(());
     }
 
@@ -517,14 +503,18 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result
         .ok_or_else(|| eyre::eyre!("pr does not have state"))?;
     let comments = issue.comments.unwrap_or_default();
 
-    println!("{yellow}{title} {dark_grey}#{id}{reset}");
-    print!("By {white}{username}{reset} {dash} ");
-
     use forgejo_api::structs::StateType;
-    match state {
-        StateType::Open => println!("{bright_green}Open{reset}"),
-        StateType::Closed => println!("{bright_red}Closed{reset}"),
+    let state = match state {
+        StateType::Open => "open",
+        StateType::Closed => "closed",
     };
+    ftl_println!(
+        "msg-issue-view-header",
+        title,
+        number,
+        author = username,
+        state,
+    );
 
     crate::render_label_list(&issue.labels.unwrap_or_default())?;
 
@@ -538,11 +528,7 @@ pub async fn view_issue(repo: &RepoName, api: &Forgejo, id: i64) -> eyre::Result
 
     crate::repo::archived_warning(&repo_info)?;
 
-    if comments == 1 {
-        println!("1 comment");
-    } else {
-        println!("{comments} comments");
-    }
+    ftl_println!("msg-issue-view-comment_count", comments);
     Ok(())
 }
 async fn view_issues(
@@ -574,11 +560,7 @@ async fn view_issues(
         .issue_list_issues(repo.owner(), repo.name(), query)
         .all()
         .await?;
-    if issues.len() == 1 {
-        println!("1 issue");
-    } else {
-        println!("{} issues", issues.len());
-    }
+    ftl_println!("msg-issue-search-total", issues = issues.len());
     for issue in issues {
         let number = issue
             .number
@@ -595,7 +577,7 @@ async fn view_issues(
             .login
             .as_ref()
             .ok_or_else(|| eyre::eyre!("user does not have login"))?;
-        println!("#{}: {} (by {})", number, title, username);
+        ftl_println!("msg-issue-search-entry", number, title, author = username);
     }
     Ok(())
 }
@@ -651,12 +633,12 @@ pub async fn view_issue_templates(repo: &RepoName, api: &Forgejo) -> eyre::Resul
     }
 
     if total_count == 0 {
-        eprintln!("No issue templates or contact info.");
+        ftl_eprintln!("msg-issue-templates-none");
     }
     if config.blank_issues_enabled.unwrap_or(true) {
-        println!("'--no-template' is allowed");
+        ftl_eprintln!("msg-issue-templates-blank_allowed");
     } else {
-        println!("'--no-template' is not allowed");
+        ftl_eprintln!("msg-issue-templates-blank_not_allowed");
     }
     Ok(())
 }
@@ -700,31 +682,27 @@ fn print_comment(comment: &Comment) -> eyre::Result<()> {
         .user
         .as_ref()
         .ok_or_else(|| eyre::eyre!("comment does not have user"))?;
-    let name = user.full_name.as_deref().filter(|name| !name.is_empty());
+    let full_name = user.full_name.as_deref().filter(|name| !name.is_empty());
     let username = user
         .login
         .as_ref()
         .ok_or_else(|| eyre::eyre!("user does not have login"))?;
 
-    let crate::SpecialRender {
-        bold,
-        bright_cyan,
-        dark_grey,
-        reset,
-        ..
-    } = crate::special_render();
-    if let Some(name) = name {
-        println!("{bold}{bright_cyan}{name}{reset} {dark_grey}({username}){reset} said:");
-    } else {
-        println!("{bold}{bright_cyan}{username}{reset} said:");
-    }
+    ftl_println!(
+        "msg-issue-view-comments-comment_header",
+        full_name,
+        username,
+    );
     println!("{}", crate::markdown(body));
     let assets = comment
         .assets
         .as_ref()
         .ok_or_else(|| eyre::eyre!("comment does not have assets"))?;
     if !assets.is_empty() {
-        println!("({} attachments)", assets.len());
+        ftl_println!(
+            "msg-issue-view-comments-attachments",
+            attachments = assets.len(),
+        );
     }
     Ok(())
 }
@@ -792,10 +770,10 @@ pub async fn edit_title(
     };
     let new_title = new_title.trim();
     if new_title.is_empty() {
-        eyre::bail!("title cannot be empty");
+        ftl_bail!("msg-issue-edit-title-empty");
     }
     if new_title.contains('\n') {
-        eyre::bail!("title cannot contain newlines");
+        ftl_bail!("msg-issue-edit-title-no_newlines");
     }
     api.issue_edit_issue(
         repo.owner(),
@@ -944,28 +922,16 @@ pub async fn assign_to_issue(
     };
     api.issue_edit_issue(repo.owner(), repo.name(), index, opt)
         .await?;
-    let num_added = assigned_after - assigned_before;
-    let num_duplicate = num_to_add - num_added;
-    print!("assigned ");
-    if num_added == 1 {
-        print!("1 user");
-    } else {
-        print!("{num_added} users");
-    }
-    print!(" to {}/{}#{index}", repo.owner(), repo.name());
-    if num_duplicate == 0 {
-        println!();
-    } else if num_duplicate == num_to_add {
-        if num_to_add == 1 {
-            println!(" (user was already assigned)")
-        } else {
-            println!(" (all users were already assigned)")
-        }
-    } else if num_duplicate == 1 {
-        println!(" (1 user was already assigned)")
-    } else {
-        println!(" ({num_duplicate} users were already assigned)")
-    }
+    let added = assigned_after - assigned_before;
+    let duplicate = num_to_add - added;
+    ftl_println!(
+        "msg-issue-assign-success",
+        owner = repo.owner(),
+        repo = repo.name(),
+        number = index,
+        added,
+        duplicate,
+    );
     Ok(())
 }
 
@@ -1002,28 +968,16 @@ pub async fn unassign_from_issue(
     };
     api.issue_edit_issue(repo.owner(), repo.name(), index, opt)
         .await?;
-    let num_removed = assigned_before - assigned_after;
-    let num_duplicate = num_to_remove - num_removed;
-    print!("unassigned ");
-    if num_removed == 1 {
-        print!("1 user");
-    } else {
-        print!("{num_removed} users");
-    }
-    print!(" from {}/{}#{index}", repo.owner(), repo.name());
-    if num_duplicate == 0 {
-        println!();
-    } else if num_duplicate == num_to_remove {
-        if num_to_remove == 1 {
-            println!(" (user was already not assigned)")
-        } else {
-            println!(" (all users were already not assigned)")
-        }
-    } else if num_duplicate == 1 {
-        println!(" (1 user was already not assigned)")
-    } else {
-        println!(" ({num_duplicate} users were already not assigned)")
-    }
+    let removed = assigned_before - assigned_after;
+    let duplicate = num_to_remove - removed;
+    ftl_println!(
+        "msg-issue-unassign-success",
+        owner = repo.owner(),
+        repo = repo.name(),
+        number = index,
+        removed,
+        duplicate,
+    );
     Ok(())
 }
 
@@ -1072,7 +1026,11 @@ pub async fn close_issue(
         .as_deref()
         .ok_or_eyre("issue does not have title")?;
 
-    println!("Closed issue {issue}: \"{issue_title}\"");
+    ftl_println!(
+        "msg-issue-close-success",
+        number = issue,
+        title = issue_title,
+    );
 
     Ok(())
 }

@@ -8,7 +8,7 @@ use forgejo_api::{
 };
 use futures::{future, TryStreamExt};
 
-use crate::{repo::RepoInfo, SpecialRender};
+use crate::{ftl_bail, ftl_eprintln, ftl_print, ftl_println, repo::RepoInfo, SpecialRender};
 
 mod team;
 
@@ -194,7 +194,7 @@ async fn list_orgs(api: &Forgejo, page: u32, only_member_of: bool) -> eyre::Resu
     };
 
     if orgs.is_empty() {
-        println!("No results");
+        ftl_eprintln!("msg-org-list-no_results");
     } else {
         let SpecialRender {
             bullet,
@@ -207,7 +207,7 @@ async fn list_orgs(api: &Forgejo, page: u32, only_member_of: bool) -> eyre::Resu
             println!("{bullet} {bold}{name}{reset}");
         }
         if let Some(total) = total {
-            println!("Page {} of {}", page, total.div_ceil(20));
+            ftl_eprintln!("msg-org-list-page_number", page, total = total.div_ceil(20));
         }
     }
     Ok(())
@@ -217,33 +217,17 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
     let org = api.org_get(&name).await?;
 
     let SpecialRender {
-        bold,
-        dash,
-        bright_cyan,
-        light_grey,
-        reset,
-        ..
+        bold, dash, reset, ..
     } = *crate::special_render();
 
     let name = org.name.as_deref().ok_or_eyre("org does not have name")?;
+    let full_name = org.full_name.as_deref().filter(|n| !n.is_empty());
+
     let visibility = org
         .visibility
         .as_deref()
         .ok_or_eyre("new org does not have visibility")?;
-    let vis_pretty = match visibility {
-        "public" => "Public",
-        "limited" => "Limited",
-        "private" => "Private",
-        _ => visibility,
-    };
 
-    if let Some(full_name) = &org.full_name {
-        print!("{bold}{bright_cyan}{full_name}{reset} {light_grey}({name}){reset}");
-    } else {
-        print!("{bold}{bright_cyan}{name}{reset}");
-    }
-    print!(" {dash} {vis_pretty}");
-    println!();
     let member_count = match api.org_list_members(&name).page(1).page_size(1).await {
         Ok((members_headers, _)) => members_headers.x_total_count.unwrap_or_default(),
         Err(_) => {
@@ -255,11 +239,21 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
             members_headers.x_total_count.unwrap_or_default()
         }
     };
-    print!("{bold}{member_count}{reset} members");
-    if let Ok((teams_headers, _)) = api.org_list_teams(&name).page(1).page_size(1).await {
-        let teams = teams_headers.x_total_count.unwrap_or_default();
-        println!(" {dash} {bold}{teams}{reset} teams");
-    }
+    let team_count = api
+        .org_list_teams(&name)
+        .page(1)
+        .page_size(1)
+        .await?
+        .0
+        .x_total_count
+        .unwrap_or_default();
+
+    ftl_print!("msg-org-view-org_name", full_name, name);
+    print!(" {dash} ");
+    ftl_println!("msg-org-view-visibility", visibility);
+    ftl_print!("msg-org-view-member_count", member_count);
+    print!(" {dash} ");
+    ftl_println!("msg-org-view-team_count", team_count);
     println!();
 
     let mut first = true;
@@ -302,27 +296,27 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
 
 async fn create_org(api: &Forgejo, name: String, options: OrgOptions) -> eyre::Result<()> {
     if !name.chars().all(is_valid_name_char) {
-        eyre::bail!("Organization names can only have alphanumeric characters, dash, underscore, or period. \n  If you want a name with other characters, try setting the --full-name flag");
+        ftl_bail!("msg-org-create-invalid_character");
     }
     if !name
         .chars()
         .next()
         .is_some_and(|c| c.is_ascii_alphanumeric())
     {
-        eyre::bail!("Organization names can only start with alphanumeric characters. \n  If you want a name that starts with other characters, try setting the --full-name flag");
+        ftl_bail!("msg-org-create-invalid_starting_character");
     }
     if !name
         .chars()
         .last()
         .is_some_and(|c| c.is_ascii_alphanumeric())
     {
-        eyre::bail!("Organization names can only end with alphanumeric characters. \n  If you want a name that ends with other characters, try setting the --full-name flag");
+        ftl_bail!("msg-org-create-invalid_ending_character");
     }
     let mut chars = name.chars().peekable();
     while let Some(c) = chars.next() {
         // because of the prior check, if it isn't alphanumeric, it's definitely one of - _ or .
         if !c.is_alphanumeric() && !chars.peek().is_some_and(|c| c.is_alphanumeric()) {
-            eyre::bail!("Organization names can't have consecutive non-alphanumeric characters.\n  If you want that in the name, try setting the --full-name flag");
+            ftl_bail!("msg-org-create-invalid_consecutive_characters");
         }
     }
     let opt = CreateOrgOption {
@@ -338,31 +332,12 @@ async fn create_org(api: &Forgejo, name: String, options: OrgOptions) -> eyre::R
     let new_org = api.org_create(opt).await?;
 
     let name = new_org.name.ok_or_eyre("new org does not have name")?;
+    let full_name = new_org.full_name.as_deref().filter(|n| !n.is_empty());
     let visibility = new_org
         .visibility
         .ok_or_eyre("new org does not have visibility")?;
 
-    let SpecialRender {
-        fancy,
-        bold,
-        light_grey,
-        reset,
-        ..
-    } = *crate::special_render();
-    print!("created new {visibility} org ");
-    if let Some(full_name) = &new_org.full_name {
-        if fancy {
-            println!("{bold}{full_name}{reset} {light_grey}({name}){reset}");
-        } else {
-            println!("\"{full_name}\" ({name})");
-        }
-    } else {
-        if fancy {
-            println!("{bold}{name}{reset}");
-        } else {
-            println!("\"{name}\"");
-        }
-    }
+    ftl_println!("msg-org-create-success", visibility, full_name, name);
     Ok(())
 }
 
@@ -404,36 +379,31 @@ async fn list_org_members(api: &Forgejo, org: String, page: u32) -> eyre::Result
         (headers.x_total_count.unwrap_or_default() as u64, users)
     };
 
-    let SpecialRender {
-        bullet,
-        light_grey,
-        bright_cyan,
-        reset,
-        ..
-    } = crate::special_render();
+    let SpecialRender { bullet, .. } = crate::special_render();
     if users.is_empty() {
-        println!("No results");
+        ftl_println!("msg-org-members-no_results");
     } else {
         for user in users {
             let username = user
                 .login
                 .as_deref()
                 .ok_or_eyre("repo does not have full name")?;
-            match user.full_name.as_deref().filter(|s| !s.is_empty()) {
-                Some(full_name) => println!(
-                    "{bullet} {bright_cyan}{full_name}{reset} {light_grey}({username}){reset}"
-                ),
-                None => println!("{bullet} {bright_cyan}{username}{reset}"),
-            }
+            let full_name = user.full_name.as_deref().filter(|s| !s.is_empty());
+            print!("{bullet} ");
+            ftl_println!("msg-org-members-entry", full_name, username);
         }
-        println!("Page {} of {}", page, count.div_ceil(20));
+        ftl_println!(
+            "msg-org-members-page_number",
+            page,
+            total = count.div_ceil(20)
+        );
     }
     Ok(())
 }
 
 async fn member_visibility(
     api: &Forgejo,
-    org: String,
+    org_name: String,
     visibility: Option<OrgMemberVisibility>,
 ) -> eyre::Result<()> {
     let username = api
@@ -441,29 +411,26 @@ async fn member_visibility(
         .await?
         .login
         .ok_or_eyre("current user does not have username")?;
-    let SpecialRender {
-        bright_blue, reset, ..
-    } = crate::special_render();
-    if api.org_is_member(&org, &username).await.is_ok() {
+    if api.org_is_member(&org_name, &username).await.is_ok() {
         match visibility {
             Some(OrgMemberVisibility::Private) => {
-                api.org_conceal_member(&org, &username).await?;
-                println!("You are now a private member of {bright_blue}{org}{reset}");
+                api.org_conceal_member(&org_name, &username).await?;
+                ftl_println!("msg-org-visibility-set_private", org_name);
             }
             Some(OrgMemberVisibility::Public) => {
-                api.org_conceal_member(&org, &username).await?;
-                println!("You are now a public member of {bright_blue}{org}{reset}");
+                api.org_conceal_member(&org_name, &username).await?;
+                ftl_println!("msg-org-visibility-set_public", org_name);
             }
             None => {
-                if api.org_is_public_member(&org, &username).await.is_ok() {
-                    println!("You are a public member of {bright_blue}{org}{reset}");
+                if api.org_is_public_member(&org_name, &username).await.is_ok() {
+                    ftl_println!("msg-org-visibility-public", org_name);
                 } else {
-                    println!("You are a private member of {bright_blue}{org}{reset}");
+                    ftl_println!("msg-org-visibility-private", org_name);
                 }
             }
         }
     } else {
-        println!("You are not a member of {bright_blue}{org}{reset}");
+        ftl_println!("msg-org-visibility-not_member", org_name);
     }
     Ok(())
 }
@@ -609,7 +576,10 @@ async fn add_org_label(
         name,
     };
     let label = api.org_create_label(&org, opt).await?;
-    println!("Created new label {}", crate::render_label(&label)?);
+    ftl_println!(
+        "msg-org-label-add-success",
+        label = crate::render_label(&label)?
+    );
     Ok(())
 }
 
@@ -641,10 +611,10 @@ async fn edit_org_label(
         name: new_name,
     };
     let label = api.org_edit_label(&org, id, opt).await?;
-    println!(
-        "Changed label {} to {}",
-        crate::render_label(&old_label)?,
-        crate::render_label(&label)?
+    ftl_println!(
+        "msg-org-label-edit-success",
+        old_label = crate::render_label(&old_label)?,
+        label = crate::render_label(&label)?
     );
     Ok(())
 }
@@ -655,7 +625,10 @@ async fn remove_org_label(api: &Forgejo, org: String, name: String) -> eyre::Res
         .ok_or_eyre("label not found")?;
     let id = label.id.ok_or_eyre("label does not have id")?;
     api.org_delete_label(&org, id).await?;
-    println!("Removed label {}", crate::render_label(&label)?);
+    ftl_println!(
+        "msg-org-label-remove-success",
+        label = crate::render_label(&label)?
+    );
     Ok(())
 }
 
@@ -724,7 +697,7 @@ async fn list_org_repos(api: &Forgejo, org: String, page: u32) -> eyre::Result<(
     let (headers, repos) = api.org_list_repos(&org).page(page).await?;
     let SpecialRender { bullet, .. } = crate::special_render();
     if repos.is_empty() {
-        println!("No results");
+        ftl_println!("msg-org-repo-list-no_results");
     } else {
         for repo in repos {
             let full_name = repo
@@ -734,7 +707,11 @@ async fn list_org_repos(api: &Forgejo, org: String, page: u32) -> eyre::Result<(
             println!("{bullet} {full_name}");
         }
         let count = headers.x_total_count.unwrap_or_default() as u64;
-        println!("Page {} of {}", page, count.div_ceil(20));
+        ftl_println!(
+            "msg-org-repo-list-page_number",
+            page,
+            total = count.div_ceil(20)
+        );
     }
     Ok(())
 }
