@@ -3,7 +3,6 @@ use std::{io::Write, path::PathBuf, str::FromStr};
 use clap::{Args, Subcommand};
 use eyre::{eyre, Context, OptionExt, Result};
 use forgejo_api::{structs::CreateRepoOption, Forgejo};
-use ssh2_config::ParseRule;
 use url::Url;
 
 use crate::{DisplayOptional, SpecialRender};
@@ -1709,9 +1708,7 @@ pub fn load_ssh_keys(
     mut auth: auth_git2::GitAuthenticator,
     host: &str,
 ) -> auth_git2::GitAuthenticator {
-    if let Ok(ssh_config) =
-        ssh2_config::SshConfig::parse_default_file(ParseRule::ALLOW_UNKNOWN_FIELDS)
-    {
+    if let Some(ssh_config) = crate::get_ssh_config() {
         let params = ssh_config.query(host);
         if let Some(identity_file) = params.identity_file.as_deref() {
             for path in identity_file {

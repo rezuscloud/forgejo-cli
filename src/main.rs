@@ -242,16 +242,40 @@ async fn tempfile(ext: Option<&str>) -> tokio::io::Result<(tokio::fs::File, std:
     Ok((file, path))
 }
 
+use std::sync::OnceLock;
+static SSH_CONFIG: OnceLock<Option<ssh2_config::SshConfig>> = OnceLock::new();
+
+fn get_ssh_config() -> &'static Option<ssh2_config::SshConfig> {
+    SSH_CONFIG.get_or_init(|| {
+        ssh2_config::SshConfig::parse_default_file(ssh2_config::ParseRule::ALLOW_UNKNOWN_FIELDS)
+            .ok()
+    })
+}
+
 fn ssh_url_parse(s: &str) -> Result<url::Url, url::ParseError> {
-    url::Url::parse(s).or_else(|_| {
+    let mut url = url::Url::parse(s)?;
+    if url.cannot_be_a_base() {
         let mut new_s = String::new();
         new_s.push_str("ssh://");
 
         let auth_end = s.find("@").unwrap_or(0);
         new_s.push_str(&s[..auth_end]);
         new_s.push_str(&s[auth_end..].replacen(":", "/", 1));
-        url::Url::parse(&new_s)
-    })
+        url = url::Url::parse(&new_s)?
+    }
+    if let Some(host_str) = url.host_str() {
+        if let Some(ssh_config) = get_ssh_config() {
+            let host_params = ssh_config.query(host_str);
+            if let Some(host_name) = host_params.host_name {
+                // Expand '%h' and '%%' per ssh_config(5)
+                let mut expanded = host_name.replace("%h", host_str);
+                expanded = expanded.replace("%%", "%");
+                url.set_host(Some(&expanded))?;
+            }
+        }
+    } // Let the caller handle URLs without a host
+
+    Ok(url)
 }
 
 fn host_name(url: &url::Url) -> &str {
@@ -264,7 +288,6 @@ fn repo_url_host_name(url: &url::Url) -> &str {
     host.rsplitn(3, '/').last().unwrap_or(host)
 }
 
-use std::sync::OnceLock;
 static SPECIAL_RENDER: OnceLock<SpecialRender> = OnceLock::new();
 
 fn special_render() -> &'static SpecialRender {
