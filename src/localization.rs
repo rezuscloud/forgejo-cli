@@ -38,6 +38,7 @@ pub mod bundles {
     }
 
     bundle!(EN_US = "en-US");
+    bundle!(DE_DE = "de-DE");
 
     pub fn locale() -> &'static [&'static LazyLock<Bundle>] {
         LOCALE.get_or_init(init_from_env)
@@ -61,6 +62,7 @@ pub mod bundles {
     pub fn init_to(lang: &unic_langid::LanguageIdentifier) -> &'static [&'static LazyLock<Bundle>] {
         match lang.language.as_str() {
             "en" => const { &[&EN_US] },
+            "de" => const { &[&DE_DE] },
             _ => const { &[&EN_US] },
         }
     }
