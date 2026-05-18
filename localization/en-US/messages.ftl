@@ -662,7 +662,7 @@ msg-release-view-header = {$name}
 
 msg-release-asset-create-success = Added attachment `{$asset}` to {$release}
 
-msg-release-asset-delete-success = Added attachment `{$asset}` to {$release}
+msg-release-asset-delete-success = Removed attachment `{$asset}` from {$release}
 
 msg-release-asset-download-success = { OPT($file) ->
        *[none] Downloaded {$asset}
@@ -671,7 +671,7 @@ msg-release-asset-download-success = { OPT($file) ->
 
 msg-tag-create-success = created tag {$name}
 
-msg-tag-delete-success = created tag {$name}
+msg-tag-delete-success = deleted tag {$name}
 
 msg-version-update_check-hint = Check for a new version with `fj version --check`
 msg-version-update_check-current = Up to date!
