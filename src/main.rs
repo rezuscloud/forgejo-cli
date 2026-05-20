@@ -126,7 +126,7 @@ async fn prompt<'b>(
         bundle.write_pattern(
             &mut localization::WriterCompat(&mut stdout),
             pattern,
-            Some(&args),
+            Some(args),
             &mut errors,
         )?;
         if !errors.is_empty() {
@@ -604,7 +604,7 @@ fn markdown(text: &str) -> String {
                 ansi_printer.start_bold();
                 ansi_printer
                     .out
-                    .extend(std::iter::repeat('#').take(heading.level as usize));
+                    .extend(std::iter::repeat_n('#', heading.level as usize));
                 ansi_printer.out.push(' ');
                 ansi_printer.cur_line_len += heading.level as usize + 1;
             }
@@ -653,7 +653,7 @@ fn markdown(text: &str) -> String {
                 }
                 ansi_printer
                     .out
-                    .extend(std::iter::repeat(horiz_rule).take(max_line_len));
+                    .extend(std::iter::repeat_n(horiz_rule, max_line_len));
                 ansi_printer.newline();
                 ansi_printer.newline();
             }
@@ -869,7 +869,7 @@ impl AnsiPrinter {
     fn newline(&mut self) {
         if self.current_bg().is_some() {
             self.out
-                .extend(std::iter::repeat(' ').take(self.max_line_len - self.cur_line_len));
+                .extend(std::iter::repeat_n(' ', self.max_line_len - self.cur_line_len));
         }
         self.pause_style();
         self.out.push('\n');

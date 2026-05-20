@@ -225,7 +225,7 @@ pub enum ViewCommand {
 impl IssueCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         use IssueSubcommand::*;
-        let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref(), &keys)?;
+        let repo = RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref(), keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         let repo = repo.name().ok_or_else(|| self.no_repo_error())?;
         match self.command {

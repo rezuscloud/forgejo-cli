@@ -176,7 +176,7 @@ impl YamlTemplate {
                     let list = append_node(arena, output, NodeValue::List(list_cfg));
                     for list_option in &attributes.options {
                         let list_item = append_node(arena, list, task_item(None));
-                        append_markdown_inline(arena, list_item, &list_option);
+                        append_markdown_inline(arena, list_item, list_option);
                     }
                     append_node(arena, output, comrak::nodes::NodeValue::Raw("\n".into()));
                 }
@@ -207,7 +207,7 @@ impl YamlTemplate {
             }
         }
         let mut output_str = String::new();
-        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_str)?;
+        comrak::format_commonmark(output, &MD_OPTIONS, &mut output_str)?;
         Ok(output_str)
     }
 
@@ -216,7 +216,7 @@ impl YamlTemplate {
 
         let arena = &comrak::Arena::new();
 
-        let form = comrak::parse_document(arena, form, &*MD_OPTIONS);
+        let form = comrak::parse_document(arena, form, &MD_OPTIONS);
         let mut form_iter = form.children();
 
         let mut output = Vec::new();
@@ -319,7 +319,7 @@ impl YamlTemplate {
                     }
 
                     let mut body = String::new();
-                    comrak::format_commonmark(new_doc, &*MD_OPTIONS, &mut body)?;
+                    comrak::format_commonmark(new_doc, &MD_OPTIONS, &mut body)?;
                     if body.ends_with("\r\n") {
                         body.pop();
                         body.pop();
@@ -552,7 +552,7 @@ impl YamlTemplate {
             }
         }
         let mut output_str = String::new();
-        comrak::format_commonmark(output, &*MD_OPTIONS, &mut output_str)?;
+        comrak::format_commonmark(output, &MD_OPTIONS, &mut output_str)?;
         Ok(output_str)
     }
 }
@@ -593,7 +593,7 @@ fn validate_contents<'a>(
     parent: &'a comrak::nodes::AstNode<'a>,
     md: &str,
 ) -> eyre::Result<()> {
-    let parsed = comrak::parse_document(arena, md, &*MD_OPTIONS);
+    let parsed = comrak::parse_document(arena, md, &MD_OPTIONS);
     ensure_at!(parent, children_eq(parent, parsed), "modified content");
     Ok(())
 }
@@ -603,7 +603,7 @@ fn validate_description<'a>(
     form: &mut comrak::arena_tree::Children<'a, std::cell::RefCell<comrak::nodes::Ast>>,
     md: &str,
 ) -> eyre::Result<()> {
-    let parsed = comrak::parse_document(arena, md, &*MD_OPTIONS);
+    let parsed = comrak::parse_document(arena, md, &MD_OPTIONS);
     for a in parsed.children() {
         let b = form.next().ok_or_eyre("unexpected EOF")?;
         ensure_at!(b, nodes_eq(a, b), "modified content");
@@ -647,7 +647,7 @@ fn validate_header<'a>(
         }),
         "expected header"
     );
-    let parsed = comrak::parse_document(arena, content, &*MD_OPTIONS);
+    let parsed = comrak::parse_document(arena, content, &MD_OPTIONS);
     let parsed_inline = parsed.first_child().ok_or_eyre("invalid label")?;
     ensure_at!(
         form_heading,

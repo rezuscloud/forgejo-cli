@@ -327,7 +327,7 @@ impl PrCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         use PrSubcommand::*;
         let repo_info =
-            RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref(), &keys)?;
+            RepoInfo::get_current(host_name, self.repo(), self.remote.as_deref(), keys)?;
         let api = keys.get_api(repo_info.host_url()).await?;
         let repo = repo_info.name().ok_or_else(|| self.no_repo_error())?;
         match self.command {
@@ -444,7 +444,7 @@ impl PrCommand {
                 ssh,
                 identity_file: identity,
             } => {
-                let url_host = crate::host_name(&repo_info.host_url());
+                let url_host = crate::host_name(repo_info.host_url());
                 let ssh = ssh
                     .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
@@ -645,7 +645,7 @@ pub async fn view_pr(repo: &RepoName, api: &Forgejo, id: Option<i64>) -> eyre::R
 async fn view_pr_labels(repo: &RepoName, api: &Forgejo, pr: Option<i64>) -> eyre::Result<()> {
     let pr = try_get_pr(repo, api, pr).await?;
     let labels = pr.labels.as_deref().unwrap_or_default();
-    crate::render_label_list(&labels)?;
+    crate::render_label_list(labels)?;
     Ok(())
 }
 
@@ -1371,13 +1371,13 @@ fn get_commit_msg(commit: &forgejo_api::structs::Commit) -> eyre::Result<(&str, 
     let (commit_title, commit_body) = commit_message
         .split_once('\n')
         .unwrap_or((commit_message, ""));
-    Ok((commit_title, commit_body.trim_start_matches(&['\n', '\r'])))
+    Ok((commit_title, commit_body.trim_start_matches(['\n', '\r'])))
 }
 
 fn body_from_commit_messages<'s>(msgs: impl Iterator<Item = (&'s str, &'s str)>) -> String {
     let mut body = String::new();
     for (commit_title, commit_body) in msgs {
-        body.push_str(&commit_title);
+        body.push_str(commit_title);
         body.push('\n');
         for (i, line) in commit_body.lines().enumerate() {
             if i == 0 {
@@ -1981,14 +1981,14 @@ async fn find_pr_from_branch(
     api: &Forgejo,
     head: &str,
 ) -> eyre::Result<Option<forgejo_api::structs::PullRequest>> {
-    Ok(api
+    api
         .repo_list_branches(repo_owner, repo_name)
         .stream()
         .map_err(|e| e.into())
         .try_filter_map(|branch| check_branch_pair(repo_owner, repo_name, api, branch, head))
         .boxed_local()
         .try_next()
-        .await?)
+        .await
 }
 
 async fn check_branch_pair(

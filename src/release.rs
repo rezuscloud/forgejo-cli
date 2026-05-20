@@ -133,7 +133,7 @@ impl ReleaseCommand {
             remote_name,
             self.repo.as_ref(),
             self.remote.as_deref(),
-            &keys,
+            keys,
         )?;
         let api = keys.get_api(repo.host_url()).await?;
         let repo = repo

@@ -132,10 +132,10 @@ pub enum OrgVisibility {
     Public,
 }
 
-impl Into<forgejo_api::structs::CreateOrgOptionVisibility> for OrgVisibility {
-    fn into(self) -> forgejo_api::structs::CreateOrgOptionVisibility {
+impl From<OrgVisibility> for forgejo_api::structs::CreateOrgOptionVisibility {
+    fn from(val: OrgVisibility) -> Self {
         use forgejo_api::structs::CreateOrgOptionVisibility as ApiVis;
-        match self {
+        match val {
             OrgVisibility::Private => ApiVis::Private,
             OrgVisibility::Limited => ApiVis::Limited,
             OrgVisibility::Public => ApiVis::Public,
@@ -143,10 +143,10 @@ impl Into<forgejo_api::structs::CreateOrgOptionVisibility> for OrgVisibility {
     }
 }
 
-impl Into<forgejo_api::structs::EditOrgOptionVisibility> for OrgVisibility {
-    fn into(self) -> forgejo_api::structs::EditOrgOptionVisibility {
+impl From<OrgVisibility> for forgejo_api::structs::EditOrgOptionVisibility {
+    fn from(val: OrgVisibility) -> Self {
         use forgejo_api::structs::EditOrgOptionVisibility as ApiVis;
-        match self {
+        match val {
             OrgVisibility::Private => ApiVis::Private,
             OrgVisibility::Limited => ApiVis::Limited,
             OrgVisibility::Public => ApiVis::Public,
@@ -156,7 +156,7 @@ impl Into<forgejo_api::structs::EditOrgOptionVisibility> for OrgVisibility {
 
 impl OrgCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
-        let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref(), &keys)?;
+        let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref(), keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         match self.command {
             OrgSubcommand::List {
@@ -228,11 +228,11 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
         .as_deref()
         .ok_or_eyre("new org does not have visibility")?;
 
-    let member_count = match api.org_list_members(&name).page(1).page_size(1).await {
+    let member_count = match api.org_list_members(name).page(1).page_size(1).await {
         Ok((members_headers, _)) => members_headers.x_total_count.unwrap_or_default(),
         Err(_) => {
             let (members_headers, _) = api
-                .org_list_public_members(&name)
+                .org_list_public_members(name)
                 .page(1)
                 .page_size(1)
                 .await?;
@@ -240,7 +240,7 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
         }
     };
     let team_count = api
-        .org_list_teams(&name)
+        .org_list_teams(name)
         .page(1)
         .page_size(1)
         .await?
@@ -287,7 +287,7 @@ async fn view_org(api: &Forgejo, name: String) -> eyre::Result<()> {
 
     if let Some(description) = &org.description {
         if !description.is_empty() {
-            println!("\n{}\n", crate::markdown(&description));
+            println!("\n{}\n", crate::markdown(description));
         }
     }
 
@@ -492,14 +492,14 @@ pub enum LabelSubcommand {
 impl LabelSubcommand {
     async fn run(self, api: &Forgejo) -> eyre::Result<()> {
         match self {
-            LabelSubcommand::List { org } => list_org_labels(&api, org).await?,
+            LabelSubcommand::List { org } => list_org_labels(api, org).await?,
             LabelSubcommand::Add {
                 org,
                 name,
                 color,
                 description,
                 exclusive,
-            } => add_org_label(&api, org, name, color, description, exclusive).await?,
+            } => add_org_label(api, org, name, color, description, exclusive).await?,
             LabelSubcommand::Edit {
                 org,
                 name,
@@ -510,7 +510,7 @@ impl LabelSubcommand {
                 archived,
             } => {
                 edit_org_label(
-                    &api,
+                    api,
                     org,
                     name,
                     new_name,
@@ -521,7 +521,7 @@ impl LabelSubcommand {
                 )
                 .await?
             }
-            LabelSubcommand::Rm { org, label } => remove_org_label(&api, org, label).await?,
+            LabelSubcommand::Rm { org, label } => remove_org_label(api, org, label).await?,
         }
         Ok(())
     }
@@ -542,7 +542,7 @@ async fn find_label_by_name(
     name: &str,
 ) -> eyre::Result<Option<forgejo_api::structs::Label>> {
     Ok(api
-        .org_list_labels(&org, OrgListLabelsQuery::default())
+        .org_list_labels(org, OrgListLabelsQuery::default())
         .stream()
         .try_filter(|label| {
             future::ready(
@@ -659,7 +659,7 @@ impl RepoSubcommand {
         api: &Forgejo,
     ) -> eyre::Result<()> {
         match self {
-            RepoSubcommand::List { org, page } => list_org_repos(&api, org, page).await?,
+            RepoSubcommand::List { org, page } => list_org_repos(api, org, page).await?,
             RepoSubcommand::Create {
                 org,
                 args:
@@ -672,12 +672,12 @@ impl RepoSubcommand {
                         ssh,
                     },
             } => {
-                let url_host = crate::host_name(&repo_info.host_url());
+                let url_host = crate::host_name(repo_info.host_url());
                 let ssh = ssh
                     .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);
                 crate::repo::create_repo(
-                    &api,
+                    api,
                     Some(org),
                     repo,
                     description,

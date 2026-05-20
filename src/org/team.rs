@@ -138,28 +138,28 @@ pub struct TeamEditFlags {
 impl TeamSubcommand {
     pub async fn run(self, api: &forgejo_api::Forgejo) -> eyre::Result<()> {
         match self {
-            TeamSubcommand::List { org } => list_teams(&api, org).await?,
+            TeamSubcommand::List { org } => list_teams(api, org).await?,
             TeamSubcommand::View {
                 org,
                 name,
                 list_permissions,
-            } => view_team(&api, org, name, list_permissions).await?,
+            } => view_team(api, org, name, list_permissions).await?,
             TeamSubcommand::Create {
                 org,
                 name,
                 flags,
                 options,
-            } => create_team(&api, org, name, flags, options).await?,
+            } => create_team(api, org, name, flags, options).await?,
             TeamSubcommand::Edit {
                 org,
                 name,
                 new_name,
                 flags,
                 options,
-            } => edit_team(&api, org, name, new_name, flags, options).await?,
-            TeamSubcommand::Delete { org, name } => delete_team(&api, org, name).await?,
-            TeamSubcommand::Repo(subcommand) => subcommand.run(&api).await?,
-            TeamSubcommand::Member(subcommand) => subcommand.run(&api).await?,
+            } => edit_team(api, org, name, new_name, flags, options).await?,
+            TeamSubcommand::Delete { org, name } => delete_team(api, org, name).await?,
+            TeamSubcommand::Repo(subcommand) => subcommand.run(api).await?,
+            TeamSubcommand::Member(subcommand) => subcommand.run(api).await?,
         }
         Ok(())
     }
@@ -170,7 +170,7 @@ async fn find_team_by_name(
     org: &str,
     name: &str,
 ) -> eyre::Result<forgejo_api::structs::Team> {
-    api.org_list_teams(&org)
+    api.org_list_teams(org)
         .stream()
         .try_filter(|team| {
             future::ready(
@@ -344,7 +344,7 @@ async fn create_team(
         name,
         permission: flags
             .admin
-            .then(|| forgejo_api::structs::CreateTeamOptionPermission::Admin),
+            .then_some(forgejo_api::structs::CreateTeamOptionPermission::Admin),
         units: None,
         units_map: Some(units),
     };
@@ -391,7 +391,7 @@ async fn edit_team(
         name: new_name,
         permission: flags
             .admin
-            .and_then(|b| b.then(|| forgejo_api::structs::EditTeamOptionPermission::Admin)),
+            .and_then(|b| b.then_some(forgejo_api::structs::EditTeamOptionPermission::Admin)),
         units: None,
         units_map: Some(units),
     };
@@ -455,13 +455,13 @@ impl TeamRepoSubcommand {
     async fn run(self, api: &Forgejo) -> eyre::Result<()> {
         match self {
             TeamRepoSubcommand::List { org, team, page } => {
-                list_team_repos(&api, org, team, page).await?
+                list_team_repos(api, org, team, page).await?
             }
             TeamRepoSubcommand::Add { org, team, repo } => {
-                add_repo_to_team(&api, org, team, repo).await?
+                add_repo_to_team(api, org, team, repo).await?
             }
             TeamRepoSubcommand::Rm { org, team, repo } => {
-                remove_repo_from_team(&api, org, team, repo).await?
+                remove_repo_from_team(api, org, team, repo).await?
             }
         }
         Ok(())
@@ -562,13 +562,13 @@ impl TeamMemberSubcommand {
     async fn run(self, api: &Forgejo) -> eyre::Result<()> {
         match self {
             TeamMemberSubcommand::List { org, team, page } => {
-                list_team_members(&api, org, team, page).await?
+                list_team_members(api, org, team, page).await?
             }
             TeamMemberSubcommand::Add { org, team, user } => {
-                add_user_to_team(&api, org, team, user).await?
+                add_user_to_team(api, org, team, user).await?
             }
             TeamMemberSubcommand::Rm { org, team, user } => {
-                remove_user_from_team(&api, org, team, user).await?
+                remove_user_from_team(api, org, team, user).await?
             }
         }
         Ok(())
