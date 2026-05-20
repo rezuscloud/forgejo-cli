@@ -88,7 +88,7 @@ impl RepoInfo {
                 if name.is_none() {
                     let all_remotes = local_repo.remotes()?;
                     if all_remotes.len() == 1 {
-                        if let Some(remote_name) = all_remotes.get(0) {
+                        if let Ok(Some(remote_name)) = all_remotes.get(0) {
                             name = Some(remote_name.to_owned());
                         }
                     }
@@ -97,11 +97,10 @@ impl RepoInfo {
                 // if the current branch is tracking a remote branch, use that remote
                 if name.is_none() {
                     let head = local_repo.head()?;
-                    let branch_name = head.name().ok_or_eyre("branch name not UTF-8")?;
+                    let branch_name = head.name().wrap_err("branch name not UTF-8")?;
 
                     if let Ok(remote_name) = local_repo.branch_upstream_remote(branch_name) {
-                        let remote_name_s =
-                            remote_name.as_str().ok_or_eyre("remote name invalid")?;
+                        let remote_name_s = remote_name.as_str().wrap_err("remote name invalid")?;
 
                         if let Some(host_url) = &host_url {
                             let remote = local_repo.find_remote(remote_name_s)?;
@@ -128,12 +127,12 @@ impl RepoInfo {
                     if let Some(host_url) = &host_url {
                         let all_remotes = local_repo.remotes()?;
                         for remote_name in all_remotes.iter() {
-                            let Some(remote_name) = remote_name else {
+                            let Ok(Some(remote_name)) = remote_name else {
                                 continue;
                             };
                             let remote = local_repo.find_remote(remote_name)?;
 
-                            if let Some(url) = remote.url() {
+                            if let Ok(url) = remote.url() {
                                 let url = crate::ssh_url_parse(url)?;
                                 let (url, _) = url_strip_repo_name(url)?;
                                 let url = keys.deref_alias(url);
@@ -1179,7 +1178,7 @@ pub async fn create_repo(
             }
             let branch_shorthand = head
                 .shorthand()
-                .ok_or_else(|| ftl_eyre!("msg-repo-create-branch_invalid_utf8"))?
+                .wrap_err_with(|| ftl_eyre!("msg-repo-create-branch_invalid_utf8"))?
                 .to_owned();
             let branch_name = std::str::from_utf8(head.name_bytes())?.to_owned();
 

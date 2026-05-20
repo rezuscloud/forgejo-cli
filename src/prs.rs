@@ -1013,14 +1013,14 @@ async fn create_pr(
 
             let branch_shorthand = head
                 .shorthand()
-                .ok_or_eyre("current branch does not have utf8 name")?;
+                .wrap_err("current branch does not have utf8 name")?;
 
             let remote_name = config.get_string(&format!("branch.{branch_shorthand}.remote"))?;
             let remote_url = crate::ssh_url_parse(
                 local_repo
                     .find_remote(&remote_name)?
                     .url()
-                    .ok_or_eyre("remote does not have utf8 url")?,
+                    .wrap_err("remote does not have utf8 url")?,
             )?;
             let remote_host = crate::repo_url_host_name(&remote_url);
 
@@ -1543,10 +1543,7 @@ async fn checkout_pr(
         } else {
             local_repo.branch(&branch_name, &commit, false)?
         };
-    let branch_ref = branch
-        .get()
-        .name()
-        .ok_or_eyre("branch does not have name")?;
+    let branch_ref = branch.get().name().wrap_err("branch does not have name")?;
 
     local_repo.set_head(branch_ref)?;
     local_repo
