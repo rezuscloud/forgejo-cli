@@ -1424,7 +1424,7 @@ async fn migrate_repo(
     let new_repo_url = new_repo
         .html_url
         .as_ref()
-        .ok_or_eyre("new repo doesnt have url")?;
+        .ok_or_eyre("new repo doesn't have url")?;
     ftl_println!("msg-repo-migrate-success", url = new_repo_url.as_str());
 
     Ok(())
