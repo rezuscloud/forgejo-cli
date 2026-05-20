@@ -164,3 +164,94 @@ msg-user-repos-none-self = sina jo ala e poki
 msg-user-orgs-none-other = { $user } li lon kulupu ala
 msg-user-orgs-none-self = sina lon kulupu ala
 msg-user-orgs-count = kulupu { $organizations }
+-dash =
+    { IS_MINIMAL() ->
+        [yes] -
+       *[no] —
+    }
+msg-org-team-view-perms-wiki = lipu sona
+msg-org-team-view-perms-ext_wiki = lipu sona pi ma ante
+msg-org-team-view-perms-issues = toki
+msg-org-team-view-perms-ext_issues = toki pi ma ante
+msg-org-team-view-perms-pulls = ante wile
+msg-org-team-view-perms-projects = sinpin pali
+msg-org-team-view-perms-code = toki ilo
+msg-org-team-view-perms-releases = pana
+msg-org-team-view-perms-packages = pana poki
+msg-issue-create-no_templates = poki { $owner }/{ $repo } li kepeken ala nasin toki
+msg-issue-create-templates_required =
+    poki { $owner }/{ $repo } la o kepeken nasin toki
+    sina ken kepeken ona kepeken nimi `--template <NIMI>`
+msg-issue-create-templates_enabled =
+    poki { $owner }/{ $repo } li kepeken nasin toki
+    sina ken kepeken ona kepeken nimi `--template <NIMI>`
+    anu ken kepeken ala ona kepeken nimi `--no-template`
+msg-issue-templates-none = nasin toki ala li lon poki ni
+msg-issue-close-success = sina pini e toki nanpa { $number }: { $title }
+msg-pr-couldnt_guess = mi sona ala e nanpa pi ante wile. o pana e nanpa
+msg-pr-not_found = mi sona ala e ante wile ni
+msg-pr-view-header =
+    { STYLE("yellow") }ante wile "{ $title }" { STYLE("dark-grey") } li { $number }{ STYLE("reset") }
+    li tan { STYLE("white") }{ $username }{ STYLE("reset") } { $state ->
+        [draft] { STYLE("light-grey") }. ante li pini ala{ STYLE("reset") }
+        [open] { STYLE("bright-green") }li pini ala{ STYLE("reset") }
+        [merged] { STYLE("bright-magenta") }. ante li tawa mama ona{ STYLE("reset") }
+        [closed] { STYLE("bright-red") }li pini{ STYLE("reset") }
+       *[other] $state
+    } { -dash } { STYLE("bright-green") }linja { $additions } li kama { STYLE("reset") }, { STYLE("bright-red") }linja { $deletions } li weka{ STYLE("reset") }
+    { OPT($head_branch) ->
+       *[none] ante li tawa `{ $base_branch }`
+        [some] ante li kama tan `{ $head_branch }` li tawa `{ $base_branch }`
+    }
+msg-pr-view-comment_count = { $comments } toki li lon ante wile ni
+msg-pr-status-merged = { STYLE("bright-magenta") }ante li tawa mama ona{ STYLE("reset") }. { $merged_by } li wan e ona lon tenpo { DATETIME($created_at, dateStyle: "long", timeStyle: "long") }
+msg-pr-status-header =
+    { $state ->
+        [draft] { STYLE("light-grey") }ona li sin{ STYLE("reset") } { -dash } la sina ken ala wan e ona
+        [open]
+            { STYLE("bright_green") }ona li pini ala{ STYLE("reset") } { $mergeable ->
+               *[yes] li ken kama wa
+                [no] { STYLE("bright-red") } li ken ala kama wan{ STYLE("reset") }
+            }
+        [closed] { STYLE("bright-red") }ona li pini{ STYLE("reset") } { -dash } sina wile wan e ona la o open sin e ona
+       *[other] nasa
+    }
+msg-pr-status-entry =
+    { $state ->
+        [success] { STYLE("bright_green") }pona{ STYLE("reset") }
+        [pending] { STYLE("yellow") }open ala{ STYLE("reset") }
+        [warning] { STYLE("bright_yellow") }ike ken { STYLE("reset") }
+        [failure] { STYLE("bright_red") }ike{ STYLE("reset") }
+        [error] { STYLE("bright_red") }pakala{ STYLE("reset") }
+       *[other] nasa
+    } { -dash } { $context }
+msg-pr-create-cross_instance = ante wile o lon ma wan taso; mama li lon ma { $base_instance }, taso ante li lon ma { $head_instance }
+msg-pr-create-success = sina open e ante wile nanpa { $number }: { $title }
+msg-pr-create-agit_success = sina open e ante wile: { $title }
+msg-pr-create-agit_push_cfg_question =
+    sina wile ala wile e ni:
+    nasin pi ilo Git li ante tawa ni: nasin `git push` li ken, lon ante wile ni
+msg-pr-create-agit_push_cfg_prompt = (w/A/?)
+    .yes =
+        wile
+        w
+    .no =
+        wile ala
+        ala
+        a
+    .help =
+        seme
+        s
+        ?
+msg-pr-create-agit_force_push_warning =
+    { STYLE("bold") }o sona e ni:{ STYLE("reset") }
+      nasin AGit la `git push --force[-with-lease]` li ken ala.
+      o kepeken nasin `git push -o force=true`.
+msg-pr-create-agit_push_cfg_help = ni li ante e nasin ni:
+msg-pr-merge-default_message = Reviewed-on: { $pr_url }
+msg-pr-merge-success = ante wile nanpa { $number } \"{ $title }\" li kama tawa `{ $base_branch }`
+msg-pr-checkout-dirty = ante pi awen ala li lon poka la mi ken ala lukin e ante wile ni
+msg-pr-checkout-not_fork = poki { $repo } li jo ala e poki mama
+msg-pr-search-entry = ante wile "{ $title }" li nanpa { $number } li tan { $author }
+msg-repo-fallback_host-invalid_url = o sona: `FJ_FALLBACK_HOST` li pakala
+msg-repo-arg_no_owner = nimi poki o kepeken nasin nimi ni: [MA/]JAN/POKI anu [MA/]KULUPU/POKI
