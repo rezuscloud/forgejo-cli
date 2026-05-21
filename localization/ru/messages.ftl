@@ -46,3 +46,24 @@ msg-repo-view-is_fork = Ответвление { $parent }
 msg-repo-label-view-archived = (архивирована)
 msg-repo-label-view-no_description = (без описания)
 msg-user-followers-none-self = На вас никто не подписан :(
+msg-org-create-invalid_character =
+    Название организации может содержать только буквы, цифры и знаки: минусы, нижние подчёркивания и точки.
+      Для установки названия с другими символами используйте флаг --full-name
+msg-org-create-invalid_starting_character =
+    Название организации может начинаться только с буквы.
+      Для установки названия, начинающегося с другого символа, используйте флаг --full-name
+msg-org-create-invalid_ending_character =
+    Название организации может заканчиваться только на букву.
+      Для установки названия, заканчивающегося другим символом, используйте флаг --full-name
+msg-org-create-invalid_consecutive_characters =
+    Название организации не может содержать идущие подряд спец. символы.
+      Для установки подобного названия используйте флаг --full-name
+msg-org-members-page_number = Страница { $page } из { $total }
+msg-org-visibility-public = Вы публичный участник { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-private = Вы скрытый участник { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-set_public = Теперь вы публичный участник { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-set_private = Теперь вы скрытый участник { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-not_member = Вы не состоите в { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-team-view-perms-wiki = Вики-страницы
+msg-org-team-view-perms-ext_wiki = Внешние вики
+msg-org-team-view-perms-packages = Пакеты
