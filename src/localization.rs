@@ -39,6 +39,7 @@ pub mod bundles {
 
     bundle!(EN_US = "en-US");
     bundle!(DE_DE = "de-DE");
+    bundle!(ZH_HANS = "zh-Hans");
 
     pub fn locale() -> &'static [&'static LazyLock<Bundle>] {
         LOCALE.get_or_init(init_from_env)
@@ -63,6 +64,8 @@ pub mod bundles {
         match lang.language.as_str() {
             "en" => const { &[&EN_US] },
             "de" => const { &[&DE_DE] },
+            // match on lang.script here once more scripts are added
+            "zh" => const { &[&ZH_HANS] },
             _ => const { &[&EN_US] },
         }
     }
