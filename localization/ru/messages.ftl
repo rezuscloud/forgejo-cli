@@ -67,3 +67,49 @@ msg-org-visibility-not_member = Вы не состоите в { STYLE("bold", "b
 msg-org-team-view-perms-wiki = Вики-страницы
 msg-org-team-view-perms-ext_wiki = Внешние вики
 msg-org-team-view-perms-packages = Пакеты
+-dash =
+    { IS_MINIMAL() ->
+        [yes] -
+       *[no] —
+    }
+msg-auth-login-oauth_unsupported =
+    Ваша версия fj не поддерживает `login` для { $host_domain }
+
+    Создайте токен по ссылке { $applications_url }
+    и используйте его, чтобы войти с `fj auth add-key`
+msg-auth_logout-success = выполнен выход из { $username }@{ $host }
+msg-auth_logout-already_signed_out = вход не выполнен в { $host }
+msg-whoami = выполнен вход в { $name }@{ $host }
+msg-org-list-no_results = Ничего не нашлось.
+msg-org-members-no_results = Ничего не нашлось.
+msg-org-repo-list-no_results = Ничего не нашлось.
+msg-org-team-repo-list-no_results = Ничего не нашлось.
+msg-org-team-member-list-no_results = Ничего не нашлось.
+msg-org-team-view-perms-projects = Проекты
+msg-org-team-view-perms-code = Код
+msg-issue-create-no_templates = { $owner }/{ $repo } не содержит шаблонов задач
+msg-issue-create-templates_required =
+    { $owner }/{ $repo } требует заполнение задач по шаблону.
+    Выберите шаблон с `--template <NAME>`.
+msg-issue-create-templates_enabled =
+    { $owner }/{ $repo } использует шаблоны для задач.
+    Выберите шаблон с `--template <NAME>`,
+    или укажите `--no-template`, чтобы не использовать шаблон.
+msg-issue-view-comments-attachments =
+    { $attachments ->
+        [one] 1 прикреплённый файл
+        [few] { $attachments } прикреплённых файла
+       *[many] { $attachments } прикреплённых файлов
+    }
+msg-issue-view-comment_count =
+    { $comments ->
+        [one] 1 комментарий
+        [few] { $comments } комментария
+       *[many] { $comments } комментариев
+    }
+msg-issue-search-total =
+    { $issues ->
+        [one] 1 задача
+        [few] { $issues } задачи
+       *[many] { $issues } задач
+    }
