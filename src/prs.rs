@@ -1983,8 +1983,7 @@ async fn find_pr_from_branch(
     api: &Forgejo,
     head: &str,
 ) -> eyre::Result<Option<forgejo_api::structs::PullRequest>> {
-    api
-        .repo_list_branches(repo_owner, repo_name)
+    api.repo_list_branches(repo_owner, repo_name)
         .stream()
         .map_err(|e| e.into())
         .try_filter_map(|branch| check_branch_pair(repo_owner, repo_name, api, branch, head))

@@ -868,8 +868,10 @@ impl AnsiPrinter {
 
     fn newline(&mut self) {
         if self.current_bg().is_some() {
-            self.out
-                .extend(std::iter::repeat_n(' ', self.max_line_len - self.cur_line_len));
+            self.out.extend(std::iter::repeat_n(
+                ' ',
+                self.max_line_len - self.cur_line_len,
+            ));
         }
         self.pause_style();
         self.out.push('\n');
