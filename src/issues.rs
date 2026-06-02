@@ -357,6 +357,7 @@ pub async fn maybe_label_names_to_ids(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_issue(
     repo: &RepoName,
     api: &Forgejo,

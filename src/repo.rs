@@ -175,9 +175,7 @@ impl RepoInfo {
             (repo_url, repo_name)
         } else if repo_name.is_some() {
             (host_url.or(remote_url), repo_name)
-        } else if remote.is_some() {
-            (remote_url, remote_repo_name)
-        } else if host_url.is_none() || same_instance(&remote_url, &host_url) {
+        } else if remote.is_some() || host_url.is_none() || same_instance(&remote_url, &host_url) {
             (remote_url, remote_repo_name)
         } else {
             (host_url, None)
@@ -1121,6 +1119,7 @@ impl DefaultUpdateStyle {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn create_repo(
     api: &Forgejo,
     org: Option<String>,
@@ -1339,6 +1338,7 @@ impl std::fmt::Display for MigrateIncludeParseError {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn migrate_repo(
     api: &Forgejo,
     mut repo: String,
@@ -1821,6 +1821,7 @@ async fn delete_repo_label(api: &Forgejo, repo: &RepoName, name: String) -> eyre
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn edit_repo_label(
     api: &Forgejo,
     repo: &RepoName,

@@ -11,6 +11,7 @@ pub struct CompletionCommand {
 }
 
 #[derive(ValueEnum, Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum Shell {
     Bash,
     Elvish,

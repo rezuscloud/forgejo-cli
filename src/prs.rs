@@ -984,6 +984,7 @@ pub async fn get_template_file(
     Ok(None)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_pr(
     repo: &RepoName,
     api: &Forgejo,
@@ -1337,6 +1338,7 @@ async fn create_pr(
                 if !default_is_upstream || !branch_merge_is_agit || !branch_remote_is_agit {
                     loop {
                         let response = crate::ftl_prompt!("msg-pr-create-agit_push_cfg_prompt")?;
+                        #[allow(clippy::wildcard_in_or_patterns)]
                         match response {
                             Some("yes") => {
                                 let remote = remote_name.unwrap_or(clone_url.as_str());

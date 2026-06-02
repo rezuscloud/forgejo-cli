@@ -294,6 +294,7 @@ async fn oauth_login(
 
 use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 
+#[allow(clippy::type_complexity)]
 fn auth_server() -> (
     JoinHandle<eyre::Result<()>>,
     Receiver<Result<Option<(String, String)>, String>>,

@@ -111,7 +111,7 @@ async fn readline() -> eyre::Result<String> {
     .await?
 }
 
-async fn prompt<'b>(
+async fn prompt(
     msg_id: &str,
     args: &fluent_bundle::FluentArgs<'_>,
 ) -> eyre::Result<Option<&'static str>> {
@@ -226,7 +226,7 @@ fn get_default_editor_flags(editor_path: &std::path::Path) -> Vec<String> {
 
 // Read a filename, unless “-” is given, in which case, stdin is read and returned
 async fn read_file_or_stdin(path: &PathBuf) -> eyre::Result<String> {
-    if *path == PathBuf::from("-") {
+    if &**path == "-" {
         // Typical use should be not interactive, so it's fine to call stdin() (see docs)
         let mut stdin = tokio::io::stdin();
         let mut body = String::new();

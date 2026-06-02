@@ -583,6 +583,7 @@ async fn add_org_label(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn edit_org_label(
     api: &Forgejo,
     org: String,
