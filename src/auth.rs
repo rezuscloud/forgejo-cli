@@ -236,9 +236,9 @@ async fn oauth_login(
     let res = rx.recv().await.unwrap();
     handle.abort();
     let code = match res {
-        Ok(Some((code, returned_state))) => {
-            if returned_state == state {
-                code
+        Ok(Some(response)) => {
+            if response.state == state {
+                response.code
             } else {
                 eyre::bail!("returned with invalid state");
             }
@@ -294,11 +294,14 @@ async fn oauth_login(
 
 use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 
-#[allow(clippy::type_complexity)]
-fn auth_server() -> (
-    JoinHandle<eyre::Result<()>>,
-    Receiver<Result<Option<(String, String)>, String>>,
-) {
+struct AuthResponse {
+    code: String,
+    state: String,
+}
+
+type AuthServerReceiver = Receiver<Result<Option<AuthResponse>, String>>;
+
+fn auth_server() -> (JoinHandle<eyre::Result<()>>, AuthServerReceiver) {
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], 26218).into();
     let (tx, rx) = tokio::sync::mpsc::channel(1);
     let tx = std::sync::Arc::new(tx);
@@ -329,7 +332,10 @@ fn auth_server() -> (
                         ftl_format!("msg-auth-login-browser_failure").into_owned(),
                     ),
                     (Some(code), Some(state), None) => (
-                        Ok(Some((code.to_owned(), state.to_owned()))),
+                        Ok(Some(AuthResponse {
+                            code: code.to_owned(),
+                            state: state.to_owned(),
+                        })),
                         ftl_format!("msg-auth-login-browser_success").into_owned(),
                     ),
                     _ => (Ok(None), String::new()),
