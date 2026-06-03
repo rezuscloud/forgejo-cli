@@ -417,7 +417,7 @@ macro_rules! ftl_prompt {
     };
     ($msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
-            crate::prompt($msg_id, &$crate::ftl_args!($($var_name $(= $var_val)*),*)).await
+            $crate::prompt($msg_id, &$crate::ftl_args!($($var_name $(= $var_val)*),*)).await
         }
     }
 }
@@ -429,7 +429,7 @@ macro_rules! ftl_prompt_bool {
     };
     (default $default:expr; $msg_id:expr, $($var_name:ident $(= $var_val:expr)?),* $(,)?) => {
         {
-            crate::ftl_prompt!($msg_id, $($var_name $(= $var_val)*),*).map(|o| o.map(|r| r == "yes").unwrap_or($default))
+            $crate::ftl_prompt!($msg_id, $($var_name $(= $var_val)*),*).map(|o| o.map(|r| r == "yes").unwrap_or($default))
         }
     }
 }

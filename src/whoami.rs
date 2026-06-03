@@ -11,7 +11,7 @@ pub struct WhoAmICommand {
 
 impl WhoAmICommand {
     pub async fn run(self, keys: &mut KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
-        let url = RepoInfo::get_current(host_name, None, self.remote.as_deref(), &keys)
+        let url = RepoInfo::get_current(host_name, None, self.remote.as_deref(), keys)
             .wrap_err("could not find host, try specifying with --host")?
             .host_url()
             .clone();

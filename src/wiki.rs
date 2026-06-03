@@ -53,7 +53,7 @@ impl WikiCommand {
         use WikiSubcommand::*;
 
         let repo =
-            RepoInfo::get_current(host_name, self.repo.as_ref(), self.remote.as_deref(), &keys)?;
+            RepoInfo::get_current(host_name, self.repo.as_ref(), self.remote.as_deref(), keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         let repo_name = repo
             .name()
@@ -67,7 +67,7 @@ impl WikiCommand {
                 ssh,
                 identity_file: identity,
             } => {
-                let url_host = crate::host_name(&repo.host_url());
+                let url_host = crate::host_name(repo.host_url());
                 let ssh = ssh
                     .unwrap_or_else(|| Some(keys.default_ssh.contains(url_host)))
                     .unwrap_or(true);

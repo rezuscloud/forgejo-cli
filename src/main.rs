@@ -111,7 +111,7 @@ async fn readline() -> eyre::Result<String> {
     .await?
 }
 
-async fn prompt<'b>(
+async fn prompt(
     msg_id: &str,
     args: &fluent_bundle::FluentArgs<'_>,
 ) -> eyre::Result<Option<&'static str>> {
@@ -126,7 +126,7 @@ async fn prompt<'b>(
         bundle.write_pattern(
             &mut localization::WriterCompat(&mut stdout),
             pattern,
-            Some(&args),
+            Some(args),
             &mut errors,
         )?;
         if !errors.is_empty() {
@@ -226,7 +226,7 @@ fn get_default_editor_flags(editor_path: &std::path::Path) -> Vec<String> {
 
 // Read a filename, unless “-” is given, in which case, stdin is read and returned
 async fn read_file_or_stdin(path: &PathBuf) -> eyre::Result<String> {
-    if *path == PathBuf::from("-") {
+    if &**path == "-" {
         // Typical use should be not interactive, so it's fine to call stdin() (see docs)
         let mut stdin = tokio::io::stdin();
         let mut body = String::new();
@@ -604,7 +604,7 @@ fn markdown(text: &str) -> String {
                 ansi_printer.start_bold();
                 ansi_printer
                     .out
-                    .extend(std::iter::repeat('#').take(heading.level as usize));
+                    .extend(std::iter::repeat_n('#', heading.level as usize));
                 ansi_printer.out.push(' ');
                 ansi_printer.cur_line_len += heading.level as usize + 1;
             }
@@ -653,7 +653,7 @@ fn markdown(text: &str) -> String {
                 }
                 ansi_printer
                     .out
-                    .extend(std::iter::repeat(horiz_rule).take(max_line_len));
+                    .extend(std::iter::repeat_n(horiz_rule, max_line_len));
                 ansi_printer.newline();
                 ansi_printer.newline();
             }
@@ -868,8 +868,10 @@ impl AnsiPrinter {
 
     fn newline(&mut self) {
         if self.current_bg().is_some() {
-            self.out
-                .extend(std::iter::repeat(' ').take(self.max_line_len - self.cur_line_len));
+            self.out.extend(std::iter::repeat_n(
+                ' ',
+                self.max_line_len - self.cur_line_len,
+            ));
         }
         self.pause_style();
         self.out.push('\n');

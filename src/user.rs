@@ -276,7 +276,7 @@ pub enum VisibilitySetting {
 
 impl UserCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
-        let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref(), &keys)?;
+        let repo = RepoInfo::get_current(host_name, None, self.remote.as_deref(), keys)?;
         let api = keys.get_api(repo.host_url()).await?;
         match self.command {
             UserSubcommand::Search { query, page } => user_search(&api, &query, page).await?,
@@ -356,7 +356,7 @@ async fn user_search(api: &Forgejo, query: &str, page: Option<usize>) -> eyre::R
     }
     if users.is_empty() {
         ftl_println!("msg-user-search-none");
-        println!("");
+        println!();
     } else {
         let SpecialRender {
             bullet,
@@ -1200,7 +1200,7 @@ async fn upload_key(
     let title = if let Some(title) = title {
         title
     } else {
-        let Some(guess) = trimmed.split(' ').last() else {
+        let Some(guess) = trimmed.split(' ').next_back() else {
             ftl_bail!("msg-user-key-upload-no_title");
         };
 
@@ -1330,7 +1330,7 @@ fn print_gpg(key: &forgejo_api::structs::GPGKey, indent_depth: usize) {
         println!("\n{indent}{key}");
     }
 
-    for subkey in key.subkeys.as_ref().map(Vec::as_slice).unwrap_or(&[]) {
+    for subkey in key.subkeys.as_deref().unwrap_or(&[]) {
         println!();
         print!("{indent}");
         ftl_println!("msg-user-gpg-list-subkey", id = key.id);

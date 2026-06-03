@@ -61,6 +61,7 @@
             cargo
             rustc
             rustfmt
+            clippy
           ];
 
           # Required for rust-analyzer to work

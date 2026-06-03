@@ -38,14 +38,14 @@ impl AuthCommand {
     pub async fn run(self, keys: &mut crate::KeyInfo, host_name: Option<&str>) -> eyre::Result<()> {
         match self {
             AuthCommand::Login => {
-                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, keys)?;
                 let host_url = repo_info.host_url();
                 let client_info = get_client_info_for(host_url).await?;
                 if let Some(client_id) = &client_info {
                     oauth_login(keys, host_url, client_id).await?;
                     keys.save().await?;
                 } else {
-                    let host_domain = crate::host_name(&host_url);
+                    let host_domain = crate::host_name(host_url);
                     let applications_url =
                         format!("https://{host_domain}/user/settings/applications");
 
@@ -66,7 +66,7 @@ impl AuthCommand {
                 }
             }
             AuthCommand::AddKey { user, key } => {
-                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, keys)?;
                 let host_url = repo_info.host_url();
                 let key = match key {
                     Some(key) => key,
@@ -75,7 +75,7 @@ impl AuthCommand {
                         .trim()
                         .to_string(),
                 };
-                let host = crate::host_name(&host_url);
+                let host = crate::host_name(host_url);
                 if !keys.hosts.contains_key(host) {
                     let mut login = crate::keys::LoginInfo::Application {
                         name: user,
@@ -89,27 +89,25 @@ impl AuthCommand {
                 }
             }
             AuthCommand::UseSsh { use_ssh } => {
-                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, &keys)?;
-                let host = crate::host_name(&repo_info.host_url());
+                let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, keys)?;
+                let host = crate::host_name(repo_info.host_url());
                 if !keys.hosts.contains_key(host) {
                     ftl_eprintln!("msg-auth-use_ssh-not_logged_in", host);
-                } else {
-                    if use_ssh.unwrap_or(true) {
-                        let already_present = keys.default_ssh.insert(host.to_string());
-                        if already_present {
-                            ftl_println!("msg-auth-use_ssh-enabled", host);
-                            keys.save().await?;
-                        } else {
-                            ftl_println!("msg-auth-use_ssh-already_enabled", host);
-                        }
+                } else if use_ssh.unwrap_or(true) {
+                    let already_present = keys.default_ssh.insert(host.to_string());
+                    if already_present {
+                        ftl_println!("msg-auth-use_ssh-enabled", host);
+                        keys.save().await?;
                     } else {
-                        let was_present = keys.default_ssh.remove(host);
-                        if was_present {
-                            ftl_println!("msg-auth-use_ssh-disabled", host);
-                            keys.save().await?;
-                        } else {
-                            ftl_println!("msg-auth-use_ssh-already_disabled", host);
-                        }
+                        ftl_println!("msg-auth-use_ssh-already_enabled", host);
+                    }
+                } else {
+                    let was_present = keys.default_ssh.remove(host);
+                    if was_present {
+                        ftl_println!("msg-auth-use_ssh-disabled", host);
+                        keys.save().await?;
+                    } else {
+                        ftl_println!("msg-auth-use_ssh-already_disabled", host);
                     }
                 }
             }
@@ -238,9 +236,9 @@ async fn oauth_login(
     let res = rx.recv().await.unwrap();
     handle.abort();
     let code = match res {
-        Ok(Some((code, returned_state))) => {
-            if returned_state == state {
-                code
+        Ok(Some(response)) => {
+            if response.state == state {
+                response.code
             } else {
                 eyre::bail!("returned with invalid state");
             }
@@ -288,7 +286,7 @@ async fn oauth_login(
         expires_at,
     };
     add_ssh_alias(&mut login_info, host, keys).await;
-    let domain = crate::host_name(&host);
+    let domain = crate::host_name(host);
     keys.hosts.insert(domain.to_owned(), login_info);
 
     Ok(())
@@ -296,10 +294,14 @@ async fn oauth_login(
 
 use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 
-fn auth_server() -> (
-    JoinHandle<eyre::Result<()>>,
-    Receiver<Result<Option<(String, String)>, String>>,
-) {
+struct AuthResponse {
+    code: String,
+    state: String,
+}
+
+type AuthServerReceiver = Receiver<Result<Option<AuthResponse>, String>>;
+
+fn auth_server() -> (JoinHandle<eyre::Result<()>>, AuthServerReceiver) {
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], 26218).into();
     let (tx, rx) = tokio::sync::mpsc::channel(1);
     let tx = std::sync::Arc::new(tx);
@@ -330,7 +332,10 @@ fn auth_server() -> (
                         ftl_format!("msg-auth-login-browser_failure").into_owned(),
                     ),
                     (Some(code), Some(state), None) => (
-                        Ok(Some((code.to_owned(), state.to_owned()))),
+                        Ok(Some(AuthResponse {
+                            code: code.to_owned(),
+                            state: state.to_owned(),
+                        })),
                         ftl_format!("msg-auth-login-browser_success").into_owned(),
                     ),
                     _ => (Ok(None), String::new()),
@@ -360,7 +365,7 @@ async fn add_ssh_alias(
         Err(_) => return,
     };
     if let Some(ssh_url) = get_instance_ssh_url(api).await {
-        let http_host = crate::host_name(&host_url);
+        let http_host = crate::host_name(host_url);
         let ssh_host = crate::host_name(&ssh_url);
         if http_host != ssh_host {
             keys.aliases
