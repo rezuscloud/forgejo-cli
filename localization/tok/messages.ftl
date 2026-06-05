@@ -255,3 +255,218 @@ msg-pr-checkout-not_fork = poki { $repo } li jo ala e poki mama
 msg-pr-search-entry = ante wile "{ $title }" li nanpa { $number } li tan { $author }
 msg-repo-fallback_host-invalid_url = o sona: `FJ_FALLBACK_HOST` li pakala
 msg-repo-arg_no_owner = nimi poki o kepeken nasin nimi ni: [MA/]JAN/POKI anu [MA/]KULUPU/POKI
+msg-wiki-clone-success = lipu sona pi poki { $repo } li kama lon poki poka { $path }
+msg-version-update_check-behind =
+    sin pi ilo FJ li lon: nanpa { $new_version }
+    o kama jo e ona lon lipu { $url }
+msg-version-update_check-current = sin pi ilo FJ li lon ala. wawa a!
+msg-version-update_check-hint = sina ken alasa e sin pi ilo FJ kepeken nimi`fj version --check`
+msg-release-asset-delete-success = ijo { $asset } li weka tan pana { $release }
+msg-release-asset-create-success = ijo { $asset } li kama lon pana { $release }
+msg-release-view-header =
+    pana { $name }
+    tan { $author } lon tenpo { DATETIME($created_at, dateStyle: "long") }
+msg-release-create-success = sina open e pana { $name }
+msg-release-create-tag_flags_conflict = sina ken ala kepeken nimi `--tag` kepeken nimi `--create-tag`. o kepeken ni wan taso.
+msg-release-create-must_specify_tag = o kepeken nimi `--tag` anu nimi `--create-tag`
+msg-user-gpg-delete-success = nimi GPG nanpa { $id } li weka
+msg-user-gpg-delete-unconfirmed = ni li weka ala
+msg-user-gpg-upload-success = nimi GPG li pana!
+msg-user-gpg-upload-export_failed =
+    mi ken ala pana e nimi GPG tawa ilo Forgejo. { OPT($status_code) ->
+       *[none] { "" }
+        [some] pakala pi nasin GPG li ni: { $status_code }
+    }
+msg-user-gpg-upload-exporting = mi pana e nimi GPG
+msg-user-gpg-list-subkey = { STYLE("bold") }nimi { STYLE("bright-magenta") } nanpa { $id }{ STYLE("reset") }:
+msg-user-gpg-list-can_encrypt_storage =
+    { STYLE("bold") }ni li ken ala ken len e ijo:{ STYLE("reset") }  { $can_encrypt_storage ->
+        [yes] { STYLE("bright-green") }ken{ STYLE("reset") }
+       *[no] { STYLE("bright-red") }ken ala{ STYLE("reset") }
+    }
+msg-user-gpg-list-can_encrypt_comms =
+    { STYLE("bold") }ni li ken ala ken len e toki:{ STYLE("reset") } { $can_encrypt_storage ->
+        [yes] { STYLE("bright-green") }ken{ STYLE("reset") }Updated branch to latest commit
+       *[no] { STYLE("bright-red") }ken ala{ STYLE("reset") }
+    }
+msg-user-gpg-list-key_id = { STYLE("bold") }nanpa pi nimi ni:{ STYLE("reset") }            { STYLE("bright-cyan") }{ $key_id }{ STYLE("reset") }
+msg-user-gpg-list-header = { STYLE("bold") }nimi GPG { STYLE("bright-magenta") } nanpa { $id }{ STYLE("reset") }
+msg-user-gpg-list-count = nimi { $keys } li lon
+msg-user-key-add-success = nimi SSH li pana!
+msg-user-key-upload-confirm_key_title_prompt =
+    nimi lukin ona li ken ni: { STYLE("bright-cyan") }{ $title }{ STYLE("reset") }
+    sina wile ala wile e nimi ni?
+    .yes =
+        wile
+        w
+    .no =
+        wile ala
+        ala
+        ala
+        a
+msg-user-key-add-invalid_key =
+    ken la ijo '{ $path }' li nimi len anu ijo pakala
+     sina awen wile ni la o kepeken nimi `--force`
+msg-user-key-add-unexpected_extension =
+    pini pi nimi '{ $path }' li nimi '.pub' ala. ni li nimi len anu seme?
+     sina awen wile ni la o kepeken nimi `--force`
+msg-user-key-upload-confirm_key_file_prompt =
+    mi lukin e nimi SSH ni: { $path }
+    mi o pana ala pana e ona?
+    .yes =
+        pana
+        p
+    .no =
+        pana ala
+        ala
+        a
+msg-user-key-upload-keys_not_found = mi ken ala lukin e nimi SSH
+msg-user-key-delete-success = nimi SSH nanpa { $id } li weka
+msg-user-edit-website-removal_hint = sina wile weka e lipu linluwi sina tan lipu Forgejo sina la o kepeken nimi `--unset`
+msg-user-edit-location-removal_hint = sina wile weka e nimi pi ma sina tan lipu sina la o kepeken nimi `--unset`
+msg-user-edit-pronouns-removal_hint = sina wile weka e nimi sina pi sama nimi "ona" tan lipu sina la o kepeken nimi `--unset`
+msg-user-edit-name-removal_hint = sina wile weka e nimi sina tan lipu sina la o kepeken nimi `--unset`
+msg-activity-created_release = { STYLE("bold") }{ $actor }{ STYLE("reset") } li open e pana { STYLE("bold", "bright_cyan") }{ $release_name }{ STYLE("reset") } lon poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-commented_pr = { STYLE("bold") }{ $actor }{ STYLE("reset") } li toki lon ante wile { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-rejected_pr = { STYLE("bold") }{ $actor }{ STYLE("reset") } li pana e ante ken tawa ante wile { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-deleted_branch = { STYLE("bold") }{ $actor }{ STYLE("reset") } li weka e linja { STYLE("bold", "bright_cyan") }{ $branch }{ STYLE("reset") } tan poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-deleted_tag = { STYLE("bold") }{ $actor }{ STYLE("reset") } li weka e kule { STYLE("bold", "bright_cyan") }{ $tag_name }{ STYLE("reset") } tan poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-reopened_pr = { STYLE("bold") }{ $actor }{ STYLE("reset") } li open sin e ante wile { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-closed_pr = { STYLE("bold") }{ $actor }{ STYLE("reset") } li pini e ante wile { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-reopened_issue = { STYLE("bold") }{ $actor }{ STYLE("reset") } li open sin e toki { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-closed_issue = { STYLE("bold") }{ $actor }{ STYLE("reset") } li pini e toki { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-merged_pr = { STYLE("bold") }{ $actor }{ STYLE("reset") } li wan e ante wile { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-commented_issue = { STYLE("bold") }{ $actor }{ STYLE("reset") } li toki lon toki { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-transferred_repo = { STYLE("bold") }{ $actor }{ STYLE("reset") } li tawa e poki { STYLE("bold", "yellow") }\"{ $old_name }\"{ STYLE("reset") } tawa poki { STYLE("bold", "yellow") }{ $new_name }{ STYLE("reset") }
+msg-activity-created_pr = { STYLE("bold") }{ $actor }{ STYLE("reset") } li open e ante wile { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-created_issue = { STYLE("bold") }{ $actor }{ STYLE("reset") } li open e toki { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") }
+msg-activity-pushed_commit = { STYLE("bold") }{ $actor }{ STYLE("reset") } li pana lon linja { STYLE("bold", "bright-cyan") }{ $branch }{ STYLE("reset") } lon poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-watched_repo = { STYLE("bold") }{ $actor }{ STYLE("reset") } li lukin e poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-starred_repo = { STYLE("bold") }{ $actor }{ STYLE("reset") } li pilin pona tawa poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-renamed_repo = { STYLE("bold") }{ $actor }{ STYLE("reset") } li ante e nimi pi poki { STYLE("bold", "yellow") }\"{ $old_name }\"{ STYLE("reset") } tawa nimi { STYLE("bold", "yellow") }{ $new_name }{ STYLE("reset") }
+msg-activity-created_repo = { STYLE("bold") }{ $actor }{ STYLE("reset") } li open e poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-created_mirror = { STYLE("bold") }{ $actor }{ STYLE("reset") } li open e jasima { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-activity-created_fork = { STYLE("bold") }{ $actor }{ STYLE("reset") } li kipisi e poki { STYLE("bold", "yellow") }{ $parent_repo_name }{ STYLE("reset") } tawa poki { STYLE("bold", "yellow") }{ $repo_name }{ STYLE("reset") }
+msg-user-view-header =
+    { STYLE("bright-cyan", "bold") }{ $username }{ STYLE("reset") } { OPT($pronouns) ->
+       *[none] { "" }
+        [some] { STYLE("light-grey") } { -dash } { STYLE("bold") }{ $pronouns }{ STYLE("reset") }
+    }
+    jan { STYLE("bold") }{ $followers }{ STYLE("reset") } li lukin e ona { -dash } ona li lukin e jan { STYLE("bold") }{ $following }{ STYLE("reset") }
+    { OPT($website) ->
+       *[none]
+            { OPT($email) ->
+               *[none] { "" }
+                [some] { STYLE("bold") }{ $email }{ STYLE("reset") }
+            }
+        [some]
+            { OPT($email) ->
+               *[none] { STYLE("bold") }{ $website }{ STYLE("reset") }
+                [some] { STYLE("bold") }{ $website }{ STYLE("reset") } { -dash } { STYLE("bold") }{ $email }{ STYLE("reset") }
+            }
+    }
+msg-repo-view-external_tracker = toki li lon lipu { $url }
+msg-repo-view-name = poki { $repo_name }
+msg-repo-view-is_fork = poki { $parent } li mama ona
+msg-repo-view-is_mirror = ona li jasima e poki { $mirror_of }
+msg-repo-view-primary_language = toki wan ona li toki { $language }
+msg-repo-view-stars = pona tawa jan { $stars }
+msg-repo-view-watching = jan { $watching } li lukin e ona
+msg-repo-view-forks = ona li mama tawa poki { $forks }
+msg-repo-view-issues = toki { $issues } li lon ona
+msg-repo-view-prs = ante wile { $pull_requests } li lon ona
+msg-repo-view-releases = pana { $releases } li lon ona
+msg-repo-migrate-success = wawa! o lukin e ona lon lipu { $url }
+msg-repo-migrate-migrating = mi tawa e ona...
+msg-repo-migrate-token_prompt = nimi len ilo:
+msg-repo-migrate-password_prompt = nimi len:
+msg-repo-migrate-username_prompt = nimi sijelo:
+msg-repo-fork-success = sina kipisi e poki { $parent_owner }/{ $parent_name } tawa poki { $fork_name }
+msg-repo-create-branch_invalid_utf8 = nimi linja o kepeken nasin sitelen UTF-8
+msg-repo-create-detached_head = awen 'HEAD' li lon ala linja la mi ken ala pana
+msg-repo-create-success = poki sina li open lon lipu { $url }
+msg-repo-name_needed = mi ken ala kama sona e nimi poki. o pana e nimi ni
+msg-pr-search-count = ante wile { $pull_requests }
+msg-pr-checkout-success =
+    sina lon ante wile nanpa #{ $number }: "{ $title }"
+    { $new_branch ->
+       *[yes] sina lon linja sin { $branch_name }
+        [no] linja li kama sin
+    }
+msg-issue-assign-success =
+    jan { $added } sin o pali e toki { $owner }/{ $repo }#{ $number } { $duplicate ->
+        [0] { "" }
+        [one]
+            { $added ->
+                [0] (ona li awen ni)
+               *[other] (jan 1 li awen ni)
+            }
+       *[other]
+            { $added ->
+                [0] (jan ale li awen ni)
+               *[other] (jan { $duplicate } li awen ni)
+            }
+    }
+msg-issue-unassign-success =
+    jan { $removed } o pali ala e toki { $owner }/{ $repo }#{ $number } { $duplicate ->
+        [0] { "" }
+        [one]
+            { $removed ->
+                [0] (ona li awen ni)
+               *[other] (jan 1 li awen ni)
+            }
+       *[other]
+            { $added ->
+                [0] (jan ale li awen ni)
+               *[other] (jan { $duplicate } li awen ni)
+            }
+    }
+msg-pr-review-list-none = ala li pana e pilin ona pi ante ni.
+msg-pr-review-list-only_stale = pilin ale li pini anu majuna. sina wile lukin e ona la o kepeken nimi `--all`
+msg-pr-review-list-review_header =
+    { STYLE("bold") }{ $reviewer }{ STYLE("reset") }{ $review_type ->
+        [approved] la { STYLE("bright-green") }ni li pona{ STYLE("reset") }
+        [changes-requested] la { STYLE("bright-yellow") }ni o ante{ STYLE("reset") }
+        [comment] li { STYLE("bright-yellow") }toki{ STYLE("reset") }
+        [pending] li { STYLE("light-grey") }alasa toki e pilin ona{ STYLE("reset") }
+       *[other] Unknown
+    }
+    { STYLE("dark-grey") }toki { $comments } li lon ni. ni li open lon tenpo { DATETIME($timestamp, dateStyle: "long", timeStyle: "short") }{ STYLE("reset") }. { $state ->
+        [stale] { STYLE("bold") }(ni li majuna){ STYLE("reset") }
+        [dismissed] { STYLE("bold") }(ni li pini){ STYLE("reset") }
+       *[other] { "" }
+    }
+msg-pr-review-list-comment_position = lon lipu { STYLE("bold") }{ $path }{ STYLE("reset") } lon linja nanpa { STYLE("bold") }{ $position }{ STYLE("reset") }:
+msg-pr-review-list-comment_header =
+    { STYLE("bold", "bright-cyan") }{ $commenter }{ STYLE("reset") } li toki e ni { OPT($resolver) ->
+       *[none] { "" }
+        [some] ({ $resolver } li pini e ni)
+    }:
+msg-pr-merge-commit_title_unsupported-rebase = nasin 'rebase' la sina ken ala pana e toki open lon awen pi ilo Git
+msg-pr-merge-commit_title_unsupported-ff = nasin 'ff-only' la sina ken ala pana e toki open lon awen pi ilo Git
+msg-pr-merge-commit_title_unsupported-manual = nasin 'manually merged' la sina ken ala pana e toki open lon awen pi ilo Git
+msg-pr-view-diff-volatile = sina ante e lipu ante la ante sina li awen ala
+msg-repo-migrate-git_only = nasin Git taso la sina kama e poki la sina ken kama e ijo lon poki taso e ijo lon nasin LFS taso. sina ken ala kama e ijo ante pi poki ni. o kepeken e nasin kama ante, anu weka e nimi pi ken ala
+msg-repo-star-success = sina pana e sona ni: poki { $owner }/{ $repo } li pona tawa sina!
+msg-repo-unstar-success = sina weka e pilin pona tan poki { $owner }/{ $repo }
+msg-user-search-none = alasa ni la jan ala li lon
+msg-user-search-footer =
+    alasa la kulupu ni li tan { STYLE("bold") }jan nanpa { $first_index } tawa jan nanpa { $last_index }{ STYLE("reset") }. ale la jan { STYLE("bold") }{ $total_results }{ STYLE("reset") } li lon
+    ni li kulupu nanpa { $page }. kulupu { $total_pages } li lon
+    { $more ->
+        [yes] sina wile lukin e kulupu ante la o kepeken e nimi `--page`
+       *[no] { "" }
+    }
+msg-user-repos-none-starred-other = { $name } li pana ala e pilin pona poki
+msg-user-repos-none-starred-self = sina pana ala e pilin pona poki
+msg-user-repos-list_footer =
+    alasa la kulupu ni li tan { STYLE("bold") }poki nanpa { $first_index } tawa poki nanpa { $last_index }{ STYLE("reset") }. ale la poki { STYLE("bold") }{ $total_results }{ STYLE("reset") } li lon
+    ni li kulupu nanpa { $page }. kulupu { $total_pages } li lon
+    { $more ->
+        [yes] sina wile lukin e kulupu ante la o kepeken e nimi `--page`
+       *[no] { "" }
+    }
+msg-activity-approved_pr = { STYLE("bold") }{ $actor }{ STYLE("reset") } la { STYLE("bold", "yellow") }{ $repo_name }#{ $number }{ STYLE("reset") } li pona
+msg-user-key-list-count = nimi SSH { $keys } li lon
+msg-user-key-list-header = { STYLE("bold") }nimi SSH nanpa { STYLE("bright-magenta") }{ $id }{ STYLE("reset") }
+msg-user-key-list-title = { STYLE("bold") }nimi lukin:{ STYLE("reset") }       { STYLE("bright-cyan") }{ $title }{ STYLE("reset") }
