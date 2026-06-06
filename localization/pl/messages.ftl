@@ -141,3 +141,14 @@ msg-user-key-list-title = { STYLE("bold") }Tytuł:{ STYLE("reset") }       { STY
 msg-user-key-delete-success = z powodzeniem usunięto klucz o identyfikatorze { $id }
 msg-user-key-upload-keys_not_found = Nie znaleziono kluczy.
 msg-user-gpg-upload-exporting = Eksportowanie klucza...
+msg-org-members-entry =
+    { OPT($full_name) ->
+       *[none] { STYLE("bold", "bright-cyan") }{ $username }{ STYLE("reset") }
+        [some] { STYLE("bold", "bright-cyan") }{ $full_name }{ STYLE("reset") } { STYLE("light-gray") }({ $username }){ STYLE("reset") }
+    }
+msg-org-label-add-success = Utworzono nową etykietę { $label }
+msg-org-label-remove-success = Usunięto etykietę { $label }
+msg-org-team-repo-add-success = Dodano { STYLE("bold") }{ $org }/{ $repo }{ STYLE("reset") } do zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
+msg-org-team-repo-rm-success = Usunięto { STYLE("bold") }{ $org }/{ $repo }{ STYLE("reset") } z zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
+msg-org-team-member-add-success = Dodano użytkownika { STYLE("bold", "bright-cyan") }{ $user }{ STYLE("reset") } do zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
+msg-org-team-member-rm-success = Usunięto użytkownika { STYLE("bold", "bright-cyan") }{ $user }{ STYLE("reset") } z zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
