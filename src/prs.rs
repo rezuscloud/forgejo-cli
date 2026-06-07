@@ -920,7 +920,7 @@ fn print_pr_reviews_comment(
 
         let resolver = comment.resolver.as_ref().and_then(|u| u.login.as_deref());
         ftl_println!(
-            "msg-pr-review-list-comment_position",
+            "msg-pr-review-list-comment_header",
             commenter = user,
             resolver,
         );
