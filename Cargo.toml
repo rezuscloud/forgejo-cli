@@ -22,7 +22,16 @@ name = "fj"
 path = "src/main.rs"
 
 [features]
+default = ["locale.de-DE", "locale.zh-Hans"]
 update-check = ["dep:semver"]
+"locale.de-DE" = []
+"locale.fi" = []
+"locale.fr" = []
+"locale.it" = []
+"locale.pl" = []
+"locale.ru" = []
+"locale.tok" = []
+"locale.zh-Hans" = []
 
 [dependencies]
 auth-git2 = "0.6.0"

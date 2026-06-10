@@ -38,7 +38,21 @@ pub mod bundles {
     }
 
     bundle!(EN_US = "en-US");
+    #[cfg(feature = "locale.de-DE")]
     bundle!(DE_DE = "de-DE");
+    #[cfg(feature = "locale.fi")]
+    bundle!(FI = "fi");
+    #[cfg(feature = "locale.fr")]
+    bundle!(FR = "fr");
+    #[cfg(feature = "locale.it")]
+    bundle!(IT = "it");
+    #[cfg(feature = "locale.pl")]
+    bundle!(PL = "pl");
+    #[cfg(feature = "locale.ru")]
+    bundle!(RU = "ru");
+    #[cfg(feature = "locale.tok")]
+    bundle!(TOK = "tok");
+    #[cfg(feature = "locale.zh-Hans")]
     bundle!(ZH_HANS = "zh-Hans");
 
     pub fn locale() -> &'static [&'static LazyLock<Bundle>] {
@@ -63,8 +77,22 @@ pub mod bundles {
     pub fn init_to(lang: &unic_langid::LanguageIdentifier) -> &'static [&'static LazyLock<Bundle>] {
         match lang.language.as_str() {
             "en" => const { &[&EN_US] },
+            #[cfg(feature = "locale.de-DE")]
             "de" => const { &[&DE_DE] },
+            #[cfg(feature = "locale.fi")]
+            "fi" => const { &[&FI, &EN_US] },
+            #[cfg(feature = "locale.fr")]
+            "fr" => const { &[&FR, &EN_US] },
+            #[cfg(feature = "locale.it")]
+            "it" => const { &[&IT, &EN_US] },
+            #[cfg(feature = "locale.pl")]
+            "pl" => const { &[&PL, &EN_US] },
+            #[cfg(feature = "locale.ru")]
+            "ru" => const { &[&RU, &EN_US] },
+            #[cfg(feature = "locale.tok")]
+            "tok" => const { &[&TOK, &EN_US] },
             // match on lang.script here once more scripts are added
+            #[cfg(feature = "locale.zh-Hans")]
             "zh" => const { &[&ZH_HANS] },
             _ => const { &[&EN_US] },
         }
