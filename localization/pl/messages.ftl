@@ -141,3 +141,130 @@ msg-user-key-list-title = { STYLE("bold") }Tytuł:{ STYLE("reset") }       { STY
 msg-user-key-delete-success = z powodzeniem usunięto klucz o identyfikatorze { $id }
 msg-user-key-upload-keys_not_found = Nie znaleziono kluczy.
 msg-user-gpg-upload-exporting = Eksportowanie klucza...
+msg-org-members-entry =
+    { OPT($full_name) ->
+       *[none] { STYLE("bold", "bright-cyan") }{ $username }{ STYLE("reset") }
+        [some] { STYLE("bold", "bright-cyan") }{ $full_name }{ STYLE("reset") } { STYLE("light-gray") }({ $username }){ STYLE("reset") }
+    }
+msg-org-label-add-success = Utworzono nową etykietę { $label }
+msg-org-label-remove-success = Usunięto etykietę { $label }
+msg-org-team-repo-add-success = Dodano { STYLE("bold") }{ $org }/{ $repo }{ STYLE("reset") } do zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
+msg-org-team-repo-rm-success = Usunięto { STYLE("bold") }{ $org }/{ $repo }{ STYLE("reset") } z zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
+msg-org-team-member-add-success = Dodano użytkownika { STYLE("bold", "bright-cyan") }{ $user }{ STYLE("reset") } do zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
+msg-org-team-member-rm-success = Usunięto użytkownika { STYLE("bold", "bright-cyan") }{ $user }{ STYLE("reset") } z zespołu { STYLE("bold", "bright_blue") }{ $team }{ STYLE("reset") }
+msg-org-view-visibility =
+    { $visibility ->
+        [public] Publiczna
+        [limited] Ograniczona
+       *[private] Prywatna
+    }
+msg-org-create-invalid_starting_character =
+    Nazwy organizacji mogą się rozpoczynać wyłącznie od znaków alfanumerycznych.
+      Jeśli potrzebujesz nazwy zaczynającej się innymi znakami, spróbuj użyć flagi --full-name
+msg-org-create-invalid_ending_character =
+    Nazwy organizacji mogą kończyć się wyłącznie znakami alfanumerycznymi.
+      Jeśli potrzebujesz nazwy kończącej się innymi znakami, spróbuj użyć flagi --full-name
+msg-org-create-invalid_consecutive_characters =
+    Nazwy organizacji nie mogą zawierać występujących po sobie znaków, które nie są alfanumeryczne.
+      Jeśli potrzebujesz takiej nazwy, spróbuj użyć flagi --full-name
+msg-org-create-success =
+    utworzono nową organizację { $visibility ->
+        [public] publiczną
+        [limited] ograniczoną
+       *[private] prywatną
+    } { OPT($full_name) ->
+       *[none] { STYLE("bold", "bright-cyan") }{ $name }{ STYLE("reset") }
+        [some] { STYLE("bold", "bright-cyan") }{ $full_name }{ STYLE("reset") } { STYLE("light-gray") }({ $name }){ STYLE("reset") }
+    }
+msg-org-visibility-public = Jesteś publicznym członkiem organizacji { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-private = Jesteś prywatnym członkiem organizacji { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-set_public = Jesteś teraz publicznym członkiem organizacji { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-set_private = Jesteś teraz prywatnym członkiem organizacji { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-visibility-not_member = Nie jesteś członkiem organizacji { STYLE("bold", "bright-cyan") }{ $org_name }{ STYLE("reset") }
+msg-org-label-edit-success = Zmieniono etykietę { $old_label } na { $label }
+msg-org-team-view-read_only = Tylko Do Odczytu:
+msg-org-team-view-read_write = Odczyt/Zapis:
+msg-org-team-view-perms-wiki = Wiki
+msg-org-team-view-perms-ext_wiki = Zewnętrzne Wiki
+msg-org-team-view-perms-ext_issues = Zewnętrzne Zgłoszenia
+msg-org-team-view-perms-actions = CI
+msg-org-team-view-perms-code = Kod
+msg-org-team-create-success =
+    utworzono nowy zespół { $admin ->
+        [yes] administracyjny
+       *[no] { "" }
+    } { STYLE("bright-blue", "bold") }{ $name }{ STYLE("reset") } in org { STYLE("bold") }{ $org }{ STYLE("reset") }
+msg-org-team-delete-confirmation = Czy na pewno chcesz usunąć zespół { STYLE("bold") }{ $org }/{ $name }{ STYLE("reset") }?
+    .yes =
+        Tak
+        tak
+        T
+        t
+    .no =
+        Nie
+        nie
+        N
+        n
+msg-issue-create-no_templates = { $owner }/{ $repo } nie posiada żadnych szablonów zgłoszeń
+msg-issue-create-templates_required =
+    { $owner }/{ $repo } wymaga użycia szablonu.
+    Wybierz szablon za pomocą flagi `--template <NAME>`.
+msg-issue-view-header =
+    { STYLE("yellow") }{ $title } { STYLE("dark-grey") }#{ $number }{ STYLE("reset") }"
+    Utworzone przez { STYLE("white") }{ $author }{ STYLE("reset") } { -dash } { $state ->
+        [open] { STYLE("bright-green") }Otwarte{ STYLE("reset") }
+        [closed] { STYLE("bright-red") }Zamknięte{ STYLE("reset") }
+       *[other] $state
+    }
+msg-issue-view-comment_count =
+    { $comments ->
+        [one] 1 komentarz
+       *[other] { $comments } komentarzy
+    }
+msg-issue-search-total =
+    { $issues ->
+        [one] 1 zgłoszenie
+       *[other] { $issues } zgłoszeń
+    }
+msg-issue-templates-blank_allowed = Dozwolone używanie flagi '--no-template'
+msg-issue-templates-blank_not_allowed = Niedozwolone używanie flagi '--no-template'
+msg-issue-view-comments-comment_header =
+    { OPT($full_name) ->
+       *[none] { STYLE("bold", "bright-cyan") }{ $username }{ STYLE("reset") } skomentował:
+        [some] { STYLE("bold", "bright-cyan") }{ $full_name }{ STYLE("reset") } { STYLE("dark-gray") }({ $username }){ STYLE("reset") } skomentował:
+    }
+msg-issue-view-comments-attachments =
+    { $attachments ->
+        [one] 1 załącznik
+       *[other] { $attachments } załączników
+    }
+msg-issue-assign-success =
+    przypisano { $added ->
+        [one] 1 użytkownika
+       *[other] { $added } użytkowników
+    } do { $owner }/{ $repo }#{ $number } { $duplicate ->
+        [0] { "" }
+        [one]
+            { $added ->
+                [0] (użytkownik już został przypisany)
+               *[other] (1 użytkownik już został przypisany)
+            }
+       *[other]
+            { $added ->
+                [0] (wszyscy użytkownicy już zostali przypisani)
+               *[other] ({ $duplicate } użytkowników już zostało przypisanych)
+            }
+    }
+msg-pr-view-comment_count =
+    { $comments ->
+        [one] 1 komentarz
+       *[other] { $comments } komentarzy
+    }
+msg-pr-review-list-comment_header =
+    { STYLE("bold", "bright-cyan") }{ $commenter }{ STYLE("reset") } skomentował { OPT($resolver) ->
+       *[none] { "" }
+        [some] (komentarz oznaczony jako rozwiązany przez { $resolver })
+    }:
+msg-pr-create-agit_push_cfg_question =
+    Czy chcesz ustawić wymaganą konfigurację git
+    żeby polecenie `git push` działało poprawnie dla tego pr?
