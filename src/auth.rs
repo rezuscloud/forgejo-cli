@@ -1,5 +1,4 @@
 use clap::Subcommand;
-use eyre::OptionExt;
 use sha2::Digest;
 
 use std::collections::BTreeMap;
@@ -22,8 +21,6 @@ pub enum AuthCommand {
     ///
     /// Use this if `fj auth login` doesn't work
     AddKey {
-        /// The user that the key is associated with
-        user: String,
         /// The key to add. If not present, the key will be read in from stdin.
         key: Option<String>,
     },
@@ -58,14 +55,14 @@ impl AuthCommand {
             }
             AuthCommand::Logout { host } => {
                 let info_opt = keys.hosts.remove(&host);
-                if let Some(info) = info_opt {
-                    ftl_println!("msg-auth_logout-success", username = info.username(), host);
+                if info_opt.is_some() {
+                    ftl_println!("msg-auth_logout-success", host);
                     keys.save().await?;
                 } else {
                     ftl_println!("msg-auth_logout-already_signed_out", host = host);
                 }
             }
-            AuthCommand::AddKey { user, key } => {
+            AuthCommand::AddKey { key } => {
                 let repo_info = crate::repo::RepoInfo::get_current(host_name, None, None, keys)?;
                 let host_url = repo_info.host_url();
                 let key = match key {
@@ -77,10 +74,7 @@ impl AuthCommand {
                 };
                 let host = crate::host_name(host_url);
                 if !keys.hosts.contains_key(host) {
-                    let mut login = crate::keys::LoginInfo::Application {
-                        name: user,
-                        token: key,
-                    };
+                    let mut login = crate::keys::LoginInfo::Application { token: key };
                     add_ssh_alias(&mut login, host_url, keys).await;
                     keys.hosts.insert(host.to_owned(), login);
                     keys.save().await?;
@@ -115,8 +109,8 @@ impl AuthCommand {
                 if keys.hosts.is_empty() {
                     ftl_eprintln!("msg-auth-list-none");
                 }
-                for (host_url, login_info) in &keys.hosts {
-                    println!("{}@{}", login_info.username(), host_url);
+                for (host_url, _) in &keys.hosts {
+                    println!("{}", host_url);
                 }
             }
         }
@@ -265,22 +259,11 @@ async fn oauth_login(
     };
     let response = api.oauth_get_access_token(request).await?;
 
-    let api = forgejo_api::Forgejo::with_user_agent(
-        forgejo_api::Auth::OAuth2(&response.access_token),
-        host.clone(),
-        crate::USER_AGENT,
-    )?;
-    let current_user = api.user_get_current().await?;
-    let name = current_user
-        .login
-        .ok_or_eyre("user does not have login name")?;
-
     // A minute less, in case any weirdness happens at the exact moment it
     // expires. Better to refresh slightly too soon than slightly too late.
     let expires_in = std::time::Duration::from_secs(response.expires_in.saturating_sub(60) as u64);
     let expires_at = time::OffsetDateTime::now_utc() + expires_in;
     let mut login_info = crate::keys::LoginInfo::OAuth {
-        name,
         token: response.access_token,
         refresh_token: response.refresh_token,
         expires_at,
