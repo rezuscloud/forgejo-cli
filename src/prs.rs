@@ -1506,22 +1506,16 @@ async fn checkout_pr(
         .await?;
 
     let url = crate::repo::git_url(&remote_repo, ssh)?;
+    let url_host = url.host_str().ok_or_eyre("url has no host")?;
     let mut remote = local_repo.remote_anonymous(url.as_str())?;
-    let branch_name = branch_name.unwrap_or_else(|| {
-        format!(
-            "pr-{}-{}-{}",
-            crate::repo_url_host_name(url),
-            repo_owner,
-            pr.number(),
-        )
-    });
+    let branch_name =
+        branch_name.unwrap_or_else(|| format!("pr-{}-{}-{}", url_host, repo_owner, pr.number(),));
 
     let mut auth = auth_git2::GitAuthenticator::new();
     if let Some(id) = identity_file {
         auth = auth.add_ssh_key_from_file(id, None);
     } else if url.scheme() == "ssh" {
-        auth =
-            crate::repo::load_ssh_keys(auth, url.host_str().ok_or_eyre("url does not have host")?);
+        auth = crate::repo::load_ssh_keys(auth, url_host);
     }
 
     auth.fetch(
