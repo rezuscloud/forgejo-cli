@@ -15,8 +15,12 @@ impl WhoAmICommand {
             .wrap_err("could not find host, try specifying with --host")?
             .host_url()
             .clone();
-        let name = keys.get_login(&url).ok_or_eyre("not logged in")?.username();
         let host = crate::host_name(&url);
+        let api = keys.get_api(&url).await?;
+        let current_user = api.user_get_current().await?;
+        let name = current_user
+            .login
+            .ok_or_eyre("user does not have login name")?;
         ftl_println!("msg-whoami", name, host);
         Ok(())
     }

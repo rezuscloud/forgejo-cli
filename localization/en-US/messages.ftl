@@ -15,7 +15,7 @@ msg-auth-login-canceled = Login canceled
 msg-auth-login-browser_success = Authenticated! Close this tab and head back to your terminal.
 msg-auth-login-browser_failure = Failed to authenticate.
 
-msg-auth_logout-success = signed out of {$username}@{$host}
+msg-auth_logout-success = signed out of {$host}
 msg-auth_logout-already_signed_out = already not signed in to {$host}
 
 msg-auth-use_ssh-not-logged-in = not logged in to {$host}

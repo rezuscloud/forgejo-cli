@@ -100,11 +100,9 @@ impl KeyInfo {
 #[serde(tag = "type")]
 pub enum LoginInfo {
     Application {
-        name: String,
         token: String,
     },
     OAuth {
-        name: String,
         token: String,
         refresh_token: String,
         expires_at: time::OffsetDateTime,
@@ -112,13 +110,6 @@ pub enum LoginInfo {
 }
 
 impl LoginInfo {
-    pub fn username(&self) -> &str {
-        match self {
-            LoginInfo::Application { name, .. } => name,
-            LoginInfo::OAuth { name, .. } => name,
-        }
-    }
-
     async fn refresh(&mut self, url: &Url) -> eyre::Result<bool> {
         if let LoginInfo::OAuth {
             token,

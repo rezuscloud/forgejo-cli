@@ -77,7 +77,7 @@ msg-auth-login-oauth_unsupported =
 
     Создайте токен по ссылке { $applications_url }
     и используйте его, чтобы войти с `fj auth add-key`
-msg-auth_logout-success = выполнен выход из { $username }@{ $host }
+msg-auth_logout-success = выполнен выход из { $host }
 msg-auth_logout-already_signed_out = вход не выполнен в { $host }
 msg-whoami = выполнен вход в { $name }@{ $host }
 msg-org-list-no_results = Ничего не нашлось.
