@@ -201,6 +201,26 @@ msg-org-team-member-add-success =
 msg-org-team-member-rm-success =
     Removed {STYLE("bold", "bright-cyan")}{$user}{STYLE("reset")} from team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 
+help-cmd-issue-create = Create a new issue on a repo
+help-arg-issue-create-title = Title of the issue
+help-arg-issue-create-body = The text body of the issue
+help-arg-issue-create-body-long =
+    The text body of the issue
+
+    Leaving this out will open your editor, unless --body-file is specified.
+help-arg-issue-create-body_file = The file to read the text body of the issue from
+help-arg-issue-create-template = The template to use when creating an issue
+help-arg-issue-create-template-long =
+    The template to use when creating an issue
+
+    If the repo has disabled blank issues, this flag is required.
+help-arg-issue-create-no_template = Don't use a template for this issue
+help-arg-issue-create-no_template-long = 
+    Don't use a template for this issue
+
+    If the repo has disabled blank issues, this will fail.
+help-arg-issue-create-repo = The repo to create this issue on
+help-arg-issue-create-web = Open the issue creation page in your web browser
 msg-issue-create-no_templates = {$owner}/{$repo} does not have any issue templates
 msg-issue-create-templates_required =
     {$owner}/{$repo} requires using a template.
@@ -211,6 +231,9 @@ msg-issue-create-templates_enabled =
     or use `--no-template` to write one from scratch".
 msg-issue-create-success = created issue #{$number}: {$title}
 
+help-cmd-issue-view = View an issue's info
+help-arg-issue-view-issue = The issue to view
+help-cmd-issue-view-body = View an issue's title and body. The default
 msg-issue-view-header = 
     {STYLE("yellow")}{$title} {STYLE("dark-grey")}#{$number}{STYLE("reset")}"
     By {STYLE("white")}{$author}{STYLE("reset")} {-dash} {$state ->
@@ -223,12 +246,21 @@ msg-issue-view-comment_count = { $comments ->
        *[other] {$comments} comments
     }
 
+help-cmd-issue-view-comment = View a specific comment
+
+help-cmd-issue-view-comments = List every comment
+
+help-cmd-issue-search = Search for an issue in a repo
+help-arg-issue-search-repo = The repo to search in
+help-arg-issue-search-state = Filter issues by state. Default: open
 msg-issue-search-total = { $issues ->
         [one] 1 issue
        *[other] {$issues} issues
     }
 msg-issue-search-entry = #{$number}: {$title} (by {$author})
 
+help-cmd-issue-templates = List the issue templates in a repo
+help-arg-issue-templates-repo = The repo to view the templates of
 msg-issue-templates-none = No issue templates or contact info.
 msg-issue-templates-blank_allowed = '--no-template' is allowed
 msg-issue-templates-blank_not_allowed = '--no-template' is not allowed
@@ -242,9 +274,32 @@ msg-issue-view-comments-attachments = { $attachments ->
        *[other] {$attachments} attachments
     }
 
+help-cmd-issue-edit = Edit an issue
+
+help-cmd-issue-edit-title = Edit an issue's title
 msg-issue-edit-title-empty = title cannot be empty
 msg-issue-edit-title-no_newlines = title cannot contain newlines
 
+help-cmd-issue-edit-body = Edit an issue's text content
+
+help-cmd-issue-edit-comment = Edit a comment on an issue
+
+help-cmd-issue-edit-labels = Edit an issue's labels
+help-arg-issue-edit-labels-add = The labels to add
+help-arg-issue-edit-labels-rm = The labels to remove
+
+help-cmd-issue-comment = Add a comment on an issue
+help-arg-issue-comment-issue = The issue to comment on
+help-arg-issue-comment-body = The text content of the comment
+help-arg-issue-comment-body-long = 
+    The text content of the comment
+
+    Leaving this out will open your editor, unless --body-file is specified.
+help-arg-issue-comment-body_file = The file to read the text content of the comment from
+
+help-cmd-issue-assign = Assign users to an issue
+help-arg-issue-assign-issue = The issue to assign users to
+help-arg-issue-assign-users = The usernames of the users to assign to this issue
 msg-issue-assign-success =
     assigned {$added ->
         [one] 1 user
@@ -261,6 +316,9 @@ msg-issue-assign-success =
         }
     }
 
+help-cmd-issue-unassign = Unassign users from an issue
+help-arg-issue-unassign-issue = The issue to unassign users from
+help-arg-issue-unassign-users = The usernames of the users to unassign from this issue
 msg-issue-unassign-success =
     unassigned {$removed ->
         [one] 1 user
@@ -277,7 +335,12 @@ msg-issue-unassign-success =
         }
     }
 
+help-cmd-issue-close = Close an issue
+help-arg-issue-close-issue = The issue to close
+help-arg-issue-close-with_msg = A comment to leave on the issue before closing it
 msg-issue-close-success = Closed issue #{$number}: "{$title}"
+
+help-cmd-issue-browse = Open an issue in your browser
 
 msg-pr-couldnt_guess = could not guess pull request number, please specify
 msg-pr-not_found = could not find PR
