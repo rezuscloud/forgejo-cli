@@ -1053,9 +1053,56 @@ msg-user-gpg-delete-confirmation_prompt =
 msg-user-gpg-delete-unconfirmed = User aborted process.
 msg-user-gpg-delete-success = Key with ID {$id} deleted successfully.
 
+help-cmd-release-create = Create a new release
+help-arg-release-create-create_tag = Create a new corresponding tag for this release. Defaults to release's name
+help-arg-release-create-tag = Pre-existing tag to use
+help-arg-release-create-tag-long =
+    Pre-existing tag to use
+
+    If you need to create a new tag for this release, use `--create-tag`
+help-arg-release-create-attach = Include a file as an attachment
+help-arg-release-create-attach-long =
+    Include a file as an attachment
+
+    `--attach=<FILE>` will set the attachment's name to the file name
+    `--attach=<FILE>:<ASSET>` will use the provided name for the attachment
+help-arg-release-create-body = Text of the release body
+help-arg-release-create-body-long =
+    Text of the release body
+
+    Using this flag without an argument will open your editor.
 msg-release-create-must_specify_tag = must select tag with `--tag` or `--create-tag`
 msg-release-create-tag_flags_conflict =`--tag` and `--create-tag` are mutually exclusive; please pick just one 
 msg-release-create-success = Created release {$name}
+
+help-cmd-release-edit = Edit a release's info
+help-arg-release-edit-tag = Corresponding tag for this release
+help-arg-release-edit-body = Text of the release body
+help-arg-release-edit-body-long =
+    Text of the release body
+
+    Using this flag without an argument will open your editor.
+
+help-cmd-release-delete = Delete a release
+
+help-cmd-release-list = List all the releases on a repo
+
+help-cmd-release-view = View a release's info
+
+help-cmd-release-browse = Open a release in your browser
+
+help-cmd-release-asset = Commands on a release's attached files
+
+help-cmd-release-asset-create = Create a new attachment on a release
+
+help-cmd-release-asset-delete = Remove an attachment from a release
+
+help-cmd-release-asset-download = Download an attached file
+help-cmd-release-asset-download-long =
+    Download an attached file
+
+    Use `source.zip` or `source.tar.gz` to download the repo archive
+
 
 msg-release-list-entry = {$name} {$state ->
        *[neither] {""}
