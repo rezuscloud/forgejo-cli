@@ -9,6 +9,11 @@ help-arg-repo = The repo to operate on
 
 msg-whoami = currently signed into {$name}@{$host}
 
+help-cmd-auth-login = Log in to an instance
+help-cmd-auth-login-long =
+    Log in to an instance
+    
+    Opens an auth page in your browser
 msg-auth-login-oauth_unsupported = 
   Your installation of fj doesn't support `login` for {$host_domain}
   
@@ -18,18 +23,27 @@ msg-auth-login-canceled = Login canceled
 msg-auth-login-browser_success = Authenticated! Close this tab and head back to your terminal.
 msg-auth-login-browser_failure = Failed to authenticate.
 
+help-cmd-auth-logout = Deletes login info for an instance
 msg-auth_logout-success = signed out of {$host}
 msg-auth_logout-already_signed_out = already not signed in to {$host}
 
+help-cmd-auth-use_ssh = Enable or disable using SSH by default for certain instances
 msg-auth-use_ssh-not-logged-in = not logged in to {$host}
 msg-auth-use_ssh-enabled = now will use SSH for {$host} by default
 msg-auth-use_ssh-disabled = will no longer use SSH for {$host} by default
 msg-auth-use_ssh-already_enabled = already using SSH for {$host} by default
 msg-auth-use_ssh-already_disabled = already not using SSH for {$host} by default
 
+help-cmd-auth-add_key = Add an application token for an instance
+help-cmd-auth-add_key-long =
+    Add an application token for an instance
+    
+    Use this if `fj auth login` doesn't work.
+help-arg-auth-add_key-key = The key to add. If not present, the key will be read in from stdin
 msg-auth-add_key-prompt = new key: 
 msg-auth-add_key-already_exists = key for {$host} already exists
 
+help-cmd-auth-list = List all instances you're currently logged into
 msg-auth-list-none = No logins.
 
 help-cmd-actions-tasks = List the tasks on a repo

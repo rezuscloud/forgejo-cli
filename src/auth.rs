@@ -5,29 +5,22 @@ use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::path::PathBuf;
 
-use crate::{ftl_eprintln, ftl_format, ftl_println, ftl_readline};
+use crate::{ftl_eprintln, ftl_format, ftl_println, ftl_readline, h, lh};
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum AuthCommand {
-    /// Log in to an instance.
-    ///
-    /// Opens an auth page in your browser
+    #[clap(about = h!("cmd-auth-login"), long_about = lh!("cmd-auth-login"))]
     Login,
-    /// Deletes login info for an instance
-    Logout {
-        host: String,
-    },
-    /// Add an application token for an instance
-    ///
-    /// Use this if `fj auth login` doesn't work
+    #[clap(about = h!("cmd-auth-logout"))]
+    Logout { host: String },
+    #[clap(about = h!("cmd-auth-add_key"), long_about = lh!("cmd-auth-add_key"))]
     AddKey {
-        /// The key to add. If not present, the key will be read in from stdin.
+        #[clap(help = h!("arg-auth-add_key-key"))]
         key: Option<String>,
     },
-    UseSsh {
-        use_ssh: Option<bool>,
-    },
-    /// List all instances you're currently logged into
+    #[clap(about = h!("cmd-auth-use_ssh"))]
+    UseSsh { use_ssh: Option<bool> },
+    #[clap(about = h!("cmd-auth-list"))]
     List,
 }
 
