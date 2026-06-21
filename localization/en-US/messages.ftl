@@ -85,9 +85,14 @@ help-arg-actions-secrets-create-data = The data to save into the secret
 help-cmd-actions-secrets-delete = Delete an actions secret
 help-arg-actions-secrets-delete-name = The secret to delete
 
+help-cmd-org-list = List all organizations
+help-arg-org-list-page = Which page of the results to view
+help-arg-org-list-only_member_of = Only list organizations you are a member of
 msg-org-list-no_results = No results.
 msg-org-list-page_number = Page {$page} of {$total}
 
+help-cmd-org-view = View info about an organization
+help-arg-org-view-name = The name of the organization to view
 msg-org-view-org_name = { OPT($full_name) ->
        *[none] {STYLE("bold", "bright-cyan")}{$name}{STYLE("reset")}
         [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("light-gray")}({$name}){STYLE("reset")}
@@ -106,6 +111,33 @@ msg-org-view-team_count = {$team_count ->
        *[other] {STYLE("bold")}{$team_count}{STYLE("reset")} teams
     }
 
+help-arg-org-options-full_name = The display name for the organization
+help-arg-org-options-full_name-long = 
+    The display name for the organization
+    
+    This doesn't have the restrictions the `name` argument does, and can contain any UTF-8 text.
+help-arg-org-options-description = The organization's description
+help-arg-org-options-email = Contact email for the organization
+help-arg-org-options-location = The organizations's location
+help-arg-org-options-website = The organization's website
+help-arg-org-options-visibility = The visibility of the organization
+help-arg-org-options-visibility-long = 
+    The visibility of the organization
+    
+    Public organizations can be viewed by anyone, limited orgs can only be viewed by
+    logged-in users, and private orgs can only be viewed by members of that org.
+help-arg-org-options-admin_can_change_team_access = Whether the admin of a repo can change org teams' access to it
+
+help-cmd-org-create = Create a new organization
+help-arg-org-create-name = The username for the organization
+help-arg-org-create-name-long = 
+    The username for the organization
+
+    It can only have alphanumeric characters, dash, underscore, or period. It must start
+    and end with an alphanumeric character, and can't have consecutive dashes, underscores,
+    or periods.
+
+    If you want a name that doesn't have these restrictions, see the `--full-name` option.
 msg-org-create-invalid_character = 
     Organization names can only have alphanumeric characters, dashes, underscores, or periods.
       If you want a name with other characters, try setting the --full-name flag
@@ -127,6 +159,19 @@ msg-org-create-success = created new {$visibility ->
         [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("light-gray")}({$name}){STYLE("reset")}
     }
 
+help-cmd-org-edit = Edit an organization's information
+help-arg-org-edit-name = The name of the organization to edit
+help-arg-org-edit-name-long = 
+    The name of the organization to edit
+
+    Note that this is the username, *not* the display name.
+
+help-cmd-org-activity = View the activity in an organization
+help-arg-org-activity-name = The name of the organization to view activity for
+
+help-cmd-org-members = List the members of an organization
+help-arg-org-members-org = The name of the organization to view the members of
+help-arg-org-members-page = Which page of the results to view
 msg-org-members-no_results = No results.
 msg-org-members-page_number = Page {$page} of {$total}
 msg-org-members-entry = { OPT($full_name) ->
@@ -134,20 +179,49 @@ msg-org-members-entry = { OPT($full_name) ->
         [some] {STYLE("bold", "bright-cyan")}{$full_name}{STYLE("reset")} {STYLE("light-gray")}({$username}){STYLE("reset")}
     }
 
+help-cmd-org-visibility = View and change the visibility of your membership in an organization
+help-arg-org-visibility-org = The name of the organization to view your visibility in
+help-arg-org-visibility-set = Set a new visibility for yourself
 msg-org-visibility-public = You are a public member of {STYLE("bold", "bright-cyan")}{$org_name}{STYLE("reset")}
 msg-org-visibility-private = You are a private member of {STYLE("bold", "bright-cyan")}{$org_name}{STYLE("reset")}
 msg-org-visibility-set_public = You are now a public member of {STYLE("bold", "bright-cyan")}{$org_name}{STYLE("reset")}
 msg-org-visibility-set_private = You are now a private member of {STYLE("bold", "bright-cyan")}{$org_name}{STYLE("reset")}
 msg-org-visibility-not_member = You are not a member of {STYLE("bold", "bright-cyan")}{$org_name}{STYLE("reset")}
 
+help-cmd-org-label-list = List all the issue labels an organization uses
+help-arg-org-label-list-org = The name of the organization to list the labels of
+
+help-cmd-org-label-add = Add a new issue label to an organization
+help-arg-org-label-add-org = The name of the organization the label should be added to
+help-arg-org-label-add-name = The name of the label to add
+help-arg-org-label-add-color = The hexcode of the label to add
+help-arg-org-label-add-description = A description of what the label is for
+help-arg-org-label-add-exclusive = If this label is named {"`{scope}/{name}`"}, make it exclusive with other labels with the same scope
 msg-org-label-add-success = Created new label {$label}
 
+help-cmd-org-label-edit = Edit an issue label an organization uses
+help-arg-org-label-edit-org = The name of the organization the label is in
+help-arg-org-label-edit-name = The name of the label to edit
+help-arg-org-label-edit-new_name = Set a new name for the label
+help-arg-org-label-edit-color = Set a new hexcode for the label
+help-arg-org-label-edit-description = Set a description of what the label is for
+help-arg-org-label-edit-exclusive = Set whether this label is exclusive with others of the same scope
+help-arg-org-label-edit-archived = Set whether this label is archived
 msg-org-label-edit-success = Changed label {$old_label} to {$label}
 
+help-cmd-org-label-rm = Remove an issue label from an organization
+help-arg-org-label-rm-org = The name of the organization the label is in
+help-arg-org-label-rm-label = The name of the label to remove from the organization
 msg-org-label-remove-success = Removed label {$label}
 
+help-cmd-org-repo-list = List all the repos owned by this organization
+help-arg-org-repo-list-org = The name of the organization to list the repos of
+help-arg-org-repo-list-page = Which page of the results to view
 msg-org-repo-list-no_results = No results.
 msg-org-repo-list-page_number = Page {$page} of {$total}
+
+help-cmd-org-repo-create = Create a new repository in this organization
+help-arg-org-repo-create-org = The name of the organization to create the repo in
 
 help-cmd-org-team-list = View all the teams in an organization
 help-arg-org-team-list-org = The name of the organization to list the teams in

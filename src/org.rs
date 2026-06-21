@@ -8,13 +8,13 @@ use forgejo_api::{
 };
 use futures::{future, TryStreamExt};
 
-use crate::{ftl_bail, ftl_eprintln, ftl_print, ftl_println, repo::RepoInfo, SpecialRender};
+use crate::{ftl_bail, ftl_eprintln, ftl_print, ftl_println, h, lh, repo::RepoInfo, SpecialRender};
 
 mod team;
 
 #[derive(Args, Clone, Debug)]
 pub struct OrgCommand {
-    /// The local git remote that points to the repo to operate on.
+    #[clap(help = h!("arg-remote"))]
     #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(subcommand)]
@@ -23,60 +23,57 @@ pub struct OrgCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum OrgSubcommand {
-    /// List all organizations
+    #[clap(about = h!("cmd-org-list"))]
     List {
-        /// Which page of the results to view
+        #[clap(help = h!("arg-org-list-page"))]
         #[clap(long, short, default_value_t = 1)]
         page: u32,
-        /// Only list organizations you are a member of.
+
+        #[clap(help = h!("arg-org-list-only_member_of"))]
         #[clap(long, short, conflicts_with = "page")]
         only_member_of: bool,
     },
-    /// View info about an organization
+    #[clap(about = h!("cmd-org-view"))]
     View {
-        /// The name of the organization to view.
+        #[clap(help = h!("arg-org-view-name"))]
         name: String,
     },
-    /// Create a new organization
+    #[clap(about = h!("cmd-org-create"))]
     Create {
-        /// The username for the organization.
-        ///
-        /// It can only have alphanumeric characters, dash, underscore, or period. It must start
-        /// and end with an alphanumeric character, and can't have consecutive dashes, underscores,
-        /// or periods.
-        ///
-        /// If you want a name that doesn't have these restrictions, see the `--full-name` option.
+        #[clap(help = h!("arg-org-create-name"), long_help = lh!("arg-org-create-name"))]
         name: String,
+
         #[clap(flatten)]
         options: OrgOptions,
     },
-    /// Edit an organization's information.
+    #[clap(about = h!("cmd-org-edit"))]
     Edit {
-        /// The name of the organization to edit.
-        ///
-        /// Note that this is the username, *not* the display name.
+        #[clap(help = h!("arg-org-edit-name"), long_help = lh!("arg-org-edit-name"))]
         name: String,
+
         #[clap(flatten)]
         options: OrgOptions,
     },
-    /// View the activity in an organization
+    #[clap(about = h!("cmd-org-edit"))]
     Activity {
-        /// The name of the organization to view activity for.
+        #[clap(help = h!("arg-org-edit-name"))]
         name: String,
     },
-    /// List the members of an organization
+    #[clap(about = h!("cmd-org-members"))]
     Members {
-        /// The name of the organization to view the members of.
+        #[clap(help = h!("arg-org-members-org"))]
         org: String,
-        /// Which page of the results to view
+
+        #[clap(help = h!("arg-org-members-page"))]
         #[clap(long, short, default_value_t = 1)]
         page: u32,
     },
-    /// View and change the visibility of your membership in an organization
+    #[clap(about = h!("cmd-org-visibility"))]
     Visibility {
-        /// The name of the organization to view your visibility in.
+        #[clap(help = h!("arg-org-visibility-org"))]
         org: String,
-        /// Set a new visibility for yourself.
+
+        #[clap(help = h!("arg-org-visibility-set"))]
         #[clap(long, short)]
         set: Option<OrgMemberVisibility>,
     },
@@ -90,31 +87,31 @@ pub enum OrgSubcommand {
 
 #[derive(Args, Clone, Debug)]
 pub struct OrgOptions {
-    /// The display name for the organization.
-    ///
-    /// This doesn't have the restrictions the `name` argument does, and can contain any UTF-8
-    /// text.
+    #[clap(help = h!("arg-org-options-full_name"), long_help = lh!("arg-org-options-full_name"))]
     #[clap(long, short)]
     full_name: Option<String>,
-    /// The organization's description
+
+    #[clap(help = h!("arg-org-options-description"))]
     #[clap(long, short)]
     description: Option<String>,
-    /// Contact email for the organization
+
+    #[clap(help = h!("arg-org-options-email"))]
     #[clap(long, short)]
     email: Option<String>,
-    /// The organizations's location
+
+    #[clap(help = h!("arg-org-options-location"))]
     #[clap(long, short)]
     location: Option<String>,
-    /// The organization's website
+
+    #[clap(help = h!("arg-org-options-website"))]
     #[clap(long, short)]
     website: Option<String>,
-    /// The visibility of the organization.
-    ///
-    /// Public organizations can be viewed by anyone, limited orgs can only be viewed by
-    /// logged-in users, and private orgs can only be viewed by members of that org.
+
+    #[clap(help = h!("arg-org-options-visibility"), long_help = lh!("arg-org-options-visibility"))]
     #[clap(long, short)]
     visibility: Option<OrgVisibility>,
-    /// Whether the admin of a repo can change org teams' access to it.
+
+    #[clap(help = h!("arg-org-options-admin_can_change_team_access"))]
     #[clap(long, short)]
     admin_can_change_team_access: Option<bool>,
 }
@@ -437,54 +434,64 @@ async fn member_visibility(
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum LabelSubcommand {
-    /// List all the issue labels an organization uses.
+    #[clap(about = h!("cmd-org-label-list"))]
     List {
-        /// The name of the organization to list the labels of.
+        #[clap(help = h!("arg-org-label-list-org"))]
         org: String,
     },
-    /// Add a new issue label to an organization.
+    #[clap(about = h!("cmd-org-label-add"))]
     Add {
-        /// The name of the organization the label should be added to.
+        #[clap(help = h!("arg-org-label-add-org"))]
         org: String,
-        /// The name of the label to add.
+
+        #[clap(help = h!("arg-org-label-add-name"))]
         name: String,
-        /// The hexcode of the label to add.
+
+        #[clap(help = h!("arg-org-label-add-color"))]
         color: String,
-        /// A description of what the label is for.
+
+        #[clap(help = h!("arg-org-label-add-description"))]
         #[clap(long, short)]
         description: Option<String>,
-        /// If this label is named `{scope}/{name}`, make it exclusive with other labels with the
-        /// same scope.
+
+        #[clap(help = h!("arg-org-label-add-exclusive"))]
         #[clap(long, short)]
         exclusive: bool,
     },
-    /// Edit an issue label an organization uses.
+    #[clap(about = h!("cmd-org-label-edit"))]
     Edit {
-        /// The name of the organization the label is in.
+        #[clap(help = h!("arg-org-label-edit-org"))]
         org: String,
-        /// The name of the label to edit.
+
+        #[clap(help = h!("arg-org-label-edit-name"))]
         name: String,
-        /// Set a new name for the label.
+
+        #[clap(help = h!("arg-org-label-edit-new_name"))]
         #[clap(long, short)]
         new_name: Option<String>,
-        /// Set a new hexcode for the label.
+
+        #[clap(help = h!("arg-org-label-edit-color"))]
         #[clap(long, short)]
         color: Option<String>,
-        /// Set a description of what the label is for.
+
+        #[clap(help = h!("arg-org-label-edit-description"))]
         #[clap(long, short)]
         description: Option<String>,
-        /// Set whether this label is exclusive with others of the same scope.
+
+        #[clap(help = h!("arg-org-label-edit-exclusive"))]
         #[clap(long, short)]
         exclusive: bool,
-        /// Set whether this label is archived.
+
+        #[clap(help = h!("arg-org-label-edit-archived"))]
         #[clap(long, short)]
         archived: Option<bool>,
     },
-    /// Remove an issue label from an organization.
+    #[clap(about = h!("cmd-org-label-rm"))]
     Rm {
-        /// The name of the organization the label is in.
+        #[clap(help = h!("arg-org-label-rm-org"))]
         org: String,
-        /// The name of the label to remove from the organization.
+
+        #[clap(help = h!("arg-org-label-rm-label"))]
         label: String,
     },
 }
@@ -635,18 +642,20 @@ async fn remove_org_label(api: &Forgejo, org: String, name: String) -> eyre::Res
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoSubcommand {
-    /// List all the repos owned by this organization.
+    #[clap(about = h!("cmd-org-repo-list"))]
     List {
-        /// The name of the organization to list the repos of.
+        #[clap(help = h!("arg-org-repo-list-org"))]
         org: String,
-        /// Which page of the results to view
+
+        #[clap(help = h!("arg-org-repo-list-page"))]
         #[clap(long, short, default_value_t = 1)]
         page: u32,
     },
-    /// Create a new repository in this organization.
+    #[clap(about = h!("cmd-org-repo-create"))]
     Create {
-        /// The name of the organization to create the repo in.
+        #[clap(help = h!("arg-org-repo-create-org"))]
         org: String,
+
         #[clap(flatten)]
         args: crate::repo::RepoCreateArgs,
     },
