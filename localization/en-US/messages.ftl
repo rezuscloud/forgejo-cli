@@ -513,6 +513,11 @@ help-cmd-issue-browse = Open an issue in your browser
 msg-pr-couldnt_guess = could not guess pull request number, please specify
 msg-pr-not_found = could not find PR
 
+
+help-cmd-pr-view = View the contents of a pull request
+help-arg-pr-view-id = The pull request to view
+
+help-cmd-pr-view-body = View the title and body of a pull request
 msg-pr-view-header =
     {STYLE("yellow")}{$title} {STYLE("dark-grey")}#{$number}{STYLE("reset")}
     By {STYLE("white")}{$username}{STYLE("reset")} {-dash} {$state ->
@@ -531,6 +536,26 @@ msg-pr-view-comment_count = { $comments ->
        *[other] {$comments} comments
     }
 
+help-cmd-pr-view-comment = View a comment on a pull request
+help-arg-pr-view-comment-idx = The index of the comment to view, 0-indexed
+
+help-cmd-pr-view-comments = View all comments on a pull request
+
+help-cmd-pr-view-labels = View the labels applied to a pull request
+
+help-cmd-pr-view-diff = View the diff between the base and head branches of a pull request
+help-arg-pr-view-diff-patch = Get the diff in patch format
+help-arg-pr-view-diff-editor = View the diff in your text editor
+msg-pr-view-diff-volatile = changes made to the diff will not persist
+
+help-cmd-pr-view-files = View the files changed in a pull request
+
+help-cmd-pr-view-commits = View the commits in a pull request
+help-arg-pr-view-commits-oneline = View one commit per line
+
+help-cmd-pr-status = View the mergability and CI status of a pull request
+help-arg-pr-status-id = The pull request to view
+help-arg-pr-status-wait = Wait for all checks to finish before exiting
 msg-pr-status-merged = {STYLE("bright-magenta")}Merged{STYLE("reset")} by {$merged_by} on {DATETIME($created_at, dateStyle: "long", timeStyle: "long")}
 msg-pr-status-header = {$state ->
         [draft] {STYLE("light-grey")}Draft{STYLE("reset")} {-dash} Can't merge draft PR
@@ -550,6 +575,12 @@ msg-pr-status-entry = {$state ->
        *[other] Unknown
     } {-dash} {$context}
 
+help-cmd-pr-review = Manage reviews on a pull request
+help-arg-pr-review-id = The pull request to act on
+
+help-cmd-pr-review-list = List reviews on a pull request
+help-arg-pr-review-list-comments = List inline comments in reviews on a pull request
+help-arg-pr-review-list-all = Include all reviews, including stale and dismissed ones
 msg-pr-review-list-none = No reviews.
 msg-pr-review-list-only_stale = Only stale or dismissed reviews, use --all to display them.
 msg-pr-review-list-review_header = {$review_type ->
@@ -573,6 +604,30 @@ msg-pr-review-list-comment_header = {STYLE("bold", "bright-cyan")}{$commenter}{S
         [some] (resolved by {$resolver})
     }:
 
+help-cmd-pr-create = Create a new pull request
+help-arg-pr-create-base = The branch to merge onto
+help-arg-pr-create-head = The branch to pull changes from
+help-arg-pr-create-title = What to name the new pull request
+help-arg-pr-create-title-long = 
+    What to name the new pull request
+
+    Prefix with "WIP: " to mark this PR as a draft.
+help-arg-pr-create-body = The text body of the pull request
+help-arg-pr-create-body-long = 
+    The text body of the pull request
+
+    Leaving this out will open your editor, unless --body-file is specified.
+help-arg-pr-create-body_file = The text body of the issue, to read from a file
+help-arg-pr-create-autofill = Automatically populate the PR's title and body from its commits
+help-arg-pr-create-autofill-long = 
+    Automatically populate the PR's title and body from its commits
+
+    If there's a single commit, the PR will match its title and contents.
+    Otherwise the title will be the branch title, and the contents will
+    include a list of every commit's message.
+help-arg-pr-create-repo = The repo to create this pull request on
+help-arg-pr-create-web = Open the PR creation page in your web browser
+help-arg-pr-create-agit = Open the PR using AGit workflow
 msg-pr-create-cross_instance = cannot create pull request across instances; base is on {$base_instance}, while head is tracking {$head_instance}
 msg-pr-create-success = created pull request #{$number}: {$title}
 msg-pr-create-agit_success = created pull request: {$title}
@@ -602,12 +657,31 @@ msg-pr-create-agit_force_push_warning =
       You can use `git push -o force=true` instead.
 msg-pr-create-agit_push_cfg_help = This would set the following config options:
 
+help-cmd-pr-merge = Merge a pull request
+help-arg-pr-merge-pr = The pull request to merge
+help-arg-pr-merge-method = The merge style to use
+help-arg-pr-merge-delete = Option to delete the corresponding branch afterwards
+help-arg-pr-merge-title = The title of the merge or squash commit to be created
+help-arg-pr-merge-message = The body of the merge or squash commit to be created
 msg-pr-merge-commit_title_unsupported-rebase = rebase does not support commit title
 msg-pr-merge-commit_title_unsupported-ff = ff-only does not support commit title
 msg-pr-merge-commit_title_unsupported-manual = manually merged does not support commit title
 msg-pr-merge-default_message = Reviewed-on: {$pr_url}
 msg-pr-merge-success = Merged PR #{$number} \"{$title}\" into `{$base_branch}`
 
+help-cmd-pr-checkout = Checkout a pull request in a new branch
+help-arg-pr-checkout-pr = The pull request to check out
+help-arg-pr-checkout-pr-long = 
+    The pull request to check out
+
+    Prefix with ^ to get a pull request from the parent repo.
+help-arg-pr-checkout-branch_name = The name to give the newly created branch
+help-arg-pr-checkout-branch_name-long = 
+    The name to give the newly created branch
+
+    Defaults to naming after the host url, repo owner, and PR number.
+help-arg-pr-checkout-ssh = Pull the commits using SSH instead of HTTP(S)
+help-arg-pr-checkout-identity_file = An SSH key file to use when cloning over SSH
 msg-pr-checkout-dirty = Cannot checkout PR; working directory has uncommitted changes
 msg-pr-checkout-not_fork = cannot get parent repo, {$repo} is not a fork
 msg-pr-checkout-success = Checked out PR #{$number}: {$title}
@@ -616,13 +690,69 @@ msg-pr-checkout-success = Checked out PR #{$number}: {$title}
         [no] Updated branch to latest commit
     }
 
+help-cmd-pr-comment = Add a comment on a pull request
+help-arg-pr-comment-pr = The pull request to comment on
+help-arg-pr-comment-body = The text content of the comment
+help-arg-pr-comment-body-long = 
+    The text content of the comment
+
+    Leaving this out will open your editor, unless --body-file is specified.
+help-arg-pr-comment-body_file = The file to read the text content of the comment from
+
+help-cmd-pr-assign = Assign users to a pull request
+help-arg-pr-assign-users = The usernames of the users to assign to this PR
+
+help-cmd-pr-unassign = Unassign users from a pull request
+help-arg-pr-unassign-users = The usernames of the users to unassign from this PR
+
+help-cmd-pr-edit = Edit the contents of a pull request
+help-arg-pr-edit-pr = The pull request to edit
+
+help-cmd-pr-edit-title = Edit the title
+help-arg-pr-edit-title-new_title = New PR title
+help-arg-pr-edit-title-new_title-long =
+    New PR title
+
+    Leaving this out will open the current title in your editor.
+
+help-cmd-pr-edit-body = Edit the text body
+help-arg-pr-edit-body-new_body = New PR body
+help-arg-pr-edit-body-new_body-long =
+    New PR body
+
+    Leaving this out will open the current body in your editor.
+
+help-cmd-pr-edit-comment = Edit a comment
+help-arg-pr-edit-comment-idx = The index of the comment to edit, 0-indexed
+help-arg-pr-edit-comment-new_body = New comment body
+help-arg-pr-edit-comment-new_body-long =
+    New comment body
+
+    Leaving this out will open the current body in your editor.
+
+help-cmd-pr-edit-labels = Edit the applied labels
+help-arg-pr-edit-labels-add = The labels to add
+help-arg-pr-edit-labels-rm = The labels to remove
+
+help-cmd-pr-close = Close a pull request, without merging
+help-arg-pr-close-pr = The pull request to close
+help-arg-pr-close-with_msg = A comment to add before closing
+help-arg-pr-close-with_msg-long =
+    A comment to add before closing
+
+    Adding without an argument will open your editor
+
+help-cmd-pr-browse = Open a pull request in your browser
+help-arg-pr-browse-id = The pull request to open in your browser
+
+help-cmd-pr-search = Search a repository's pull requests
+help-arg-pr-search-state = Filter PRs by state. Default: open
+help-arg-pr-search-repo = The repo to search in
 msg-pr-search-count = {$pull_requests ->
         [one] 1 pull request
        *[other] {$pull_requests} pull requests
     }
 msg-pr-search-entry = #{$number}: {$title} (by {$author})
-
-msg-pr-view-diff-volatile = changes made to the diff will not persist
 
 msg-repo-no_host_given = cannot find repo, no host specified
 msg-repo-no_info_given =

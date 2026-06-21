@@ -13,7 +13,7 @@ use forgejo_api::{
 };
 use futures::stream::{StreamExt, TryStreamExt};
 
-use crate::{ftl_bail, ftl_ensure, ftl_eprintln, ftl_eyre, ftl_format, ftl_println};
+use crate::{ftl_bail, ftl_ensure, ftl_eprintln, ftl_eyre, ftl_format, ftl_println, h, lh};
 use crate::{
     issues::IssueId,
     localization::AsFluent,
@@ -23,7 +23,7 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct PrCommand {
-    /// The local git remote that points to the repo to operate on.
+    #[clap(help = h!("arg-remote"))]
     #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(subcommand)]
@@ -32,162 +32,167 @@ pub struct PrCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum PrSubcommand {
-    /// Search a repository's pull requests
+    #[clap(about = h!("cmd-pr-search"))]
     Search {
         query: Option<String>,
+
         #[clap(long, short)]
         labels: Option<String>,
+
         #[clap(long, short)]
         creator: Option<String>,
+
         #[clap(long, short)]
         assignee: Option<String>,
-        /// Filter PRs by state. Default: open
+
+        #[clap(help = h!("arg-pr-search-state"))]
         #[clap(long, short)]
         state: Option<crate::issues::State>,
-        /// The repo to search in
+
+        #[clap(help = h!("arg-pr-search-repo"))]
         #[clap(long, short)]
         repo: Option<RepoArg>,
     },
-    /// Create a new pull request
+    #[clap(about = h!("cmd-pr-create"))]
     Create {
-        /// The branch to merge onto.
+        #[clap(help = h!("arg-pr-create-base"))]
         #[clap(long)]
         base: Option<String>,
-        /// The branch to pull changes from.
+
+        #[clap(help = h!("arg-pr-create-head"))]
         #[clap(long, group = "source")]
         head: Option<String>,
-        /// What to name the new pull request.
-        ///
-        /// Prefix with "WIP: " to mark this PR as a draft.
+
+        #[clap(help = h!("arg-pr-create-title"), long_help = lh!("arg-pr-create-title"))]
         #[clap(group = "web-or-cmd")]
         title: Option<String>,
-        /// The text body of the pull request.
-        ///
-        /// Leaving this out will open your editor, unless --body-file is specified.
+
+        #[clap(help = h!("arg-pr-create-body"), long_help = lh!("arg-pr-create-body"))]
         #[clap(long)]
         body: Option<String>,
-        /// The text body of the issue, to read from a file
+
         #[clap(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
-        /// Automatically populate the PR's title and body from its commits.
-        ///
-        /// If there's a single commit, the PR will match its title and contents.
-        /// Otherwise the title will be the branch title, and the contents will
-        /// include a list of every commit's message.
+
+        #[clap(help = h!("arg-pr-create-autofill"), long_help = lh!("arg-pr-create-autofill"))]
         #[clap(short = 'A', long, alias = "fill")]
         autofill: bool,
-        /// The repo to create this pull request on
+
+        #[clap(help = h!("arg-pr-create-repo"))]
         #[clap(long, short)]
         repo: Option<RepoArg>,
-        /// Open the PR creation page in your web browser
+
+        #[clap(help = h!("arg-pr-create-web"))]
         #[clap(short, long, group = "web-or-cmd", group = "web-or-agit")]
         web: bool,
-        /// Open the PR using AGit workflow
+
+        #[clap(help = h!("arg-pr-create-agit"))]
         #[clap(short, long, group = "source", group = "web-or-agit")]
         agit: bool,
     },
-    /// View the contents of a pull request
+    #[clap(about = h!("cmd-pr-view"))]
     View {
-        /// The pull request to view.
+        #[clap(help = h!("arg-pr-view-id"))]
         id: Option<IssueId>,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
-    /// View the mergability and CI status of a pull request
+    #[clap(about = h!("cmd-pr-status"))]
     Status {
-        /// The pull request to view.
+        #[clap(help = h!("arg-pr-status-id"))]
         id: Option<IssueId>,
-        /// Wait for all checks to finish before exiting
+        #[clap(help = h!("arg-pr-status-wait"))]
         #[clap(long)]
         wait: bool,
     },
-    /// Checkout a pull request in a new branch
+    #[clap(about = h!("cmd-pr-checkout"))]
     Checkout {
-        /// The pull request to check out.
-        ///
-        /// Prefix with ^ to get a pull request from the parent repo.
+        #[clap(help = h!("arg-pr-checkout-pr"), long_help = lh!("arg-pr-checkout-pr"))]
         #[clap(id = "ID")]
         pr: PrNumber,
-        /// The name to give the newly created branch.
-        ///
-        /// Defaults to naming after the host url, repo owner, and PR number.
+
+        #[clap(help = h!("arg-pr-checkout-branch_name"), long_help = lh!("arg-pr-checkout-branch_name"))]
         #[clap(long, id = "NAME")]
         branch_name: Option<String>,
-        /// Pull the commits using SSH instead of HTTP(S).
+
+        #[clap(help = h!("arg-pr-checkout-ssh"))]
         #[clap(long, short = 'S')]
         ssh: Option<Option<bool>>,
-        /// An SSH key file to use when cloning over SSH.
+
+        #[clap(help = h!("arg-pr-checkout-identity_file"))]
         #[clap(long, short = 'I')]
         identity_file: Option<PathBuf>,
     },
-    /// Add a comment on a pull request
+    #[clap(about = h!("cmd-pr-checkout"))]
     Comment {
-        /// The pull request to comment on.
+        #[clap(help = h!("arg-pr-comment-pr"))]
         pr: Option<IssueId>,
-        /// The text content of the comment.
-        ///
-        /// Leaving this out will open your editor, unless --body-file is specified.
+
+        #[clap(help = h!("arg-pr-comment-body"), long_help = lh!("arg-pr-comment-body"))]
         body: Option<String>,
-        /// The text content of the comment, to read from a file
+
+        #[clap(help = h!("arg-pr-comment-body_file"))]
         #[clap(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
     },
-    /// Assign users to a pull request
+    #[clap(about = h!("cmd-pr-assign"))]
     Assign {
         #[clap(long, short)]
         pr: Option<IssueId>,
-        /// The usernames of the users to assign to this PR
+        #[clap(help = h!("arg-pr-assign-users"))]
         users: Vec<String>,
     },
-    /// Unassign users from an issue
+    #[clap(about = h!("cmd-pr-unassign"))]
     Unassign {
         #[clap(long, short)]
         pr: Option<IssueId>,
-        /// The usernames of the users to unassign from this PR
+        #[clap(help = h!("arg-pr-unassign-users"))]
         users: Vec<String>,
     },
-    /// Edit the contents of a pull request
+    #[clap(about = h!("cmd-pr-edit"))]
     Edit {
-        /// The pull request to edit.
+        #[clap(help = h!("arg-pr-edit-pr"))]
         pr: Option<IssueId>,
         #[clap(subcommand)]
         command: EditCommand,
     },
-    /// Close a pull request, without merging.
+    #[clap(about = h!("cmd-pr-close"))]
     Close {
-        /// The pull request to close.
+        #[clap(help = h!("arg-pr-close-pr"))]
         pr: Option<IssueId>,
-        /// A comment to add before closing.
-        ///
-        /// Adding without an argument will open your editor
+        #[clap(help = h!("arg-pr-close-with_msg"), long_help = lh!("arg-pr-close-with_msg"))]
         #[clap(long, short)]
         with_msg: Option<Option<String>>,
     },
-    /// Merge a pull request
+    #[clap(about = h!("cmd-pr-merge"))]
     Merge {
-        /// The pull request to merge.
+        #[clap(help = h!("arg-pr-merge-pr"))]
         pr: Option<IssueId>,
-        /// The merge style to use.
+
+        #[clap(help = h!("arg-pr-merge-method"))]
         #[clap(long, short = 'M')]
         method: Option<MergeMethod>,
-        /// Option to delete the corresponding branch afterwards.
+
+        #[clap(help = h!("arg-pr-merge-delete"))]
         #[clap(long, short)]
         delete: bool,
-        /// The title of the merge or squash commit to be created
+
+        #[clap(help = h!("arg-pr-merge-title"))]
         #[clap(long, short)]
         title: Option<String>,
-        /// The body of the merge or squash commit to be created
+
+        #[clap(help = h!("arg-pr-merge-message"))]
         #[clap(long, short)]
         message: Option<Option<String>>,
     },
-    /// Open a pull request in your browser
+    #[clap(about = h!("cmd-pr-browse"))]
     Browse {
-        /// The pull request to open in your browser.
+        #[clap(help = h!("arg-pr-browse-id"))]
         id: Option<IssueId>,
     },
-    /// View the review on a pull request
+    #[clap(about = h!("cmd-pr-review"))]
     Review {
-        /// The pull request to view.
+        #[clap(help = h!("arg-pr-review-id"))]
         id: Option<IssueId>,
         #[clap(subcommand)]
         command: Option<ReviewCommand>,
@@ -245,34 +250,31 @@ impl From<MergeMethod> for forgejo_api::structs::MergePullRequestOptionDo {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum EditCommand {
-    /// Edit the title
+    #[clap(about = h!("cmd-pr-edit-title"))]
     Title {
-        /// New PR title.
-        ///
-        /// Leaving this out will open the current title in your editor.
+        #[clap(help = h!("arg-pr-edit-title-new_title"), long_help = lh!("arg-pr-edit-title-new_title"))]
         new_title: Option<String>,
     },
-    /// Edit the text body
+    #[clap(about = h!("cmd-pr-edit-body"))]
     Body {
-        /// New PR body.
-        ///
-        /// Leaving this out will open the current body in your editor.
+        #[clap(help = h!("arg-pr-edit-body-new_body"), long_help = lh!("arg-pr-edit-body-new_body"))]
         new_body: Option<String>,
     },
-    /// Edit a comment
+    #[clap(about = h!("cmd-pr-edit-comment"))]
     Comment {
-        /// The index of the comment to edit, 0-indexed.
+        #[clap(help = h!("arg-pr-edit-comment-idx"))]
         idx: usize,
-        /// New comment body.
-        ///
-        /// Leaving this out will open the current body in your editor.
+
+        #[clap(help = h!("arg-pr-edit-comment-new_body"), long_help = lh!("arg-pr-edit-comment-new_body"))]
         new_body: Option<String>,
     },
+    #[clap(about = h!("cmd-pr-edit-labels"))]
     Labels {
-        /// The labels to add.
+        #[clap(help = h!("arg-pr-edit-labels-add"))]
         #[clap(long, short)]
         add: Vec<String>,
-        /// The labels to remove.
+
+        #[clap(help = h!("arg-pr-edit-labels-rm"))]
         #[clap(long, short)]
         rm: Vec<String>,
     },
@@ -280,31 +282,31 @@ pub enum EditCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ViewCommand {
-    /// View the title and body of a pull request.
+    #[clap(about = h!("cmd-pr-view-body"))]
     Body,
-    /// View a comment on a pull request.
+    #[clap(about = h!("cmd-pr-view-comment"))]
     Comment {
-        /// The index of the comment to view, 0-indexed.
+        #[clap(help = h!("arg-pr-view-comment-idx"))]
         idx: usize,
     },
-    /// View all comments on a pull request.
+    #[clap(about = h!("cmd-pr-view-comments"))]
     Comments,
-    /// View the labels applied to a pull request.
+    #[clap(about = h!("cmd-pr-view-labels"))]
     Labels,
-    /// View the diff between the base and head branches of a pull request.
+    #[clap(about = h!("cmd-pr-view-diff"))]
     Diff {
-        /// Get the diff in patch format
+        #[clap(help = h!("arg-pr-view-diff-patch"))]
         #[clap(long, short)]
         patch: bool,
-        /// View the diff in your text editor
+        #[clap(help = h!("arg-pr-view-diff-editor"))]
         #[clap(long, short)]
         editor: bool,
     },
-    /// View the files changed in a pull request.
+    #[clap(about = h!("cmd-pr-view-files"))]
     Files,
-    /// View the commits in a pull request.
+    #[clap(about = h!("cmd-pr-view-commits"))]
     Commits {
-        /// View one commit per line
+        #[clap(help = h!("arg-pr-view-commits-oneline"))]
         #[clap(long, short)]
         oneline: bool,
     },
@@ -312,12 +314,12 @@ pub enum ViewCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ReviewCommand {
-    /// List reviews on a pull request.
+    #[clap(about = h!("cmd-pr-review-list"))]
     List {
-        /// List inline comments in reviews on a pull request.
+        #[clap(help = h!("arg-pr-review-list-comments"))]
         #[clap(long, short)]
         comments: bool,
-        /// Include all reviews, including stale and dismissed ones.
+        #[clap(help = h!("arg-pr-review-list-all"))]
         #[clap(long, short)]
         all: bool,
     },
