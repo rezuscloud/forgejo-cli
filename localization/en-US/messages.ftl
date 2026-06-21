@@ -1245,9 +1245,20 @@ msg-release-asset-download-success = { OPT($file) ->
         [some] Downloaded {$asset} into {$file}
     }
 
+help-cmd-tag-create = Create a new tag
+help-arg-tag-create-body = Text of the tag's message
+help-arg-tag-create-body-long =
+    Text of the tag's message
+
+    Using this flag without an argument will open your editor.
 msg-tag-create-success = created tag {$name}
 
+help-cmd-tag-delete = Delete a tag
 msg-tag-delete-success = deleted tag {$name}
+
+help-cmd-tag-list = List all the tags on a repo
+
+help-cmd-tag-view = View a tag's info
 
 msg-version-update_check-hint = Check for a new version with `fj version --check`
 msg-version-update_check-current = Up to date!

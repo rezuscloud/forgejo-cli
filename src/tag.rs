@@ -3,44 +3,47 @@ use eyre::OptionExt;
 use forgejo_api::Forgejo;
 
 use crate::{
-    ftl_println,
+    ftl_println, h,
     keys::KeyInfo,
+    lh,
     repo::{RepoArg, RepoInfo, RepoName},
 };
 
 #[derive(Args, Clone, Debug)]
 pub struct TagCommand {
-    /// The local git remote that points to the repo to operate on
+    #[clap(help = h!("arg-remote"))]
     #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
-    /// The name of the repository to operate on
+
+    #[clap(help = h!("arg-repo"))]
     #[clap(long, short, global = true)]
     repo: Option<RepoArg>,
+
     #[clap(subcommand)]
     command: TagSubcommand,
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TagSubcommand {
-    /// Create a new tag
+    #[clap(about = h!("cmd-tag-create"))]
     Create {
         name: String,
+
+        #[clap(help = h!("arg-tag-create-body"), long_help = lh!("arg-tag-create-body"))]
         #[clap(long, short)]
-        /// Text of the tag's message.
-        ///
-        /// Using this flag without an argument will open your editor.
         body: Option<Option<String>>,
+
         #[clap(long, short = 'B')]
         branch: Option<String>,
     },
-    /// Delete a tag
+    #[clap(about = h!("cmd-tag-delete"))]
     Delete { name: String },
-    /// List all the tags on a repo
+    #[clap(about = h!("cmd-tag-list"))]
     List {
         #[clap(long, short, default_value_t = 1)]
         page: u32,
     },
-    /// View a tag's info
+    #[clap(about = h!("cmd-tag-view"))]
     View { name: String },
 }
 
