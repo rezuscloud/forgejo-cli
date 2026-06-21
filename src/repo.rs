@@ -6,7 +6,7 @@ use forgejo_api::{structs::CreateRepoOption, Forgejo};
 use url::Url;
 
 use crate::{
-    ftl_bail, ftl_eprintln, ftl_eyre, ftl_format, ftl_print, ftl_println, ftl_write,
+    ftl_bail, ftl_eprintln, ftl_eyre, ftl_format, ftl_print, ftl_println, ftl_write, h, lh,
     DisplayOptional, SpecialRender,
 };
 
@@ -327,28 +327,31 @@ pub struct RepoCreateArgs {
     // flags
     #[clap(long, short)]
     pub description: Option<String>,
+
     #[clap(long, short = 'P')]
     pub private: bool,
-    /// Creates a new remote with the given name for the new repo
+
+    #[clap(help = h!("arg-repo-create-remote"))]
     #[clap(long, short)]
     pub remote: Option<String>,
-    /// Pushes the current branch to the default branch on the new repo.
-    /// Implies `--remote=origin` (setting remote manually overrides this)
+
+    #[clap(help = h!("arg-repo-create-push"), long_help = lh!("arg-repo-create-push"))]
     #[clap(long, short)]
     pub push: bool,
-    /// Use SSH for the new remote instead of HTTP(S)
+
+    #[clap(help = h!("arg-repo-create-ssh"))]
     #[clap(long, short = 'S')]
     pub ssh: Option<Option<bool>>,
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum RepoCommand {
-    /// Creates a new repository
+    #[clap(about = h!("cmd-repo-create"))]
     Create {
         #[clap(flatten)]
         args: RepoCreateArgs,
     },
-    /// Fork a repository onto your account
+    #[clap(about = h!("cmd-repo-fork"))]
     Fork {
         repo: RepoArg,
         #[clap(long)]
@@ -356,92 +359,91 @@ pub enum RepoCommand {
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
-    /// Migrate or mirror an existing repository
+    #[clap(about = h!("cmd-repo-migrate"))]
     Migrate {
-        /// URL of the repo to migrate
+        #[clap(help = h!("arg-repo-migrate-repo"))]
         repo: String,
-        /// Name of the new mirror, and optionally which org/user should own it.
+
+        #[clap(help = h!("arg-repo-migrate-repo"))]
         #[clap(id = "[OWNER]/NAME")]
         name: String,
-        /// Whether to mirror the repo instead of migrating it
+
+        #[clap(help = h!("arg-repo-migrate-mirror"))]
         #[clap(long, short)]
         mirror: bool,
-        /// Whether the new migration should be private
+
+        #[clap(help = h!("arg-repo-migrate-private"))]
         #[clap(long, short)]
         private: bool,
-        /// Comma-separated list of items to include. Defaults to nothing but git data.
-        ///
-        /// These are `lfs`, `wiki`, `issues`, `prs`, `milestones`, `labels`, and `releases`.
-        /// You can use `all` to include everything.
+
+        #[clap(help = h!("arg-repo-migrate-include"), long_help = lh!("arg-repo-migrate-include"))]
         #[clap(long, short)]
         include: Option<MigrateInclude>,
-        /// The URL to fetch LFS files from
+
+        #[clap(help = h!("arg-repo-migrate-lfs_endpoint"))]
         #[clap(long, short = 'L')]
         lfs_endpoint: Option<url::Url>,
-        /// The type of Git service the original repo is on. Defaults to `git`
+
+        #[clap(help = h!("arg-repo-migrate-service"))]
         #[clap(long, short)]
         service: Option<MigrateService>,
-        /// If enabled, will read an access token in from stdin to use for fetching.
-        ///
-        /// Mutually exclusive with `--login`
+
+        #[clap(help = h!("arg-repo-migrate-token"), long_help = lh!("arg-repo-migrate-token"))]
         #[clap(long, short)]
         token: bool,
-        /// If enabled, will read a username and password from stdin to use for fetching.
-        ///
-        /// Mutually exclusive with `--token`.
-        ///
-        /// This is not recommended, `--token` should be used instead whenever possible.
+
+        #[clap(help = h!("arg-repo-migrate-login"), long_help = lh!("arg-repo-migrate-login"))]
         #[clap(long, short)]
         login: bool,
     },
-    /// View a repo's info
+    #[clap(about = h!("cmd-repo-view"))]
     View {
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
-    /// View a repo's README
+    #[clap(about = h!("cmd-repo-readme"))]
     Readme {
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
-    /// Clone a repo's code locally
+    #[clap(about = h!("cmd-repo-clone"))]
     Clone {
         repo: RepoArg,
+
         path: Option<PathBuf>,
-        /// Clone the repo over SSH instead of HTTP(S)
+
+        #[clap(help = h!("arg-repo-clone-ssh"))]
         #[clap(long, short = 'S')]
         ssh: Option<Option<bool>>,
 
-        /// An SSH key file to use when cloning over SSH.
+        #[clap(help = h!("arg-repo-clone-identity_file"))]
         #[clap(long, short = 'I')]
         identity_file: Option<PathBuf>,
     },
-    /// Add a star to a repo
+    #[clap(about = h!("cmd-repo-star"))]
     Star {
         repo: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
-    /// Take away a star from a repo
+    #[clap(about = h!("cmd-repo-unstar"))]
     Unstar {
         repo: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
-    /// Delete a repository
-    ///
-    /// This cannot be undone!
+    #[clap(about = h!("cmd-repo-delete"), long_about = lh!("cmd-repo-delete"))]
     Delete { repo: RepoArg },
-    /// Open a repository's page in your browser
+    #[clap(about = h!("cmd-repo-browse"))]
     Browse {
         name: Option<RepoArg>,
         #[clap(long, short = 'R')]
         remote: Option<String>,
     },
 
-    /// Manage a repo's issue labels
+    #[clap(about = h!("cmd-repo-labels"))]
     #[clap(alias = "label")]
     Labels {
         repo: Option<RepoArg>,
@@ -450,48 +452,48 @@ pub enum RepoCommand {
         cmd: LabelsSubcommand,
     },
 
-    /// Edit a repository's properties
+    #[clap(about = h!("cmd-repo-edit"))]
     Edit {
         repo: Option<RepoArg>,
 
-        /// Archive or unarchive
+        #[clap(help = h!("arg-repo-edit-archived"))]
         #[clap(short, long)]
         archived: Option<bool>,
 
-        /// Set the default branch
+        #[clap(help = h!("arg-repo-edit-default_branch"))]
         #[clap(long)]
         default_branch: Option<String>,
 
-        /// Set the description
+        #[clap(help = h!("arg-repo-edit-description"))]
         #[clap(short, long)]
         description: Option<String>,
 
-        /// Remove obsolete remote-tracking references when mirroring
+        #[clap(help = h!("arg-repo-edit-enable_prune"))]
         #[clap(long)]
         enable_prune: Option<bool>,
 
-        /// Set the interval for push mirrors. Use a string like 8h30m0s
+        #[clap(help = h!("arg-repo-edit-mirror_interval"))]
         #[clap(long)]
         mirror_interval: Option<String>,
 
-        /// Set the repo's name
+        #[clap(help = h!("arg-repo-edit-name"))]
         #[clap(long)]
         name: Option<String>,
 
-        /// Set this repository's private status
+        #[clap(help = h!("arg-repo-edit-private"))]
         #[clap(short, long)]
         private: Option<bool>,
 
-        /// Set if this repository should be a template repository
+        #[clap(help = h!("arg-repo-edit-template"))]
         #[clap(short, long)]
         template: Option<bool>,
 
-        /// Set a URL for this repository's website
+        #[clap(help = h!("arg-repo-edit-website"))]
         #[clap(short, long)]
         website: Option<String>,
     },
 
-    /// Manage a repo's units
+    #[clap(about = h!("cmd-repo-units"))]
     #[clap(alias = "unit")]
     Units {
         repo: Option<RepoArg>,
@@ -896,62 +898,62 @@ impl RepoCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum LabelsSubcommand {
-    /// Show a repo's labels
+    #[clap(about = h!("cmd-repo-labels-view"))]
     View {
-        /// Show archived labels
+        #[clap(help = h!("arg-repo-labels-view-archived"))]
         #[clap(short, long)]
         archived: bool,
     },
 
-    /// Create a new label
+    #[clap(about = h!("cmd-repo-labels-create"))]
     Create {
-        /// Name of the new label. You may include a '/' here to namespace the label
+        #[clap(help = h!("arg-repo-labels-create-name"))]
         name: String,
 
-        /// Color of the new label in hexadecimal format
+        #[clap(help = h!("arg-repo-labels-create-color"))]
         color: String,
 
-        /// A description for the new label. If no argument is given, open the editor
+        #[clap(help = h!("arg-repo-labels-create-description"))]
         #[clap(long, short)]
         description: Option<Option<String>>,
 
-        /// Make this label exclusive with other labels in the same namespace
+        #[clap(help = h!("arg-repo-labels-create-exclusive"))]
         #[clap(long, short)]
         exclusive: bool,
 
-        /// Create an archived label
+        #[clap(help = h!("arg-repo-labels-create-archived"))]
         #[clap(long, short)]
         archived: bool,
     },
 
-    /// Delete a label
+    #[clap(about = h!("cmd-repo-labels-delete"))]
     Delete {
-        /// The ID or name of the label to delete
+        #[clap(help = h!("arg-repo-labels-delete-id"))]
         id: String,
     },
 
-    /// Edit a label
+    #[clap(about = h!("cmd-repo-labels-edit"))]
     Edit {
-        /// The ID or name of the label to edit
+        #[clap(help = h!("arg-repo-labels-edit-id"))]
         id: String,
 
-        /// New name for the label
+        #[clap(help = h!("arg-repo-labels-edit-name"))]
         #[clap(short, long)]
         name: Option<String>,
 
-        /// New color for the label
+        #[clap(help = h!("arg-repo-labels-edit-color"))]
         #[clap(short, long)]
         color: Option<String>,
 
-        /// New description for the label. If no argument is given, open the editor
+        #[clap(help = h!("arg-repo-labels-edit-description"))]
         #[clap(short, long)]
         description: Option<Option<String>>,
 
-        /// New exclusive status
+        #[clap(help = h!("arg-repo-labels-edit-exclusive"))]
         #[clap(short, long)]
         exclusive: Option<bool>,
 
-        /// New archived status
+        #[clap(help = h!("arg-repo-labels-edit-archived"))]
         #[clap(short, long)]
         archived: Option<bool>,
     },
@@ -959,123 +961,122 @@ pub enum LabelsSubcommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum UnitsSubcommand {
-    /// Manage the issues unit
+    #[clap(about = h!("cmd-repo-units-issues"))]
     #[clap(alias = "issue")]
     Issues {
-        /// Enable or disable issues
+        #[clap(help = h!("arg-repo-units-issues-enable"))]
         #[clap(short, long)]
         enable: Option<bool>,
         // TODO: external_tracker, internal_tracker
         // These accept quite sophisticated data structures, not sure how to model those.
     },
 
-    /// Manage the pull requests unit
+    #[clap(about = h!("cmd-repo-units-prs"))]
     #[clap(alias = "pr")]
     Prs {
-        /// Enable or disable pull requests
+        #[clap(help = h!("arg-repo-units-prs-enable"))]
         #[clap(short, long)]
         enable: Option<bool>,
 
-        /// Allow fast-forward only merging
+        #[clap(help = h!("arg-repo-units-prs-allow_fast_forward_only_merge"))]
         #[clap(long)]
         allow_fast_forward_only_merge: Option<bool>,
 
-        /// Allow manual merging
+        #[clap(help = h!("arg-repo-units-prs-allow_manual_merge"))]
         #[clap(long)]
         allow_manual_merge: Option<bool>,
 
-        /// Allow merge commits
+        #[clap(help = h!("arg-repo-units-prs-allow_merge_commits"))]
         #[clap(long)]
         allow_merge_commits: Option<bool>,
 
-        /// Allow rebase merging
+        #[clap(help = h!("arg-repo-units-prs-allow_rebase"))]
         #[clap(long)]
         allow_rebase: Option<bool>,
 
-        /// Allow rebase merging with explicit merge commits
+        #[clap(help = h!("arg-repo-units-prs-allow_rebase_explicit"))]
         #[clap(long)]
         allow_rebase_explicit: Option<bool>,
 
-        /// Allow updating PR branches by rebase
+        #[clap(help = h!("arg-repo-units-prs-allow-rebase_update"))]
         #[clap(long)]
         allow_rebase_update: Option<bool>,
 
-        /// Allow squash merging
+        #[clap(help = h!("arg-repo-units-prs-allow_squash_merge"))]
         #[clap(long)]
         allow_squash_merge: Option<bool>,
 
-        /// Automatically detect manual merges
+        #[clap(help = h!("arg-repo-units-prs-autodetect_manual_merge"))]
         #[clap(long)]
         autodetect_manual_merge: Option<bool>,
 
-        /// Allow maintainer edits by default
+        #[clap(help = h!("arg-repo-units-prs-default_allow_maintainer_edit"))]
         #[clap(long)]
         default_allow_maintainer_edit: Option<bool>,
 
-        /// Delete branch after merge by default
+        #[clap(help = h!("arg-repo-units-prs-default_delete_branch_after_merge"))]
         #[clap(long)]
         default_delete_branch_after_merge: Option<bool>,
 
-        /// Default merge style
+        #[clap(help = h!("arg-repo-units-prs-default_merge_style"))]
         #[clap(long)]
         default_merge_style: Option<DefaultMergeStyle>,
 
-        /// Default update style
+        #[clap(help = h!("arg-repo-units-prs-default_update_style"))]
         #[clap(long)]
         default_update_style: Option<DefaultUpdateStyle>,
 
-        /// Ignore whitespace merge conflicts
+        #[clap(help = h!("arg-repo-units-prs-ignore_whitespace_conflicts"))]
         #[clap(long)]
         ignore_whitespace_conflicts: Option<bool>,
     },
 
-    /// Manage the actions unit
+    #[clap(about = h!("cmd-repo-units-actions"))]
     Actions {
-        /// Enable or disable actions
+        #[clap(help = h!("arg-repo-units-actions-enable"))]
         #[clap(short, long)]
         enable: Option<bool>,
     },
 
-    /// Manage the wiki unit
+    #[clap(about = h!("cmd-repo-units-wiki"))]
     Wiki {
-        /// Enable or disable the wiki
+        #[clap(help = h!("arg-repo-units-wiki-enable"))]
         #[clap(short, long)]
         enable: Option<bool>,
 
-        /// Set the branch used for the wiki
+        #[clap(help = h!("arg-repo-units-wiki-branch"))]
         #[clap(long)]
         branch: Option<String>,
 
-        /// Set the URL for an external wiki.
-        /// If no URL is given, the external wiki is instead disabled.
+        #[clap(help = h!("arg-repo-units-wiki-external_url"), long_help = lh!("arg-repo-units-wiki-external_url"))]
         #[clap(long)]
         external_url: Option<Url>,
 
-        /// Set the globally editable state of the wiki
+        #[clap(help = h!("arg-repo-units-wiki-globally_editable"))]
         #[clap(long)]
         globally_editable: Option<bool>,
     },
 
-    /// Manage the packages unit
+    #[clap(about = h!("cmd-repo-units-packages"))]
     #[clap(alias = "package")]
     Packages {
-        /// Enable or disable the package registry
+        #[clap(help = h!("arg-repo-units-packages-enable"))]
         #[clap(short, long)]
         enable: Option<bool>,
     },
 
-    /// Manage the projects unit
+    #[clap(about = h!("cmd-repo-units-projects"))]
     #[clap(alias = "project")]
     Projects {
-        /// Enable or disable the project board
+        #[clap(help = h!("arg-repo-units-projects-enable"))]
         #[clap(short, long)]
         enable: Option<bool>,
     },
 
-    /// Manage the releases unit
+    #[clap(about = h!("cmd-repo-units-releases"))]
     #[clap(alias = "release")]
     Releases {
-        /// Enable or disable the releases unit
+        #[clap(help = h!("arg-repo-units-releases-enable"))]
         #[clap(short, long)]
         enable: Option<bool>,
     },

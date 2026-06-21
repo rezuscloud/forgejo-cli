@@ -768,14 +768,49 @@ msg-repo-arg_no_owner = repo name should be in the format [HOST/]OWNER/NAME
 
 msg-repo-name_needed = couldn't get repo name, please specify
 
+help-cmd-repo-create = Create a new repository
+help-arg-repo-create-remote = Creates a new remote with the given name for the new repo
+help-arg-repo-create-push = Pushes the current branch to the default branch on the new repo
+help-arg-repo-create-push-long =
+    Pushes the current branch to the default branch on the new repo
+
+    Implies `--remote=origin` (setting remote manually overrides this)
+help-arg-repo-create-ssh = Use SSH for the new remote instead of HTTP(S)
 msg-repo-create-remote_exists = A remote named \"{$remote_name}\" already exists
 msg-repo-create-success = created new repo at {$url}
 msg-repo-create-detached_head = HEAD is not on a branch; cannot push to remote
 msg-repo-create-branch_invalid_utf8 = branch name invalid utf-8
 
+help-cmd-repo-fork = Fork a repository onto your account
 msg-repo-fork-conflicting_hosts = conflicting hosts {$host_a} and {$host_b}. please only specify one
 msg-repo-fork-success = Forked {$parent_owner}/{$parent_name} into {$fork_name}
 
+help-cmd-repo-migrate = Migrate or mirror an existing repository
+help-arg-repo-migrate-repo = URL of the repo to migrate
+help-arg-repo-migrate-name = Name of the new mirror, and optionally which org/user should own it
+help-arg-repo-migrate-mirror = Whether to mirror the repo instead of migrating it
+help-arg-repo-migrate-private = Whether the new migration should be private
+help-arg-repo-migrate-include = Comma-separated list of items to include. Defaults to nothing but git data
+help-arg-repo-migrate-include-long =
+    Comma-separated list of items to include. Defaults to nothing but git data
+
+    These are `lfs`, `wiki`, `issues`, `prs`, `milestones`, `labels`, and `releases`.
+    You can use `all` to include everything.
+
+help-arg-repo-migrate-lfs_endpoint = The URL to fetch LFS files from
+help-arg-repo-migrate-service = The type of Git service the original repo is on. Defaults to `git`
+help-arg-repo-migrate-token = If enabled, will read an access token in from stdin to use for fetching
+help-arg-repo-migrate-token-long =
+    If enabled, will read an access token in from stdin to use for fetching
+
+    Mutually exclusive with `--login`
+help-arg-repo-migrate-login = If enabled, will read a username and password from stdin to use for fetching
+help-arg-repo-migrate-login-long =
+    If enabled, will read a username and password from stdin to use for fetching
+
+    Mutually exclusive with `--token`.
+
+    This is not recommended, `--token` should be used instead whenever possible.
 msg-repo-migrate-git_only = Migrating from a `git` service doesn't support migration items other than LFS. Please specify a different service or remove the included items
 msg-repo-migrate-username_prompt = Username: 
 msg-repo-migrate-password_prompt = Password: 
@@ -783,6 +818,7 @@ msg-repo-migrate-token_prompt = Token:
 msg-repo-migrate-migrating = Migrating...
 msg-repo-migrate-success = Done! View online at {$url}
 
+help-cmd-repo-view = View a repo's info
 msg-repo-view-name = {$repo_name}
 msg-repo-view-is_fork = Fork of {$parent}
 msg-repo-view-is_mirror = Mirror of {$mirror_of}
@@ -811,18 +847,29 @@ msg-repo-view-releases = {$releases ->
 msg-repo-view-external_tracker = Issue tracker is at {$url}
 msg-repo-view-url = View online at {$url}
 
+help-cmd-repo-readme = View a repo's README
 msg-repo-readme-none = Repo does not have a README
 
+help-cmd-repo-clone = Clone a repo's code locally
+help-arg-repo-clone-ssh = Clone the repo over SSH instead of HTTP(S)
+help-arg-repo-clone-identity_file = An SSH key file to use when cloning over SSH
 msg-repo-clone-preparing = {"   "}Preparing...
 msg-repo-clone-downloading = {" "}Downloading... {NUMBER($percent, maximumFractionDigits: 2)}% ({NUMBER($size, maximumFractionDigits: 2)}{$units})
 msg-repo-clone-resolving = {"   "}Resolving... {NUMBER($percent, maximumFractionDigits: 2)}%
 msg-repo-clone-finishing_up = Finishing up...
 msg-repo-clone-success = Cloned {$repo} into {$path}
 
+help-cmd-repo-star = Add a star to a repo
 msg-repo-star-success = Starred {$owner}/{$repo}!
 
+help-cmd-repo-unstar = Take away a star from a repo
 msg-repo-unstar-success = Removed star from {$owner}/{$repo}!
 
+help-cmd-repo-delete = Delete a repository
+help-cmd-repo-delete-long =
+    Delete a repository
+
+    This cannot be undone!
 msg-repo-delete-confirmation_prompt = Are you sure you want to delete {$owner}/{$name}? (y/N) 
     .yes =
         Yes
@@ -837,14 +884,89 @@ msg-repo-delete-confirmation_prompt = Are you sure you want to delete {$owner}/{
 msg-repo-delete-success = Deleted {$owner}/{$repo}
 msg-repo-delete-cancelled = Did not delete
 
+help-cmd-repo-browse = Open a repository's page in your browser
+
+help-cmd-repo-labels = Manage a repo's issue labels
+
+help-cmd-repo-labels-view = Show a repo's labels
+help-arg-repo-labels-view-archived = Show archived labels
 msg-repo-label-view-archived = (archived)
 msg-repo-label-view-no_description = (no description)
 
+help-cmd-repo-labels-create = Create a new label
+help-arg-repo-labels-create-name = Name of the new label. You may include a '/' here to namespace the label
+help-arg-repo-labels-create-color = Color of the new label in hexadecimal format
+help-arg-repo-labels-create-description = A description for the new label. If no argument is given, open the editor
+help-arg-repo-labels-create-exclusive = Make this label exclusive with other labels in the same namespace
+help-arg-repo-labels-create-archived = Create an archived label
 msg-repo-label-create-success = Successfully created label {$label}
 
+help-cmd-repo-labels-delete = Delete a label
+help-arg-repo-labels-delete-id = The ID or name of the label to delete
 msg-repo-label-delete-success = Successfully deleted label {$label}
 
+help-cmd-repo-labels-edit = Edit a label
+help-arg-repo-labels-edit-id = The ID or name of the label to edit
+help-arg-repo-labels-edit-name = New name for the label
+help-arg-repo-labels-edit-color = New color for the label
+help-arg-repo-labels-edit-description = New description for the label. If no argument is given, open the editor
+help-arg-repo-labels-edit-exclusive = New exclusive status
+help-arg-repo-labels-edit-archived = New archived status
 msg-repo-label-edit-success = Edited label: {$label}
+
+help-cmd-repo-edit = Edit a repository's properties
+help-arg-repo-edit-archived = Archive or unarchive
+help-arg-repo-edit-default_branch = Set the default branch
+help-arg-repo-edit-description = Set the description
+help-arg-repo-edit-enable_prune = Remove obsolete remote-tracking references when mirroring
+help-arg-repo-edit-mirror_interval = Set the interval for push mirrors. Use a string like 8h30m0s
+help-arg-repo-edit-name = Set the repo's name
+help-arg-repo-edit-private = Set this repository's private status
+help-arg-repo-edit-template = Set if this repository should be a template repository
+help-arg-repo-edit-website = Set a URL for this repository's website
+
+help-cmd-repo-units = Manage a repo's units
+
+help-cmd-repo-units-issues = Manage the issues unit
+help-arg-repo-units-issues-enable = Enable or disable issues
+
+help-cmd-repo-units-prs = Manage the pull requests unit
+help-arg-repo-units-prs-enable = Enable or disable pull requests
+help-arg-repo-units-prs-allow_fast_forward_only_merge = Allow fast-forward only merging
+help-arg-repo-units-prs-allow_manual_merge = Allow manual merging
+help-arg-repo-units-prs-allow_merge_commits = Allow merge commits
+help-arg-repo-units-prs-allow_rebase = Allow rebase merging
+help-arg-repo-units-prs-allow_rebase_explicit = Allow rebase merging with explicit merge commits
+help-arg-repo-units-prs-allow_rebase_update = Allow updating PR branches by rebase
+help-arg-repo-units-prs-allow_squash_merge = Allow squash merging
+help-arg-repo-units-prs-autodetect_manual_merge = Automatically detect manual merges
+help-arg-repo-units-prs-default_allow_maintainer_edit = Allow maintainer edits by default
+help-arg-repo-units-prs-default_delete_branch_after_merge = Delete branch after merge by default
+help-arg-repo-units-prs-default_merge_style = Default merge style
+help-arg-repo-units-prs-default_update_style = Default update style
+help-arg-repo-units-prs-ignore_whitespace_conflicts = Ignore whitespace merge conflicts
+
+help-cmd-repo-units-actions = Manage the actions unit
+help-arg-repo-units-actions-enable = Enable or disable actions
+
+help-cmd-repo-units-wiki = Manage the wiki unit
+help-arg-repo-units-wiki-enable = Enable or disable the wiki
+help-arg-repo-units-wiki-branch = Set the branch used for the wiki
+help-arg-repo-units-wiki-external_url = Set the URL for an external wiki
+help-arg-repo-units-wiki-external_url-long = 
+    Set the URL for an external wiki
+
+    If no URL is given, the external wiki is instead disabled.
+help-arg-repo-units-wiki-globally_editable = Set the globally editable state of the wiki
+
+help-cmd-repo-units-packages = Manage the packages unit
+help-arg-repo-units-packages-enable = Enable or disable the package registry
+
+help-cmd-repo-units-projects = Manage the projects unit
+help-arg-repo-units-projects-enable = Enable or disable the project board
+
+help-cmd-repo-units-releases = Manage the releases unit
+help-arg-repo-units-releases-enable = Enable or disable releases
 
 msg-user-search-page_zero = There is no page 0
 msg-user-search-fail = Search failed
