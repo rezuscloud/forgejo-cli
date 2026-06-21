@@ -149,6 +149,12 @@ msg-org-label-remove-success = Removed label {$label}
 msg-org-repo-list-no_results = No results.
 msg-org-repo-list-page_number = Page {$page} of {$total}
 
+help-cmd-org-team-list = View all the teams in an organization
+help-arg-org-team-list-org = The name of the organization to list the teams in
+
+help-cmd-org-team-view = View info about a single team
+help-arg-org-team-view-org = The name of the organization the team is part of
+help-arg-org-team-view-name = The name of the team to view
 msg-org-team-view = {STYLE("bright-blue", "bold")}{$name}{STYLE("reset")} in org {STYLE("bold")}{$org}{STYLE("reset")} {$admin ->
         [yes] {-dash} {STYLE("bright-red")}Admin{STYLE("reset")}
        *[no] {""}
@@ -166,11 +172,71 @@ msg-org-team-view-perms-code = Code
 msg-org-team-view-perms-releases = Releases
 msg-org-team-view-perms-packages = Packages
 
+help-arg-org-team-options-description = A description of what the team does
+help-arg-org-team-options-read_permissions = A comma-separated list of read permissions to give this team
+help-arg-org-team-options-read_permissions-long =
+    A comma-separated list of read permissions to give this team
+    
+    List of permissions:
+     - wiki
+     - ext_wiki
+     - issues
+     - ext_issues
+     - pulls
+     - projects
+     - actions
+     - code
+     - releases
+     - packages
+    
+    Alternatively, you can use `all` to allow every read permission.
+help-arg-org-team-options-write_permissions = A comma-separated list of read+write permissions to give this team
+help-arg-org-team-options-write_permissions-long =
+    A comma-separated list of read+write permissions to give this team
+    
+    List of permissions:
+     - wiki
+     - ext_wiki
+     - issues
+     - ext_issues
+     - pulls
+     - projects
+     - actions
+     - code
+     - releases
+     - packages
+    
+    Alternatively, you can use `all` to allow every read+write permission
+
+help-cmd-org-team-create = Create a new team
+help-arg-org-team-create-org = The name of the organization to create the team in
+help-arg-org-team-create-name = The name of the new team
+help-arg-org-team-create-name-long =
+    The name of the new team
+
+    This must only contain alphanumeric characters
+help-arg-org-team-create-can_create_repos = Allow members of this team to create repos in the organization
+help-arg-org-team-create-include_all_repos = Give this team access to every repo
+help-arg-org-team-create-admin = Give this team administrator abilities in the organization
 msg-org-team-create-success = created new {$admin ->
         [yes] admin
        *[no] {""}
     } team {STYLE("bright-blue", "bold")}{$name}{STYLE("reset")} in org {STYLE("bold")}{$org}{STYLE("reset")}
 
+help-cmd-org-team-edit = Edit a team's information and permissions
+help-arg-org-team-edit-org = The name of the organization the team is in
+help-arg-org-team-edit-name = The name of the team to edit
+help-arg-org-team-edit-can_create_repos = Allow members of this team to create repos in the organization
+help-arg-org-team-edit-include_all_repos = Give this team access to every repo
+help-arg-org-team-edit-admin = Give this team administrator abilities in the organization
+
+help-cmd-org-team-delete = Delete a team from an organization
+help-cmd-org-team-delete-long =
+    Delete a team from an organization
+    
+    Note that this does NOT delete the repos the team has!
+help-arg-org-team-delete-org = The name of the organization the team is in
+help-arg-org-team-delete-name = The name of the team to delete
 msg-org-team-delete-confirmation = Are you sure you want to delete {STYLE("bold")}{$org}/{$name}{STYLE("reset")}?
     .yes =
         Yes
@@ -183,21 +249,49 @@ msg-org-team-delete-confirmation = Are you sure you want to delete {STYLE("bold"
         N
         n
 
+help-cmd-org-team-repo-list = List all the repos this team can access
+help-arg-org-team-repo-list-org = The name of the organization the team is in
+help-arg-org-team-repo-list-team = The name of the team to view the repos of
+help-arg-org-team-repo-list-page = Which page of the results to view
 msg-org-team-repo-list-no_results = No results.
 msg-org-team-repo-list-page_number = Page {$page} of {$total}
 
+help-cmd-org-team-repo-add = Add access to an existing repo to a team
+help-arg-org-team-repo-add-org = The name of the organization the team is in
+help-arg-org-team-repo-add-team = The name of the team to add a repo to
+help-arg-org-team-repo-add-repo = The name of the repo to add to the team
 msg-org-team-repo-add-success =
     Added {STYLE("bold")}{$org}/{$repo}{STYLE("reset")} to team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 
+help-cmd-org-team-repo-rm = Remove access to a repo from a team
+help-cmd-org-team-repo-rm-long =
+    Remove access to a repo from a team
+    
+    Note that this does NOT delete the repository!
+help-arg-org-team-repo-rm-org = The name of the organization the team is in
+help-arg-org-team-repo-rm-team = The name of the team to remove the repo from
+help-arg-org-team-repo-rm-repo = The name of the repo to remove from the team
 msg-org-team-repo-rm-success =
     Removed {STYLE("bold")}{$org}/{$repo}{STYLE("reset")} from team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 
+help-cmd-org-team-member-list = List all the members of a team
+help-arg-org-team-member-list-org = The name of the organization the team is in
+help-arg-org-team-member-list-team = The name of the team to view the members of
+help-arg-org-team-member-list-page = Which page of the results to view
 msg-org-team-member-list-no_results = No results.
 msg-org-team-member-list-page_number = Page {$page} of {$total}
 
+help-cmd-org-team-member-add = Add someone to a team
+help-arg-org-team-member-add-org = The name of the organization the team is in
+help-arg-org-team-member-add-team = The name of the team to add a user to
+help-arg-org-team-member-add-user = The name of the user to add to the team
 msg-org-team-member-add-success =
     Added {STYLE("bold", "bright-cyan")}{$user}{STYLE("reset")} to team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 
+help-cmd-org-team-member-rm = Remove someone from a team
+help-arg-org-team-member-rm-org = The name of the organization the team is in
+help-arg-org-team-member-rm-team = The name of the team to remove the user from
+help-arg-org-team-member-rm-user = The name of the user to remove from the team
 msg-org-team-member-rm-success =
     Removed {STYLE("bold", "bright-cyan")}{$user}{STYLE("reset")} from team {STYLE("bold", "bright_blue")}{$team}{STYLE("reset")}
 

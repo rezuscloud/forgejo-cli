@@ -8,58 +8,65 @@ use forgejo_api::{
 };
 use futures::{future, TryStreamExt};
 
-use crate::{ftl_eprintln, ftl_println, ftl_prompt_bool, localization::AsFluent, SpecialRender};
+use crate::{
+    ftl_eprintln, ftl_println, ftl_prompt_bool, h, lh, localization::AsFluent, SpecialRender,
+};
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamSubcommand {
-    /// View all the teams in an organization
+    #[clap(about = h!("cmd-org-team-list"))]
     List {
-        /// The name of the organization to list the teams in.
+        #[clap(help = h!("arg-org-team-list-org"))]
         org: String,
     },
-    /// View info about a single team
+    #[clap(about = h!("cmd-org-team-view"))]
     View {
-        /// The name of the organization the team is part of.
+        #[clap(help = h!("arg-org-team-view-org"))]
         org: String,
-        /// The name of the new team
+
+        #[clap(help = h!("arg-org-team-view-name"))]
         name: String,
+
         #[clap(long, short = 'p')]
         list_permissions: bool,
     },
-    /// Create a new team
+    #[clap(about = h!("cmd-org-team-create"))]
     Create {
-        /// The name of the organization to create the team in.
+        #[clap(help = h!("arg-org-team-create-org"))]
         org: String,
-        /// The name of the new team
-        ///
-        /// This must only contain alphanumeric characters.
+
+        #[clap(help = h!("arg-org-team-create-name"), long_help = lh!("arg-org-team-create-name"))]
         name: String,
+
         #[clap(flatten)]
         flags: TeamCreateFlags,
+
         #[clap(flatten)]
         options: TeamOptions,
     },
-    /// Edit a team's information and permissions
+    #[clap(about = h!("cmd-org-team-edit"))]
     Edit {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-edit-org"))]
         org: String,
-        /// The name of the team to edit
+
+        #[clap(help = h!("arg-org-team-edit-name"))]
         name: String,
-        /// Can members of this team to create repos in the organization?
+
         #[clap(long, short)]
         new_name: Option<String>,
+
         #[clap(flatten)]
         flags: TeamEditFlags,
+
         #[clap(flatten)]
         options: TeamOptions,
     },
-    /// Delete a team from an organization.
-    ///
-    /// Note that this does NOT delete the repos the team has!
+    #[clap(about = h!("cmd-org-team-delete"), long_about = lh!("cmd-org-team-delete"))]
     Delete {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-delete-org"))]
         org: String,
-        /// The name of the team to delete
+
+        #[clap(help = h!("arg-org-team-delete-name"))]
         name: String,
     },
     #[clap(subcommand)]
@@ -70,67 +77,45 @@ pub enum TeamSubcommand {
 
 #[derive(Args, Clone, Debug)]
 pub struct TeamOptions {
-    /// A description of what the team does.
+    #[clap(help = h!("arg-org-team-options-description"))]
     #[clap(long, short)]
     description: Option<String>,
-    /// A comma-separated list of read permissions to give this team
-    ///
-    /// List of permissions:
-    ///  - wiki
-    ///  - ext_wiki
-    ///  - issues
-    ///  - ext_issues
-    ///  - pulls
-    ///  - projects
-    ///  - actions
-    ///  - code
-    ///  - releases
-    ///  - packages
-    ///
-    /// Alternatively, you can use `all` to allow every read permission.
+
+    #[clap(help = h!("arg-org-team-options-read_permissions"), long_help = lh!("arg-org-team-options-read_permissions"))]
     #[clap(long, short)]
     read_permissions: Option<String>,
-    /// A comma-separated list of read+write permissions to give this team
-    ///
-    /// List of permissions:
-    ///  - wiki
-    ///  - ext_wiki
-    ///  - issues
-    ///  - ext_issues
-    ///  - pulls
-    ///  - projects
-    ///  - actions
-    ///  - code
-    ///  - releases
-    ///  - packages
-    ///
-    /// Alternatively, you can use `all` to allow every read+write permission
+
+    #[clap(help = h!("arg-org-team-options-write_permissions"), long_help = lh!("arg-org-team-options-write_permissions"))]
     #[clap(long, short)]
     write_permissions: Option<String>,
 }
 
 #[derive(Args, Clone, Debug)]
 pub struct TeamCreateFlags {
-    /// Allow members of this team to create repos in the organization.
+    #[clap(help = h!("arg-org-team-create-can_create_repos"))]
     #[clap(long, short)]
     can_create_repos: bool,
-    /// Give this team access to every repo.
+
+    #[clap(help = h!("arg-org-team-create-include_all_repos"))]
     #[clap(long, short)]
     include_all_repos: bool,
-    /// Give this team administrator abilities in the organization.
+
+    #[clap(help = h!("arg-org-team-create-admin"))]
     #[clap(long, short = 'A')]
     admin: bool,
 }
 
 #[derive(Args, Clone, Debug)]
 pub struct TeamEditFlags {
-    /// Allow members of this team to create repos in the organization.
+    #[clap(help = h!("arg-org-team-create-can_create_repos"))]
     #[clap(long, short)]
     can_create_repos: Option<bool>,
-    /// Give this team access to every repo.
+
+    #[clap(help = h!("arg-org-team-create-include_all_repos"))]
     #[clap(long, short)]
     include_all_repos: Option<bool>,
-    /// Give this team administrator abilities in the organization.
+
+    #[clap(help = h!("arg-org-team-create-admin"))]
     #[clap(long, short = 'A')]
     admin: Option<bool>,
 }
@@ -419,34 +404,38 @@ async fn delete_team(api: &Forgejo, org: String, name: String) -> eyre::Result<(
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamRepoSubcommand {
-    /// List all the repos this team can access
+    #[clap(about = h!("cmd-org-team-repo-list"))]
     List {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-repo-list-org"))]
         org: String,
-        /// The name of the team to view the repos of.
+
+        #[clap(help = h!("arg-org-team-repo-list-team"))]
         team: String,
-        /// Which page of the results to view
+
+        #[clap(help = h!("arg-org-team-repo-list-page"))]
         #[clap(long, short, default_value_t = 1)]
         page: u32,
     },
-    /// Add access to an existing repo to a team
+    #[clap(about = h!("cmd-org-team-repo-add"))]
     Add {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-repo-add-org"))]
         org: String,
-        /// The name of the team to add a repo to.
+
+        #[clap(help = h!("arg-org-team-repo-add-team"))]
         team: String,
-        /// The name of the repo to add to the team.
+
+        #[clap(help = h!("arg-org-team-repo-add-repo"))]
         repo: String,
     },
-    /// Remove access to a repo from a team
-    ///
-    /// Note that this does NOT delete the repository!
+    #[clap(about = h!("cmd-org-team-repo-rm"), long_about = lh!("cmd-org-team-repo-rm"))]
     Rm {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-repo-rm-org"))]
         org: String,
-        /// The name of the team to remove the repo from.
+
+        #[clap(help = h!("arg-org-team-repo-rm-team"))]
         team: String,
-        /// The name of the repo to remove from the team.
+
+        #[clap(help = h!("arg-org-team-repo-rm-repo"))]
         repo: String,
     },
 }
@@ -528,32 +517,34 @@ async fn remove_repo_from_team(
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum TeamMemberSubcommand {
-    /// List all the members of a team
+    #[clap(about = h!("cmd-org-team-member-list"))]
     List {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-member-list-org"))]
         org: String,
-        /// The name of the team to view the members of.
+
+        #[clap(help = h!("arg-org-team-member-list-team"))]
         team: String,
-        /// Which page of the results to view
+
+        #[clap(help = h!("arg-org-team-member-list-page"))]
         #[clap(long, short, default_value_t = 1)]
         page: u32,
     },
-    /// Add someone to a team
+    #[clap(about = h!("cmd-org-team-member-add"))]
     Add {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-member-add-org"))]
         org: String,
-        /// The name of the team to add a user to.
+        #[clap(help = h!("arg-org-team-member-add-team"))]
         team: String,
-        /// The name of the user to add to the team.
+        #[clap(help = h!("arg-org-team-member-add-user"))]
         user: String,
     },
-    /// Remove someone from a team
+    #[clap(about = h!("cmd-org-team-member-rm"))]
     Rm {
-        /// The name of the organization the team is in.
+        #[clap(help = h!("arg-org-team-member-rm-org"))]
         org: String,
-        /// The name of the team to remove the user from.
+        #[clap(help = h!("arg-org-team-member-rm-team"))]
         team: String,
-        /// The name of the user to remove from the team.
+        #[clap(help = h!("arg-org-team-member-rm-user"))]
         user: String,
     },
 }
