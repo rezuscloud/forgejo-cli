@@ -461,3 +461,17 @@ macro_rules! ftl_prompt_bool {
         }
     }
 }
+
+/// Helper macros for localizing clap's `help` and `long_help` properties
+#[macro_export]
+macro_rules! h {
+    ($id:literal) => {
+        $crate::ftl_format!(concat!("help-", $id))
+    };
+}
+#[macro_export]
+macro_rules! lh {
+    ($id:literal) => {
+        $crate::ftl_format!(concat!("help-", $id, "-long"))
+    };
+}

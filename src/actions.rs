@@ -12,18 +12,18 @@ use hyper::StatusCode;
 use time::Duration;
 
 use crate::{
-    ftl_bail, ftl_eprintln, ftl_println,
+    ftl_bail, ftl_eprintln, ftl_println, h,
     repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
 
 #[derive(Args, Clone, Debug)]
 pub struct ActionsCommand {
-    /// The local git remote that points to the repo to operate on
+    #[clap(help = h!("arg-remote"))]
     #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
 
-    /// The repo to operate on
+    #[clap(help = h!("arg-repo"))]
     #[clap(long, short, global = true)]
     repo: Option<RepoArg>,
 
@@ -33,32 +33,34 @@ pub struct ActionsCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ActionsSubcommand {
-    /// List the tasks on a repo
+    #[clap(about = h!("cmd-actions-tasks"))]
     Tasks {
-        /// The page to show. One page always includes up to 20 tasks.
+        #[clap(help = h!("arg-actions-tasks-page"))]
         #[clap(long, short, default_value = "1")]
         page: u32,
     },
 
-    /// List and manage variables
+    #[clap(about = h!("cmd-actions-variables"))]
     Variables {
         #[clap(subcommand)]
         command: ActionsVariablesSubcommmand,
     },
 
+    #[clap(about = h!("cmd-actions-secrets"))]
     Secrets {
         #[clap(subcommand)]
         command: ActionsSecretsSubcommmand,
     },
 
-    /// Dispatch a workflow
+    #[clap(about = h!("cmd-actions-dispatch"))]
     Dispatch {
-        /// Name of the workflow to dispatch
+        #[clap(help = h!("arg-actions-dispatch-name"))]
         name: String,
 
-        /// Git revision to dispatch the workflow on
+        #[clap(help = h!("arg-actions-dispatch-ref"))]
         r#ref: String,
 
+        #[clap(help = h!("arg-actions-dispatch-inputs"))]
         #[clap(long, short = 'I', value_parser = parse_dispatch_kvs)]
         inputs: Vec<(String, String)>,
     },
@@ -66,48 +68,50 @@ pub enum ActionsSubcommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ActionsVariablesSubcommmand {
-    /// List variables
+    #[clap(about = h!("cmd-actions-variables-list"))]
     List {
-        /// Also print owner_id and repo_id
+        #[clap(help = h!("arg-actions-variables-list-verbose"))]
         #[clap(long, short)]
         verbose: bool,
     },
 
-    /// Create a new variable
+    #[clap(about = h!("cmd-actions-variables-create"))]
     Create {
-        /// The name of the new variable
+        #[clap(help = h!("arg-actions-variables-create-name"))]
         name: String,
 
-        /// The data to save into the variable. Omit to invoke editor.
+        #[clap(help = h!("arg-actions-variables-create-data"))]
         data: Option<String>,
 
-        /// Override existing variables
+        #[clap(help = h!("arg-actions-variables-create-force"))]
         #[clap(long, short)]
         force: bool,
     },
 
+    #[clap(about = h!("cmd-actions-variables-delete"))]
     Delete {
-        /// The variable to delete
+        #[clap(help = h!("arg-actions-variables-delete-name"))]
         name: String,
     },
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ActionsSecretsSubcommmand {
-    /// List secrets
+    #[clap(about = h!("cmd-actions-secrets-list"))]
     List,
 
-    /// Create a new secret
+    #[clap(about = h!("cmd-actions-secrets-create"))]
     Create {
-        /// The name of the new secret
+        #[clap(help = h!("arg-actions-secrets-create-name"))]
         name: String,
 
-        /// The data to save into the secret.
+        #[clap(help = h!("arg-actions-secrets-create-data"))]
         data: String,
     },
 
+    #[clap(about = h!("cmd-actions-secrets-delete"))]
     Delete {
-        /// The secret to delete
+        #[clap(help = h!("arg-actions-secrets-delete-name"))]
         name: String,
     },
 }

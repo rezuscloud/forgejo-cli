@@ -4,6 +4,9 @@
        *[no] —
     }
 
+help-arg-remote = The local git remote that points to the repo to operate on
+help-arg-repo = The repo to operate on
+
 msg-whoami = currently signed into {$name}@{$host}
 
 msg-auth-login-oauth_unsupported = 
@@ -29,15 +32,44 @@ msg-auth-add_key-already_exists = key for {$host} already exists
 
 msg-auth-list-none = No logins.
 
+help-cmd-actions-tasks = List the tasks on a repo
+help-arg-actions-tasks-page = The page to show. One page always includes up to 20 tasks
+
+help-cmd-actions-variables = List and manage variables
+
+help-cmd-actions-variables-list = List variables
+help-arg-actions-variables-list-verbose = Also print owner_id and repo_id
+
+help-cmd-actions-variables-create = Create a new variable
+help-arg-actions-variables-create-name = The name of the new variable
+help-arg-actions-variables-create-data = The data to save into the variable. Omit to invoke editor
+help-arg-actions-variables-create-force = Override existing variables
 msg-actions-variable-create-already_exists = variable already exists, pass --force to replace it.
 msg-actions-variable-create-already_exists_forced = variable already exists, updating.
 
+help-cmd-actions-variables-delete = Delete a variable
+help-arg-actions-variables-delete-name = The variable to delete
 msg-actions-variable-delete-success = Variable {$name} deleted.
 
+help-cmd-actions-dispatch = Dispatch a workflow
+help-arg-actions-dispatch-name = Name of the workflow to dispatch
+help-arg-actions-dispatch-ref = Git revision to dispatch the workflow on
+help-arg-actions-dispatch-inputs = Values to give as inputs to the run
 msg-actions-dispatch-success = Dispatched workflow {$name} in {$ref} with {$n_inputs ->
         [one] 1 input
        *[other] {$n_inputs} inputs
     }.
+
+help-cmd-actions-secrets = List and manage secrets
+
+help-cmd-actions-secrets-list = List secrets
+
+help-cmd-actions-secrets-create = Create a new actions secret
+help-arg-actions-secrets-create-name = The name of the new secret
+help-arg-actions-secrets-create-data = The data to save into the secret
+
+help-cmd-actions-secrets-delete = Delete an actions secret
+help-arg-actions-secrets-delete-name = The secret to delete
 
 msg-org-list-no_results = No results.
 msg-org-list-page_number = Page {$page} of {$total}
