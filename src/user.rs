@@ -3,7 +3,7 @@ use eyre::{Context, ContextCompat, OptionExt};
 use forgejo_api::Forgejo;
 
 use crate::{
-    ftl_bail, ftl_ensure, ftl_eyre, ftl_println, localization::AsFluent, repo::RepoInfo,
+    ftl_bail, ftl_ensure, ftl_eyre, ftl_println, h, lh, localization::AsFluent, repo::RepoInfo,
     SpecialRender,
 };
 
@@ -11,7 +11,7 @@ use std::borrow::Cow;
 
 #[derive(Args, Clone, Debug)]
 pub struct UserCommand {
-    /// The local git remote that points to the repo to operate on.
+    #[clap(help = h!("arg-remote"))]
     #[clap(long, short = 'R')]
     remote: Option<String>,
     #[clap(subcommand)]
@@ -20,162 +20,157 @@ pub struct UserCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum UserSubcommand {
-    /// Search for a user by username
+    #[clap(about = h!("cmd-user-search"))]
     Search {
-        /// The name to search for
+        #[clap(help = h!("arg-user-search-query"))]
         query: String,
         #[clap(long, short)]
         page: Option<usize>,
     },
-    /// View a user's profile page
+    #[clap(about = h!("cmd-user-view"))]
     View {
-        /// The name of the user to view
-        ///
-        /// Omit to view your own page
+        #[clap(help = h!("arg-user-view-user"), long_help = lh!("arg-user-view-user"))]
         user: Option<String>,
     },
-    /// Open a user's profile page in your browser
+    #[clap(about = h!("cmd-user-browse"))]
     Browse {
-        /// The name of the user to open in your browser
-        ///
-        /// Omit to view your own page
+        #[clap(help = h!("arg-user-browse-user"), long_help = lh!("arg-user-browse-user"))]
         user: Option<String>,
     },
-    /// Follow a user
+    #[clap(about = h!("cmd-user-follow"))]
     Follow {
-        /// The name of the user to follow
+        #[clap(help = h!("arg-user-follow-user"))]
         user: String,
     },
-    /// Unfollow a user
+    #[clap(about = h!("cmd-user-unfollow"))]
     Unfollow {
-        /// The name of the user to follow
+        #[clap(help = h!("arg-user-unfollow-user"))]
         user: String,
     },
-    /// List everyone a user's follows
+    #[clap(about = h!("cmd-user-following"))]
     Following {
-        /// The name of the user whose follows to list
-        ///
-        /// Omit to view your own follows
+        #[clap(help = h!("arg-user-following-user"), long_help = lh!("arg-user-following-user"))]
         user: Option<String>,
     },
-    /// List a user's followers
+    #[clap(about = h!("cmd-user-followers"))]
     Followers {
-        /// The name of the user whose followers to list
-        ///
-        /// Omit to view your own followers
+        #[clap(help = h!("arg-user-followers-user"), long_help = lh!("arg-user-followers-user"))]
         user: Option<String>,
     },
-    /// Block a user
+    #[clap(about = h!("cmd-user-block"))]
     Block {
-        /// The name of the user to block
+        #[clap(help = h!("arg-user-block-user"))]
         user: String,
     },
-    /// Unblock a user
+    #[clap(about = h!("cmd-user-unblock"))]
     Unblock {
-        /// The name of the user to unblock
+        #[clap(help = h!("arg-user-unblock-user"))]
         user: String,
     },
-    /// List a user's repositories
+    #[clap(about = h!("cmd-user-repos"))]
     Repos {
-        /// The name of the user whose repos to list
-        ///
-        /// Omit to view your own repos.
+        #[clap(help = h!("arg-user-repos-user"), long_help = lh!("arg-user-repos-user"))]
         user: Option<String>,
-        /// List starred repos instead of owned repos
+
+        #[clap(help = h!("arg-user-repos-starred"))]
         #[clap(long)]
         starred: bool,
-        /// Method by which to sort the list
+
+        #[clap(help = h!("arg-user-repos-sort"))]
         #[clap(long)]
         sort: Option<RepoSortOrder>,
-        /// Page of repos to get
+
+        #[clap(help = h!("arg-user-repos-page"))]
         #[clap(long, default_value_t = 1)]
         page: u32,
     },
-    /// List the organizations a user is a member of
+    #[clap(about = h!("cmd-user-orgs"))]
     Orgs {
-        /// The name of the user to view org membership of
-        ///
-        /// Omit to view your own orgs.
+        #[clap(help = h!("arg-user-orgs-user"), long_help = lh!("arg-user-orgs-user"))]
         user: Option<String>,
     },
-    /// List a user's recent activity
+    #[clap(about = h!("cmd-user-activity"))]
     Activity {
-        /// The name of the user to view the activity of
-        ///
-        /// Omit to view your own activity.
+        #[clap(help = h!("arg-user-orgs-user"), long_help = lh!("arg-user-orgs-user"))]
         user: Option<String>,
     },
-    /// Edit your user settings
+    #[clap(about = h!("cmd-user-edit"))]
     #[clap(subcommand)]
     Edit(EditCommand),
 
-    /// Manage SSH keys
+    #[clap(about = h!("cmd-user-key"))]
     #[clap(subcommand)]
     Key(KeyCommand),
 
-    /// Manage GPG keys
+    #[clap(about = h!("cmd-user-gpg"))]
     #[clap(subcommand)]
     Gpg(GpgCommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum EditCommand {
-    /// Set your bio
+    #[clap(about = h!("cmd-user-edit-bio"))]
     Bio {
-        /// The new description. Leave this out to open your editor.
+        #[clap(help = h!("arg-user-edit-bio-content"))]
         content: Option<String>,
     },
-    /// Set your full name
+    #[clap(about = h!("cmd-user-edit-name"))]
     Name {
-        /// The new name.
+        #[clap(help = h!("arg-user-edit-name-name"))]
         #[clap(group = "arg")]
         name: Option<String>,
-        /// Remove your name from your profile
+
+        #[clap(help = h!("arg-user-edit-name-unset"))]
         #[clap(long, short, group = "arg")]
         unset: bool,
     },
-    /// Set your pronouns
+    #[clap(about = h!("cmd-user-edit-pronouns"))]
     Pronouns {
-        /// The new pronouns.
+        #[clap(help = h!("arg-user-edit-pronouns-pronouns"))]
         #[clap(group = "arg")]
         pronouns: Option<String>,
-        /// Remove your pronouns from your profile
+
+        #[clap(help = h!("arg-user-edit-pronouns-unset"))]
         #[clap(long, short, group = "arg")]
         unset: bool,
     },
-    /// Set your activity visibility
+    #[clap(about = h!("cmd-user-edit-location"))]
     Location {
-        /// The new location.
+        #[clap(help = h!("arg-user-edit-location-location"))]
         #[clap(group = "arg")]
         location: Option<String>,
-        /// Remove your location from your profile
+
+        #[clap(help = h!("arg-user-edit-location-unset"))]
         #[clap(long, short, group = "arg")]
         unset: bool,
     },
-    /// Set your activity visibility
+    #[clap(about = h!("cmd-user-edit-activity"))]
     Activity {
-        /// The visibility of your activity.
+        #[clap(help = h!("arg-user-edit-activity-visibility"))]
         #[clap(long, short)]
         visibility: VisibilitySetting,
     },
-    /// Manage the email addresses associated with your account
+    #[clap(about = h!("cmd-user-edit-email"))]
     Email {
-        /// Set the visibility of your email address.
+        #[clap(help = h!("arg-user-edit-email-visibility"))]
         #[clap(long, short)]
         visibility: Option<VisibilitySetting>,
-        /// Add a new email address
+
+        #[clap(help = h!("arg-user-edit-email-add"))]
         #[clap(long, short)]
         add: Vec<String>,
-        /// Remove an email address
+
+        #[clap(help = h!("arg-user-edit-email-rm"))]
         #[clap(long, short)]
         rm: Vec<String>,
     },
-    /// Set your linked website
+    #[clap(about = h!("cmd-user-edit-website"))]
     Website {
-        /// Your website URL.
+        #[clap(help = h!("arg-user-edit-website-url"))]
         #[clap(group = "arg")]
         url: Option<String>,
-        /// Remove your website from your profile
+
+        #[clap(help = h!("arg-user-edit-website-unset"))]
         #[clap(long, short, group = "arg")]
         unset: bool,
     },
@@ -183,39 +178,36 @@ pub enum EditCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum KeyCommand {
-    /// List your SSH keys
+    #[clap(about = h!("cmd-user-key-list"))]
     List {
-        /// Show detailed information about every key
+        #[clap(help = h!("arg-user-key-list-verbose"))]
         #[clap(short, long)]
         verbose: bool,
     },
-
-    /// View an SSH key
+    #[clap(about = h!("cmd-user-key-view"))]
     View {
-        // The ID of the key to view as shown in `user key list`
+        #[clap(help = h!("arg-user-key-view-id"))]
         id: i64,
     },
-
-    /// Delete an SSH key
+    #[clap(about = h!("cmd-user-key-delete"))]
     Delete {
-        // The ID of the key to view as shown in `user key list`
+        #[clap(help = h!("arg-user-key-delete-id"))]
         id: i64,
     },
-
-    /// Upload an SSH key
+    #[clap(about = h!("cmd-user-key-upload"))]
     Upload {
-        /// Path to the key file or '-' to read from stdin. If omitted, will try to guess.
+        #[clap(help = h!("arg-user-key-upload-keyfile"))]
         keyfile: Option<String>,
 
-        /// The title of the key. If omitted, will try to guess from the file content.
+        #[clap(help = h!("arg-user-key-upload-title"))]
         #[clap(short, long)]
         title: Option<String>,
 
-        /// If provided, will skip checks against accidentally uploading private keys.
+        #[clap(help = h!("arg-user-key-upload-force"))]
         #[clap(short, long)]
         force: bool,
 
-        /// If provided, the new key will only have read access.
+        #[clap(help = h!("arg-user-key-upload-read_only"))]
         #[clap(short, long)]
         read_only: bool,
     },
@@ -223,47 +215,39 @@ pub enum KeyCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum GpgCommand {
-    /// List your GPG keys
+    #[clap(about = h!("cmd-user-gpg-list"))]
     List {
-        /// Show detailed information about every key
+        #[clap(help = h!("arg-user-gpg-list-verbose"))]
         #[clap(short, long)]
         verbose: bool,
     },
 
-    /// Show details about a GPG key
+    #[clap(about = h!("cmd-user-gpg-view"))]
     View {
-        /// ID of the GPG key to show as shown in `user gpg list`
+        #[clap(help = h!("arg-user-gpg-view-id"))]
         id: i64,
     },
-
-    /// Deletes a GPG key. This will un-verify all commits signed with that key!
+    #[clap(about = h!("cmd-user-gpg-delete"))]
     Delete {
-        /// ID of the GPG key to delete as shown in `user gpg list`
+        #[clap(help = h!("arg-user-gpg-delete-id"))]
         id: i64,
 
-        /// Don't ask for confirmation
+        #[clap(help = h!("arg-user-gpg-delete-force"))]
         #[clap(short, long)]
         force: bool,
     },
-
-    /// Upload a new GPG key from your local keyring.
-    /// This command requires `gpg` to be installed.
+    #[clap(about = h!("cmd-user-gpg-upload"))]
     Upload {
-        /// The key to add. This can be anything the GPG CLI recognizes such as an email associated
-        /// with the key or the key ID.
+        #[clap(help = h!("arg-user-gpg-upload-key"))]
         key: String,
 
-        /// Skip the verification step. With this disabled, you can only add keys with emails
-        /// associated with your account.
+        #[clap(help = h!("arg-user-gpg-upload-no_verify"))]
         #[clap(short, long)]
         no_verify: bool,
     },
-
-    /// Verifies a GPG key. You need to have the to-be-verified key installed locally in order to
-    /// sign some data with it.
-    /// This command requires `gpg` to be installed.
+    #[clap(about = h!("cmd-user-gpg-verify"), long_about = lh!("cmd-user-gpg-verify"))]
     Verify {
-        /// ID of the GPG key to verify as shown in `user gpg list`
+        #[clap(help = h!("arg-user-gpg-verify-id"))]
         id: i64,
     },
 }

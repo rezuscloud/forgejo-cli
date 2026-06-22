@@ -968,6 +968,8 @@ help-arg-repo-units-projects-enable = Enable or disable the project board
 help-cmd-repo-units-releases = Manage the releases unit
 help-arg-repo-units-releases-enable = Enable or disable releases
 
+help-cmd-user-search = Search for a user by username
+help-arg-user-search-query = The name to search for
 msg-user-search-page_zero = There is no page 0
 msg-user-search-fail = Search failed
 msg-user-search-none = No users matched that query
@@ -982,6 +984,12 @@ msg-user-search-footer =
        *[no] {""}
     }
 
+help-cmd-user-view = View a user's profile page
+help-arg-user-view-user = The name of the user to view
+help-arg-user-view-user-long =
+    The name of the user to view
+
+    Omit to view your own page.
 msg-user-view-header = {STYLE("bright-cyan", "bold")}{$username}{STYLE("reset")} {OPT($pronouns) ->
        *[none] {""}
         [some] {STYLE("light-grey")} {-dash} {STYLE("bold")}{$pronouns}{STYLE("reset")}
@@ -1002,24 +1010,60 @@ msg-user-view-header = {STYLE("bright-cyan", "bold")}{$username}{STYLE("reset")}
     }
 msg-user-view-joined_on = Joined on {STYLE("bold")}{DATETIME($joined, dateStyle: "medium")}{STYLE("reset")}
 
+help-cmd-user-browse = Open a user's profile page in your browser
+help-arg-user-browse-user = The name of the user to open in your browser
+help-arg-user-browse-user-long =
+    The name of the user to open in your browser
+
+    Omit to view your own page.
+
+help-cmd-user-follow = Follow a user
+help-arg-user-follow-user = The name of the user to follow
 msg-user-follow-success = Followed {$username}
 
+help-cmd-user-unfollow = Unfollow a user
+help-arg-user-unfollow-user = The name of the user to unfollow
 msg-user-unfollow-success = Unfollowed {$username}
 
+help-cmd-user-following = List everyone a user's follows
+help-arg-user-following-user = The name of the user whose follows to list
+help-arg-user-following-user-long =
+    The name of the user whose follows to list
+
+    Omit to view your own follows.
 msg-user-following-none-other = {$user} isn't following anyone
 msg-user-following-none-self = You aren't following anyone
 msg-user-following-other = {$user} is following:
 msg-user-following-self = You are following:
 
+help-cmd-user-followers = List a user's followers
+help-arg-user-followers-user = The name of the user whose followers to list
+help-arg-user-followers-user-long =
+    The name of the user whose followers to list
+
+    Omit to view your own followers.
 msg-user-followers-none-other = {$user} has no followers
 msg-user-followers-none-self = You have no followers :(
 msg-user-followers-other = {$user} is followed by:
 msg-user-followers-self = You are followed by:
 
+help-cmd-user-block = Block a user
+help-arg-user-block-user = The name of the user to block
 msg-user-block-success = Blocked {$user}
 
+help-cmd-user-unblock = Unblock a user
+help-arg-user-unblock-user = The name of the user to unblock
 msg-user-unblock-success = Unblocked {$user}
 
+help-cmd-user-repos = List a user's repositories
+help-arg-user-repos-user = The name of the user whose repos to list
+help-arg-user-repos-user-long =
+    The name of the user whose repos to list
+
+    Omit to view your own repos.
+help-arg-user-repos-starred = List starred repos instead of owned repos
+help-arg-user-repos-sort = Method by which to sort the list
+help-arg-user-repos-page = Page of repos to get
 msg-user-repos-none-starred-other = {$name} has not starred any repos
 msg-user-repos-none-starred-self = You have not starred any repos
 msg-user-repos-none-other = {$name} does not own any repos
@@ -1031,6 +1075,12 @@ msg-user-repos-list_footer =
        *[no] {""}
     }
 
+help-cmd-user-orgs = List the organizations a user is a member of
+help-arg-user-orgs-user = The name of the user to view org membership of
+help-arg-user-orgs-user-long = 
+    The name of the user to view org membership of
+
+    Omit to view your own orgs.
 msg-user-orgs-none-other = {$user} is not a member of any organizations
 msg-user-orgs-none-self = You are not a member of any organizations
 msg-user-orgs-count = {$organizations ->
@@ -1038,6 +1088,12 @@ msg-user-orgs-count = {$organizations ->
        *[other] {$organizations} organizations
     }
 
+help-cmd-user-activity = List a user's recent activity
+help-arg-user-activity-user = The name of the user to view the activity of
+help-arg-user-activity-user-long = 
+    The name of the user to view the activity of
+
+    Omit to view your own activity.
 msg-activity-created_fork = {STYLE("bold")}{$actor}{STYLE("reset")} forked repository {STYLE("bold", "yellow")}{$parent_repo_name}{STYLE("reset")} to {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
 msg-activity-created_mirror = {STYLE("bold")}{$actor}{STYLE("reset")} created mirror {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
 msg-activity-created_repo = {STYLE("bold")}{$actor}{STYLE("reset")} created repository {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
@@ -1062,11 +1118,43 @@ msg-activity-rejected_pr = {STYLE("bold")}{$actor}{STYLE("reset")} suggested cha
 msg-activity-commented_pr = {STYLE("bold")}{$actor}{STYLE("reset")} commented on pull request {STYLE("bold", "yellow")}{$repo_name}#{$number}{STYLE("reset")}
 msg-activity-created_release = {STYLE("bold")}{$actor}{STYLE("reset")} created release {STYLE("bold", "bright_cyan")}{$release_name}{STYLE("reset")} on {STYLE("bold", "yellow")}{$repo_name}{STYLE("reset")}
 
+help-cmd-user-edit = Edit your user settings
+
+help-cmd-user-edit-bio = Set your bio
+help-arg-user-edit-bio-content = The new description. Leave this out to open your editor
+
+help-cmd-user-edit-name = Set your full name
+help-arg-user-edit-name-name = The new name
+help-arg-user-edit-name-unset = Remove your name from your profile
 msg-user-edit-name-removal_hint = Use --unset to remove your name from your profile
+
+help-cmd-user-edit-pronouns = Set your pronouns
+help-arg-user-edit-pronouns-pronouns = The new pronouns
+help-arg-user-edit-pronouns-unset = Remove your pronouns from your profile
 msg-user-edit-pronouns-removal_hint = Use --unset to remove your pronouns from your profile
+
+help-cmd-user-edit-location = Set your location
+help-arg-user-edit-location-location = The new location
+help-arg-user-edit-location-unset = Remove your location from your profile
 msg-user-edit-location-removal_hint = Use --unset to remove your location from your profile
+
+help-cmd-user-edit-activity = Set your activity visibility
+help-arg-user-edit-activity-visibility = The visibility of your activity
+
+help-cmd-user-edit-email = Manage the email addresses associated with your account
+help-arg-user-edit-email-visibility = Set the visibility of your email address
+help-arg-user-edit-email-add = Add a new email address
+help-arg-user-edit-email-rm = Remove an email address
+
+help-cmd-user-edit-website = Set your linked website
+help-arg-user-edit-website-url = Your website URL
+help-arg-user-edit-website-unset = Remove your website from your profile
 msg-user-edit-website-removal_hint = Use --unset to remove your website from your profile
 
+help-cmd-user-key = Manage SSH keys
+
+help-cmd-user-key-list = List your SSH keys
+help-arg-user-key-list-verbose = Show detailed information about every key
 msg-user-key-list-count = total keys: {$keys}
 msg-user-key-list-header = {STYLE("bold")}Key {STYLE("bright-magenta")}{$id}{STYLE("reset")}
 msg-user-key-list-title = {STYLE("bold")}Title:{STYLE("reset")}       {STYLE("bright-cyan")}{$title}{STYLE("reset")}
@@ -1074,8 +1162,18 @@ msg-user-key-list-created_at = {STYLE("bold")}Created At:{STYLE("reset")}  {STYL
 msg-user-key-list-type = {STYLE("bold")}Type:{STYLE("reset")}        {STYLE("bright-cyan")}{$key_type}{STYLE("reset")}
 msg-user-key-list-fingerprint = {STYLE("bold")}Fingerprint:{STYLE("reset")} {STYLE("bright-cyan")}{$fingerprint}{STYLE("reset")}
 
+help-cmd-user-key-view = View an SSH key
+help-arg-user-key-view-id = The ID of the key to view as shown in `user key list`
+
+help-cmd-user-key-delete = Delete an SSH key
+help-arg-user-key-delete-id = The ID of the key to delete as shown in `user key list`
 msg-user-key-delete-success = successfully deleted key with ID {$id}
 
+help-cmd-user-key-upload = Upload an SSH key
+help-arg-user-key-upload-keyfile = Path to the key file or '-' to read from stdin. If omitted, will try to guess
+help-arg-user-key-upload-title = The title of the key. If omitted, will try to guess from the file content
+help-arg-user-key-upload-force = If provided, will skip checks against accidentally uploading private keys
+help-arg-user-key-upload-read_only = If provided, the new key will only have read access
 msg-user-key-upload-home_not_found = Couldn't locate home directory. Please provide an explicit path for the key file.
 msg-user-key-upload-keys_not_found = No keys found.
 msg-user-key-upload-confirm_key_file_prompt =
@@ -1115,6 +1213,10 @@ msg-user-key-upload-confirm_key_title_prompt =
 msg-user-key-add-title_unconfirmed = User didn't confirm guessed title.
 msg-user-key-add-success = Key created successfully!
 
+help-cmd-user-gpg = Manage GPG keys
+
+help-cmd-user-gpg-list = List your GPG keys
+help-arg-user-gpg-list-verbose = Show detailed information about every key
 msg-user-gpg-list-count = total keys: {$keys}
 msg-user-gpg-list-header = {STYLE("bold")}Key {STYLE("bright-magenta")}{$id}{STYLE("reset")}
 msg-user-gpg-list-key_id = {STYLE("bold")}Key ID:{STYLE("reset")}              {STYLE("bright-cyan")}{$key_id}{STYLE("reset")}
@@ -1144,6 +1246,12 @@ msg-user-gpg-list-email = {STYLE("bright-cyan")}{$email}{STYLE("reset")} {$verif
     }
 msg-user-gpg-list-subkey = {STYLE("bold")}Subkey {STYLE("bright-magenta")}{$id}{STYLE("reset")}:
 
+help-cmd-user-gpg-view = View a GPG key
+help-arg-user-gpg-view-id = The ID of the GPG key to view as shown in `user gpg list`
+
+help-cmd-user-gpg-upload = Upload a GPG key
+help-arg-user-gpg-upload-key = The key to add. This can be anything the GPG CLI recognizes such as an email associated with the key or the key ID
+help-arg-user-gpg-upload-no_verify = Skip the verification step. With this disabled, you can only add keys with emails associated with your account
 msg-user-gpg-upload-exporting = Exporting key...
 msg-user-gpg-upload-export_failed = Failed to export key. {OPT($status_code) ->
        *[none] {""}
@@ -1151,6 +1259,14 @@ msg-user-gpg-upload-export_failed = Failed to export key. {OPT($status_code) ->
     }
 msg-user-gpg-upload-success = Key successfully added!
 
+help-cmd-user-gpg-verify = Verifies a GPG key
+help-cmd-user-gpg-verify-long = 
+    Verifies a GPG key
+
+    You need to have the to-be-verified key installed locally in order to
+    sign some data with it.
+    This command requires `gpg` to be installed.
+help-arg-user-gpg-verify-id = The ID of the GPG key to verify as shown in `user gpg list`
 msg-user-gpg-verify-fetching_token = Fetching verification token...
 msg-user-gpg-verify-signing_token = Signing verification token with key '{$key_name}'...
 msg-user-gpg-verify-signing_failed = Failed to sign verification token. {OPT($status_code) ->
@@ -1160,6 +1276,9 @@ msg-user-gpg-verify-signing_failed = Failed to sign verification token. {OPT($st
 msg-user-gpg-verify-key_to_verify = Verifying this key:
 msg-user-gpg-verify-success = Verification successful!
 
+help-cmd-user-gpg-delete = Delete a GPG key. This will un-verify all commits signed with that key!
+help-arg-user-gpg-delete-id = The ID of the GPG key to delete as shown in `user gpg list`
+help-arg-user-gpg-delete-force = Don't ask for confirmation
 msg-user-gpg-delete-confirmation_prompt =
         Deleting a GPG key will cause all commits signed by that key to become unverified! Continue?
     .yes =
