@@ -1387,6 +1387,8 @@ msg-version-update_check-behind =
     Get it at {$url}
 msg-version-update_check-ahead = You are ahead of the latest published version
 
+help-arg-wiki-clone-ssh = Clone the repo over SSH instead of HTTP(S)
+help-arg-wiki-clone-identity_file = An SSH key file to use when cloning over SSH
 msg-wiki-clone-success = Cloned {$repo}'s wiki into {$path}
 
 
