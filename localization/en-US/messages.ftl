@@ -1379,6 +1379,7 @@ help-cmd-tag-list = List all the tags on a repo
 
 help-cmd-tag-view = View a tag's info
 
+help-arg-version-check = Checks for updates
 msg-version-update_check-hint = Check for a new version with `fj version --check`
 msg-version-update_check-current = Up to date!
 msg-version-update_check-behind =
