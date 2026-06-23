@@ -6,7 +6,7 @@ use eyre::OptionExt;
 
 #[derive(Args, Clone, Debug)]
 pub struct VersionCommand {
-    /// Checks for updates
+    #[clap(help = h!("arg-version-check"))]
     #[clap(long)]
     #[cfg(feature = "update-check")]
     check: bool,

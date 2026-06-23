@@ -6,18 +6,18 @@ use eyre::{Context, OptionExt};
 use forgejo_api::Forgejo;
 
 use crate::{
-    ftl_println,
+    ftl_println, h,
     repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
 };
 
 #[derive(Args, Clone, Debug)]
 pub struct WikiCommand {
-    /// The local git remote that points to the repo to operate on
+    #[clap(help = h!("arg-remote"))]
     #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
 
-    /// The repo to operate on
+    #[clap(help = h!("arg-repo"))]
     #[clap(long, short, global = true)]
     repo: Option<RepoArg>,
 
@@ -35,11 +35,11 @@ pub enum WikiSubcommand {
         #[clap(long, short)]
         path: Option<PathBuf>,
 
-        /// Clone the repo over SSH instead of HTTP(S)
+        #[clap(help = h!("arg-wiki-clone-ssh"))]
         #[clap(long, short = 'S')]
         ssh: Option<Option<bool>>,
 
-        /// An SSH key file to use when cloning over SSH.
+        #[clap(help = h!("arg-wiki-clone-identity_file"))]
         #[clap(long, short = 'I')]
         identity_file: Option<PathBuf>,
     },

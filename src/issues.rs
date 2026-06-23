@@ -10,13 +10,13 @@ use forgejo_api::structs::{
 use forgejo_api::Forgejo;
 
 use crate::repo::{RepoArg, RepoInfo, RepoName};
-use crate::{ftl_bail, ftl_ensure, ftl_eprintln, ftl_println};
+use crate::{ftl_bail, ftl_ensure, ftl_eprintln, ftl_println, h, lh};
 
 pub mod template;
 
 #[derive(Args, Clone, Debug)]
 pub struct IssueCommand {
-    /// The local git remote that points to the repo to operate on.
+    #[clap(help = h!("arg-remote"))]
     #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
     #[clap(subcommand)]
@@ -25,101 +25,111 @@ pub struct IssueCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum IssueSubcommand {
-    /// Create a new issue on a repo
+    #[clap(about = h!("cmd-issue-create"))]
     Create {
-        /// Title of the issue
+        #[clap(help = h!("arg-issue-create-title"))]
         #[clap(group = "method", required = true)]
         title: Option<String>,
-        /// The text body of the issue
-        ///
-        /// Leaving this out will open your editor, unless --body-file is specified.
+
+        #[clap(help = h!("arg-issue-create-body"), long_help = lh!("arg-issue-create-body"))]
         #[clap(long, conflicts_with = "template")]
         body: Option<String>,
-        /// The text body of the issue, to read from a file
+
+        #[clap(help = h!("arg-issue-create-body_file"))]
         #[clap(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
-        /// The template to use when creating an issue
-        ///
-        /// If the repo has disabled blank issues, this flag is required.
+
+        #[clap(help = h!("arg-issue-create-template"), long_help = lh!("arg-issue-create-template"))]
         #[clap(long)]
         template: Option<String>,
-        /// Don't use a template for this issue.
-        ///
-        /// If the repo has disabled blank issues, this will fail.
+
+        #[clap(help = h!("arg-issue-create-no_template"), long_help = lh!("arg-issue-create-no_template"))]
         #[clap(long, conflicts_with = "template")]
         no_template: bool,
-        /// The repo to create this issue on
+
+        #[clap(help = h!("arg-issue-create-repo"))]
         #[clap(long, short)]
         repo: Option<RepoArg>,
-        /// Open the issue creation page in your web browser
+
+        #[clap(help = h!("arg-issue-create-web"))]
         #[clap(long, group = "method")]
         web: bool,
     },
-    /// Edit an issue
+    #[clap(about = h!("cmd-issue-edit"))]
     Edit {
         issue: IssueId,
         #[clap(subcommand)]
         command: EditCommand,
     },
-    /// Add a comment on an issue
+    #[clap(about = h!("cmd-issue-comment"))]
     Comment {
+        #[clap(help = h!("arg-issue-comment-issue"))]
         issue: IssueId,
-        /// The text content of the comment.
-        ///
-        /// Leaving this out will open your editor, unless --body-file is specified.
+
+        #[clap(help = h!("arg-issue-comment-body"), long_help = lh!("arg-issue-comment-body"))]
         body: Option<String>,
-        /// The text content of the comment, to read from a file
+
+        #[clap(help = h!("arg-issue-comment-body_file"))]
         #[clap(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
     },
-    /// Assign users to an issue
+    #[clap(about = h!("cmd-issue-assign"))]
     Assign {
+        #[clap(help = h!("arg-issue-assign-issue"))]
         issue: IssueId,
-        /// The usernames of the users to assign to this issue
+        #[clap(help = h!("arg-issue-assign-users"))]
         users: Vec<String>,
     },
-    /// Unassign users from an issue
+    #[clap(about = h!("cmd-issue-unassign"))]
     Unassign {
+        #[clap(help = h!("arg-issue-unassign-issue"))]
         issue: IssueId,
-        /// The usernames of the users to unassign from this issue
+        #[clap(help = h!("arg-issue-unassign-users"))]
         users: Vec<String>,
     },
-    /// Close an issue
+    #[clap(about = h!("cmd-issue-close"))]
     Close {
+        #[clap(help = h!("arg-issue-close-issue"))]
         issue: IssueId,
-        /// A comment to leave on the issue before closing it
+        #[clap(help = h!("arg-issue-close-with_msg"))]
         #[clap(long, short)]
         with_msg: Option<Option<String>>,
     },
-    /// Search for an issue in a repo
+    #[clap(about = h!("cmd-issue-search"))]
     Search {
-        /// The repo to search in
+        #[clap(help = h!("arg-issue-search-repo"))]
         #[clap(long, short)]
         repo: Option<RepoArg>,
+
         query: Option<String>,
+
         #[clap(long, short)]
         labels: Option<String>,
+
         #[clap(long, short)]
         creator: Option<String>,
+
         #[clap(long, short)]
         assignee: Option<String>,
-        /// Filter issues by state. Default: open
+
+        #[clap(help = h!("arg-issue-search-state"))]
         #[clap(long, short)]
         state: Option<State>,
     },
-    /// View an issue's info
+    #[clap(about = h!("cmd-issue-view"))]
     View {
+        #[clap(help = h!("arg-issue-view-issue"))]
         id: IssueId,
         #[clap(subcommand)]
         command: Option<ViewCommand>,
     },
-    /// List the issue templates in a repo.
+    #[clap(about = h!("cmd-issue-templates"))]
     Templates {
-        /// The repo to view the templates of.
+        #[clap(help = h!("arg-issue-templates-repo"))]
         #[clap(long, short)]
         repo: Option<RepoArg>,
     },
-    /// Open an issue in your browser
+    #[clap(about = h!("cmd-issue-browse"))]
     Browse { id: IssueId },
 }
 
@@ -192,21 +202,22 @@ impl From<State> for forgejo_api::structs::IssueListIssuesQueryState {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum EditCommand {
-    /// Edit an issue's title
+    #[clap(about = h!("cmd-issue-edit-title"))]
     Title { new_title: Option<String> },
-    /// Edit an issue's text content
+    #[clap(about = h!("cmd-issue-edit-body"))]
     Body { new_body: Option<String> },
-    /// Edit a comment on an issue
+    #[clap(about = h!("cmd-issue-edit-comment"))]
     Comment {
         idx: usize,
         new_body: Option<String>,
     },
-    /// Edit an issue's labels
+    #[clap(about = h!("cmd-issue-edit-labels"))]
     Labels {
-        /// The labels to add.
+        #[clap(help = h!("arg-issue-edit-labels-add"))]
         #[clap(long, short)]
         add: Vec<String>,
-        /// The labels to remove.
+
+        #[clap(help = h!("arg-issue-edit-labels-rm"))]
         #[clap(long, short)]
         rm: Vec<String>,
     },
@@ -214,11 +225,11 @@ pub enum EditCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ViewCommand {
-    /// View an issue's title and body. The default
+    #[clap(about = h!("cmd-issue-view-body"))]
     Body,
-    /// View a specific
+    #[clap(about = h!("cmd-issue-view-comment"))]
     Comment { idx: usize },
-    /// List every comment
+    #[clap(about = h!("cmd-issue-view-comments"))]
     Comments,
 }
 

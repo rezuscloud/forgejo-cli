@@ -8,8 +8,9 @@ use futures::stream::TryStreamExt;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
-    ftl_bail, ftl_println,
+    ftl_bail, ftl_println, h,
     keys::KeyInfo,
+    lh,
     localization::AsFluent,
     repo::{RepoArg, RepoInfo, RepoName},
     SpecialRender,
@@ -17,10 +18,8 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct ReleaseCommand {
-    /// The local git remote that points to the repo to operate on
     #[clap(long, short = 'R', global = true)]
     remote: Option<String>,
-    /// The name of the repository to operate on
     #[clap(long, short, global = true)]
     repo: Option<RepoArg>,
     #[clap(subcommand)]
@@ -29,96 +28,92 @@ pub struct ReleaseCommand {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum ReleaseSubcommand {
-    /// Create a new release
+    #[clap(about = h!("cmd-release-create"))]
     Create {
         name: String,
+        #[clap(help = h!("arg-release-create-create_tag"))]
         #[clap(long, short = 'T')]
-        /// Create a new corresponding tag for this release. Defaults to release's name.
         create_tag: Option<Option<String>>,
+
+        #[clap(help = h!("arg-release-create-tag"), long_help = lh!("arg-release-create-tag"))]
         #[clap(long, short = 't')]
-        /// Pre-existing tag to use
-        ///
-        /// If you need to create a new tag for this release, use `--create-tag`
         tag: Option<String>,
-        #[clap(
-            long,
-            short,
-            help = "Include a file as an attachment",
-            long_help = "Include a file as an attachment
-        
-`--attach=<FILE>` will set the attachment's name to the file name
-`--attach=<FILE>:<ASSET>` will use the provided name for the attachment"
-        )]
-        attach: Vec<String>,
+
+        #[clap(help = h!("arg-release-create-attach"), long_help = lh!("arg-release-create-attach"))]
         #[clap(long, short)]
-        /// Text of the release body.
-        ///
-        /// Using this flag without an argument will open your editor.
+        attach: Vec<String>,
+
+        #[clap(help = h!("arg-release-create-body"), long_help = lh!("arg-release-create-body"))]
+        #[clap(long, short)]
         body: Option<Option<String>>,
+
         #[clap(long, short = 'B')]
         branch: Option<String>,
+
         #[clap(long, short)]
         draft: bool,
+
         #[clap(long, short)]
         prerelease: bool,
     },
-    /// Edit a release's info
+    #[clap(about = h!("cmd-release-edit"))]
     Edit {
         name: String,
+
         #[clap(long, short = 'n')]
         rename: Option<String>,
+
+        #[clap(help = h!("arg-release-edit-tag"))]
         #[clap(long, short = 't')]
-        /// Corresponding tag for this release.
         tag: Option<String>,
+
+        #[clap(help = h!("arg-release-edit-body"), long_help = lh!("arg-release-edit-body"))]
         #[clap(long, short)]
-        /// Text of the release body.
-        ///
-        /// Using this flag without an argument will open your editor.
         body: Option<Option<String>>,
+
         #[clap(long, short)]
         draft: Option<bool>,
+
         #[clap(long, short)]
         prerelease: Option<bool>,
     },
-    /// Delete a release
+    #[clap(about = h!("cmd-release-delete"))]
     Delete {
         name: String,
         #[clap(long, short = 't')]
         by_tag: bool,
     },
-    /// List all the releases on a repo
+    #[clap(about = h!("cmd-release-list"))]
     List {
         #[clap(long, short = 'p')]
         include_prerelease: bool,
         #[clap(long, short = 'd')]
         include_draft: bool,
     },
-    /// View a release's info
+    #[clap(about = h!("cmd-release-view"))]
     View {
         name: String,
         #[clap(long, short = 't')]
         by_tag: bool,
     },
-    /// Open a release in your browser
+    #[clap(about = h!("cmd-release-browse"))]
     Browse { name: Option<String> },
-    /// Commands on a release's attached files
+    #[clap(about = h!("cmd-release-asset"))]
     #[clap(subcommand)]
     Asset(AssetCommand),
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum AssetCommand {
-    /// Create a new attachment on a release
+    #[clap(about = h!("cmd-release-asset-create"))]
     Create {
         release: String,
         path: std::path::PathBuf,
         name: Option<String>,
     },
-    /// Remove an attachment from a release
+    #[clap(about = h!("cmd-release-asset-delete"))]
     Delete { release: String, asset: String },
-    /// Download an attached file
-    ///
-    /// Use `source.zip` or `source.tar.gz` to download the repo archive
+    #[clap(about = h!("cmd-release-asset-download"))]
     Download {
         release: String,
         asset: String,
