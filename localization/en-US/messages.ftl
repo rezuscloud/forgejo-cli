@@ -571,6 +571,7 @@ msg-pr-status-entry = {$state ->
         [pending] {STYLE("yellow")}Pending{STYLE("reset")}
         [warning] {STYLE("bright_yellow")}Warning{STYLE("reset")}
         [failure] {STYLE("bright_red")}Failure{STYLE("reset")}
+        [skipped] {STYLE("grey")}Skipped{STYLE("RESET")}
         [error] {STYLE("bright_red")}Error{STYLE("reset")}
        *[other] Unknown
     } {-dash} {$context}

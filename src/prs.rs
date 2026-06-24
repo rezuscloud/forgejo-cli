@@ -805,6 +805,7 @@ fn print_pr_status(pr_status: &PrStatus) -> eyre::Result<()> {
                     CommitStatusState::Pending => "pending",
                     CommitStatusState::Warning => "warning",
                     CommitStatusState::Failure => "failure",
+                    CommitStatusState::Skipped => "skipped",
                     CommitStatusState::Error => "error",
                 };
                 ftl_println!("msg-pr-status-entry", state, context);
