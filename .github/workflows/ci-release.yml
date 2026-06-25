@@ -73,7 +73,7 @@ jobs:
       - name: Build release
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --release --target ${{ matrix.target }} --features update-check,git2/vendored-openssl
+        run: cargo build --release --target ${{ matrix.target }} --features git2/vendored-openssl
       - name: Strip
         run: ${{ matrix.strip }} target/${{ matrix.target }}/release/fj
       - name: Archive
@@ -94,7 +94,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build release binary
-        run: cargo build --release --features update-check
+        run: cargo build --release
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
